@@ -1,0 +1,75 @@
+commodity_code: "SOYBEAN"
+commodity_name: "Soybean"
+commodity_group: "agriculture"
+base_unit: "bushel"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "CME_ZS", exchange: "CME/CBOT", symbol: "ZS", description: "CBOT Soybean Futures (benchmark)", contract_unit: "5000 bushels", currency: "USc" }
+  - { instrument_code: "CME_ZM", exchange: "CME/CBOT", symbol: "ZM", description: "Soybean Meal Futures", contract_unit: "100 short tons", currency: "USD" }
+  - { instrument_code: "CME_ZL", exchange: "CME/CBOT", symbol: "ZL", description: "Soybean Oil Futures", contract_unit: "60000 lb", currency: "USc" }
+  - { instrument_code: "BR_PARANAGUA_FOB", exchange: "Brazil FOB", symbol: "PARFOB", description: "Paranagua soybean FOB premium", contract_unit: "tonne", currency: "USD" }
+
+weather_regions:
+  - { region_code: "US_MIDWEST", name: "US Midwest", country: "US" }
+  - { region_code: "BR_CENTER_SOUTH", name: "Brazil Center-South (Mato Grosso, Parana)", country: "BR" }
+  - { region_code: "AR_PAMPAS", name: "Argentine Pampas", country: "AR" }
+
+production_regions:
+  - { region_code: "BR", name: "Brazil", role: "production" }
+  - { region_code: "US", name: "United States", role: "production" }
+  - { region_code: "AR", name: "Argentina", role: "production" }
+  - { region_code: "PY", name: "Paraguay", role: "production" }
+
+consumption_regions:
+  - { region_code: "CN", name: "China (crush/feed)", role: "consumption" }
+  - { region_code: "US", name: "United States", role: "consumption" }
+  - { region_code: "EU", name: "European Union", role: "consumption" }
+
+export_regions:
+  - { region_code: "BR", name: "Brazil", role: "export" }
+  - { region_code: "US", name: "United States", role: "export" }
+  - { region_code: "AR", name: "Argentina (meal/oil)", role: "export" }
+
+import_regions:
+  - { region_code: "CN", name: "China", role: "import" }
+  - { region_code: "EU", name: "European Union", role: "import" }
+  - { region_code: "MX", name: "Mexico", role: "import" }
+
+physical_drivers:
+  - { metric_code: "production_estimate", description: "USDA/CONAB production" }
+  - { metric_code: "ending_stocks", description: "Ending stocks / stocks-to-use" }
+  - { metric_code: "crush_margin", description: "Board crush margin (meal+oil-beans)" }
+  - { metric_code: "crop_condition", description: "USDA condition good/excellent %" }
+  - { metric_code: "china_crush_demand", description: "Chinese crush / hog herd demand" }
+
+macro_drivers:
+  - { metric_code: "usd_brl", description: "USD/BRL exchange rate" }
+  - { metric_code: "usd_ars", description: "USD/ARS exchange rate" }
+  - { metric_code: "palm_oil_spread", description: "Soyoil-palm oil spread (veg oil complex)" }
+  - { metric_code: "crude_oil_biodiesel", description: "Crude / biodiesel demand for soyoil" }
+  - { metric_code: "managed_money_positioning", description: "CFTC managed money net" }
+
+logistics_drivers:
+  - { metric_code: "brazil_port_premium", description: "Paranagua/Santos FOB premium" }
+  - { metric_code: "mississippi_barge", description: "Mississippi barge freight / water levels" }
+  - { metric_code: "freight_dry_bulk", description: "Panamax dry bulk Brazil-China" }
+
+event_risk_drivers:
+  - { metric_code: "el_nino_la_nina", description: "ENSO drought (esp. Argentina)" }
+  - { metric_code: "china_trade_policy", description: "US-China trade / tariff disputes" }
+  - { metric_code: "biofuel_policy", description: "US/Brazil biodiesel mandates" }
+  - { metric_code: "argentina_export_tax", description: "Argentine export tax (retenciones)" }
+
+data_sources:
+  - { source_code: "USDA_WASDE", name: "USDA WASDE / NASS", access: "public", url: "https://www.usda.gov" }
+  - { source_code: "CONAB", name: "CONAB Brazil", access: "public", url: "https://www.conab.gov.br" }
+  - { source_code: "CME", name: "CME Group / Barchart", access: "subscription", url: "https://www.cmegroup.com" }
+  - { source_code: "BCR", name: "Bolsa de Comercio de Rosario (Argentina)", access: "public", url: "https://www.bcr.com.ar" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "weekly", description: "US/SA harvest cycle" }
+  - { model_code: "sarimax", family: "statsmodels", horizon: "weekly", description: "SARIMAX with crush/FX exog" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting on crush + weather" }
+
+notes: "Traded as a complex (beans/meal/oil) via the crush margin. China is the dominant importer; US-China trade policy and South American (La Nina) drought are top risks. Brazil now the largest producer/exporter; counter-seasonal hemispheres drive a two-peak supply cycle."

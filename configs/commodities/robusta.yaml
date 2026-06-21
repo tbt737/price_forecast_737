@@ -1,0 +1,93 @@
+commodity_code: "ROBUSTA"
+commodity_name: "Robusta Coffee"
+commodity_group: "agriculture"
+base_unit: "tonne"
+default_currency: "USD"
+
+market_instruments:
+  - instrument_code: "ICE_RC"
+    exchange: "ICE Futures Europe"
+    symbol: "RC"
+    description: "London Robusta Coffee Futures (benchmark)"
+    contract_unit: "10 tonnes"
+    currency: "USD"
+  - instrument_code: "VN_DAKLAK_SPOT"
+    exchange: "Vietnam domestic"
+    symbol: "DAKLAK"
+    description: "Dak Lak / Central Highlands farmgate spot price"
+    contract_unit: "kg"
+    currency: "VND"
+  - instrument_code: "ICO_ROBUSTA_INDICATOR"
+    exchange: "ICO"
+    symbol: "ICO-ROB"
+    description: "ICO Robusta indicator price"
+    contract_unit: "lb"
+    currency: "USc"
+
+weather_regions:
+  - { region_code: "VN_TAY_NGUYEN", name: "Central Highlands (Dak Lak, Lam Dong, Dak Nong, Gia Lai, Kon Tum)", country: "VN" }
+  - { region_code: "BR_ESPIRITO_SANTO", name: "Espirito Santo (Conilon)", country: "BR" }
+  - { region_code: "ID_SUMATRA", name: "Sumatra (Lampung)", country: "ID" }
+
+production_regions:
+  - { region_code: "VN", name: "Vietnam", role: "production" }
+  - { region_code: "BR", name: "Brazil (Conilon)", role: "production" }
+  - { region_code: "ID", name: "Indonesia", role: "production" }
+  - { region_code: "IN", name: "India", role: "production" }
+  - { region_code: "UG", name: "Uganda", role: "production" }
+
+consumption_regions:
+  - { region_code: "EU", name: "European Union", role: "consumption" }
+  - { region_code: "US", name: "United States", role: "consumption" }
+  - { region_code: "JP", name: "Japan", role: "consumption" }
+
+export_regions:
+  - { region_code: "VN", name: "Vietnam", role: "export" }
+  - { region_code: "BR", name: "Brazil", role: "export" }
+  - { region_code: "ID", name: "Indonesia", role: "export" }
+
+import_regions:
+  - { region_code: "EU", name: "European Union", role: "import" }
+  - { region_code: "US", name: "United States", role: "import" }
+
+physical_drivers:
+  - { metric_code: "production_estimate", description: "USDA/Volcafe crop estimates (bags)" }
+  - { metric_code: "harvest_progress", description: "Central Highlands harvest progress %" }
+  - { metric_code: "certified_stocks", description: "ICE certified Robusta stocks" }
+  - { metric_code: "exportable_surplus", description: "Vietnam exportable surplus" }
+  - { metric_code: "farmer_holding", description: "Farmer stock-holding behaviour" }
+  - { metric_code: "screen_size_quality", description: "Bean screen size / outturn quality" }
+
+macro_drivers:
+  - { metric_code: "usd_vnd", description: "USD/VND exchange rate" }
+  - { metric_code: "usd_brl", description: "USD/BRL exchange rate" }
+  - { metric_code: "arabica_robusta_spread", description: "Arabica-Robusta price spread" }
+  - { metric_code: "managed_money_positioning", description: "Speculative net positioning" }
+  - { metric_code: "global_risk_sentiment", description: "Risk-on/off (DXY, VIX)" }
+
+logistics_drivers:
+  - { metric_code: "freight_asia_europe", description: "Asia-Europe container freight" }
+  - { metric_code: "vn_port_congestion", description: "Cai Mep / HCMC port congestion" }
+  - { metric_code: "physical_basis", description: "Vietnam FOB differential vs London" }
+
+event_risk_drivers:
+  - { metric_code: "el_nino_la_nina", description: "ENSO phase / drought risk" }
+  - { metric_code: "eudr_compliance", description: "EU Deforestation Regulation timeline" }
+  - { metric_code: "frost_drought_shock", description: "Acute weather shocks in growing regions" }
+  - { metric_code: "vietnam_export_policy", description: "Export tax / policy changes" }
+
+data_sources:
+  - { source_code: "ICE", name: "ICE Report Center / Barchart", access: "subscription", url: "https://www.theice.com" }
+  - { source_code: "USDA_FAS", name: "USDA Foreign Agricultural Service (PSD)", access: "public", url: "https://fas.usda.gov" }
+  - { source_code: "ICO", name: "International Coffee Organization", access: "public", url: "https://www.ico.org" }
+  - { source_code: "GSO_VN", name: "Vietnam General Statistics Office / Customs", access: "public", url: "https://www.gso.gov.vn" }
+  - { source_code: "NASA_POWER", name: "NASA POWER agroclimatology", access: "public", url: "https://power.larc.nasa.gov" }
+  - { source_code: "DREWRY", name: "Drewry / Freightos freight indices", access: "subscription", url: "https://www.drewry.co.uk" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "daily", description: "Fourier seasonal decomposition of harvest cycle" }
+  - { model_code: "sarimax", family: "statsmodels", horizon: "weekly", description: "SARIMAX with exogenous drivers" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "weekly", description: "Gradient boosting on engineered features" }
+  - { model_code: "prophet_trend", family: "prophet", horizon: "monthly", description: "Trend + seasonality with regressors" }
+
+notes: "Vietnam supplies >40% of world Robusta; ICE RC is the pricing benchmark. Harvest peak Nov-Jan, flowering Jan-Feb, lean-stock window Jul-Sep where domestic spot can decouple from futures. EUDR and ENSO are key event risks. Domestic spot in VND, benchmark in USD."

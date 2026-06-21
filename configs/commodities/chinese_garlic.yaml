@@ -1,0 +1,71 @@
+commodity_code: "CHINESE_GARLIC"
+commodity_name: "Chinese Garlic"
+commodity_group: "agriculture"
+base_unit: "tonne"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "CN_JINXIANG_SPOT", exchange: "China wholesale", symbol: "JINXIANG", description: "Jinxiang (Shandong) cold-storage garlic wholesale price", contract_unit: "kg", currency: "CNY" }
+  - { instrument_code: "CN_FOB_QINGDAO", exchange: "China FOB", symbol: "QDFOB", description: "Qingdao FOB export price (pure white)", contract_unit: "tonne", currency: "USD" }
+  - { instrument_code: "CN_COLD_STORAGE_IDX", exchange: "China domestic", symbol: "CSIDX", description: "Cold-storage inventory-implied price index", contract_unit: "kg", currency: "CNY" }
+
+weather_regions:
+  - { region_code: "CN_SHANDONG", name: "Shandong (Jinxiang, Jinmen)", country: "CN" }
+  - { region_code: "CN_HENAN", name: "Henan (Qixian, Zhongmu)", country: "CN" }
+  - { region_code: "CN_JIANGSU", name: "Jiangsu (Pizhou)", country: "CN" }
+
+production_regions:
+  - { region_code: "CN", name: "China (>75% of world output)", role: "production" }
+  - { region_code: "IN", name: "India", role: "production" }
+  - { region_code: "ES", name: "Spain", role: "production" }
+
+consumption_regions:
+  - { region_code: "CN", name: "China (domestic)", role: "consumption" }
+  - { region_code: "ID", name: "Indonesia", role: "consumption" }
+  - { region_code: "US", name: "United States", role: "consumption" }
+
+export_regions:
+  - { region_code: "CN", name: "China", role: "export" }
+  - { region_code: "ES", name: "Spain", role: "export" }
+
+import_regions:
+  - { region_code: "ID", name: "Indonesia", role: "import" }
+  - { region_code: "VN", name: "Vietnam", role: "import" }
+  - { region_code: "US", name: "United States", role: "import" }
+  - { region_code: "BR", name: "Brazil", role: "import" }
+
+physical_drivers:
+  - { metric_code: "cold_storage_inventory", description: "Jinxiang cold-storage stock levels (key driver)" }
+  - { metric_code: "planted_area", description: "Shandong/Henan planting area YoY" }
+  - { metric_code: "new_crop_yield", description: "New-crop harvest yield/quality (May-Jun)" }
+  - { metric_code: "storage_outflow_rate", description: "Cold-storage release/outflow pace" }
+  - { metric_code: "bulb_size_grade", description: "Bulb size grading (4.5cm/5.0cm/5.5cm)" }
+
+macro_drivers:
+  - { metric_code: "usd_cny", description: "USD/CNY exchange rate" }
+  - { metric_code: "diesel_storage_cost", description: "Cold-storage electricity/energy cost" }
+  - { metric_code: "speculative_storage", description: "Speculative cold-storage hoarding behaviour" }
+
+logistics_drivers:
+  - { metric_code: "qingdao_port_lineup", description: "Qingdao container availability/line-up" }
+  - { metric_code: "reefer_freight", description: "Reefer container freight to SE Asia" }
+  - { metric_code: "physical_basis", description: "FOB-domestic spread" }
+
+event_risk_drivers:
+  - { metric_code: "indonesia_import_permit", description: "Indonesian RIPH/import permit quota" }
+  - { metric_code: "us_antidumping_duty", description: "US anti-dumping duty on Chinese garlic" }
+  - { metric_code: "spring_frost", description: "Spring frost during bulbing" }
+  - { metric_code: "phytosanitary_ban", description: "Phytosanitary / SPS import bans" }
+
+data_sources:
+  - { source_code: "CN_AGRI_MOA", name: "China Ministry of Agriculture wholesale prices", access: "public", url: "http://www.moa.gov.cn" }
+  - { source_code: "JINXIANG_EXCHANGE", name: "Jinxiang International Garlic Trading Market", access: "subscription", url: "" }
+  - { source_code: "TRIDGE", name: "Tridge / Selina Wamucii market intelligence", access: "subscription", url: "https://www.tridge.com" }
+  - { source_code: "UN_COMTRADE", name: "UN Comtrade (HS 070320) trade flows", access: "public", url: "https://comtrade.un.org" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "weekly", description: "Storage-cycle seasonal (harvest May, drawdown to Apr)" }
+  - { model_code: "inventory_regression", family: "statsmodels", horizon: "weekly", description: "Cold-storage inventory regression" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "weekly", description: "Gradient boosting on storage + area" }
+
+notes: "China is >75% of global garlic. No futures market — price discovery is the Jinxiang (Shandong) cold-storage wholesale market. Dominant driver is cold-storage inventory vs planted area (boom-bust 'garlic cycle'). Indonesia import permits and US anti-dumping duties are key trade risks. Harvest ~May; price rises through the storage drawdown to the next crop."

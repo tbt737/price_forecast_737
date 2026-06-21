@@ -1,0 +1,60 @@
+# ── Secrets / environment ──────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ──────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── Node / Next.js (apps/web) ────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-error.log*
+
+# ── Build outputs ────────────────────────────────────────────────────────────────
+build/
+dist/
+*.tsbuildinfo
+
+# ── Logs ─────────────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Local database volumes / files ───────────────────────────────────────────────
+pgdata/
+*.sqlite
+*.sqlite3
+*.db
+
+# ── Local tooling config (machine-specific; never commit) ────────────────────────
+.claude/settings.local.json
+
+# ── Data artifacts (keep dirs via .gitkeep, ignore contents) ─────────────────────
+data/raw/*
+data/processed/*
+data/exports/*
+!data/**/.gitkeep
+
+# ── ML registry artifacts (keep dir, ignore large binaries) ──────────────────────
+ml/registry/*
+!ml/registry/.gitkeep
+
+# ── OS / editor ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

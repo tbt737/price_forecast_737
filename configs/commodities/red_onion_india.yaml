@@ -1,0 +1,67 @@
+commodity_code: "RED_ONION_INDIA"
+commodity_name: "Red Onion (India)"
+commodity_group: "agriculture"
+base_unit: "quintal"
+default_currency: "INR"
+
+market_instruments:
+  - { instrument_code: "IN_LASALGAON_SPOT", exchange: "Lasalgaon APMC", symbol: "LASALGAON", description: "Lasalgaon (Nashik) APMC benchmark onion price (Asia's largest onion market)", contract_unit: "quintal", currency: "INR" }
+  - { instrument_code: "IN_PIMPALGAON_SPOT", exchange: "Pimpalgaon APMC", symbol: "PIMPALGAON", description: "Pimpalgaon (Nashik) APMC modal price", contract_unit: "quintal", currency: "INR" }
+  - { instrument_code: "IN_FOB_MUMBAI", exchange: "India FOB", symbol: "JNPTFOB", description: "JNPT/Mumbai FOB export price", contract_unit: "tonne", currency: "USD" }
+
+weather_regions:
+  - { region_code: "IN_NASHIK", name: "Nashik (Maharashtra)", country: "IN" }
+  - { region_code: "IN_MADHYA_PRADESH", name: "Madhya Pradesh", country: "IN" }
+  - { region_code: "IN_KARNATAKA", name: "Karnataka (Bangalore rose)", country: "IN" }
+
+production_regions:
+  - { region_code: "IN", name: "India (Maharashtra ~40%)", role: "production" }
+
+consumption_regions:
+  - { region_code: "IN", name: "India (domestic staple)", role: "consumption" }
+
+export_regions:
+  - { region_code: "IN", name: "India", role: "export" }
+
+import_regions:
+  - { region_code: "BD", name: "Bangladesh", role: "import" }
+  - { region_code: "MY", name: "Malaysia", role: "import" }
+  - { region_code: "LK", name: "Sri Lanka", role: "import" }
+  - { region_code: "AE", name: "UAE", role: "import" }
+  - { region_code: "NP", name: "Nepal", role: "import" }
+
+physical_drivers:
+  - { metric_code: "mandi_arrivals", description: "Lasalgaon daily arrivals (quintals)" }
+  - { metric_code: "rabi_storage_stock", description: "Stored rabi-crop stock (Apr-Nov supply)" }
+  - { metric_code: "kharif_crop_progress", description: "Kharif (Oct-Dec) & late-kharif crop progress" }
+  - { metric_code: "planted_area", description: "Maharashtra/MP sown area" }
+  - { metric_code: "storage_loss_rate", description: "Storage spoilage/sprouting losses" }
+
+macro_drivers:
+  - { metric_code: "usd_inr", description: "USD/INR exchange rate" }
+  - { metric_code: "monsoon_rainfall", description: "Southwest monsoon timing/intensity" }
+  - { metric_code: "domestic_food_inflation", description: "Onion CPI (politically sensitive)" }
+
+logistics_drivers:
+  - { metric_code: "jnpt_port_lineup", description: "JNPT/Mumbai port export line-up" }
+  - { metric_code: "rail_road_freight", description: "Domestic rail/road freight to ports" }
+  - { metric_code: "physical_basis", description: "Mandi-FOB basis" }
+
+event_risk_drivers:
+  - { metric_code: "export_ban_mep", description: "Export ban / Minimum Export Price / export duty" }
+  - { metric_code: "unseasonal_rain", description: "Unseasonal rain damaging crop & storage" }
+  - { metric_code: "heatwave_storage", description: "Heatwave accelerating storage spoilage" }
+  - { metric_code: "election_price_control", description: "Pre-election price-control interventions (NAFED buffer)" }
+
+data_sources:
+  - { source_code: "AGMARKNET", name: "Agmarknet (mandi prices)", access: "public", url: "https://agmarknet.gov.in" }
+  - { source_code: "NHRDF", name: "National Horticultural Research & Development Foundation", access: "public", url: "https://nhrdf.org" }
+  - { source_code: "NAFED", name: "NAFED buffer-stock operations", access: "public", url: "https://www.nafed-india.com" }
+  - { source_code: "IMD", name: "India Meteorological Department", access: "public", url: "https://mausam.imd.gov.in" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "weekly", description: "Kharif/rabi double-cropping cycle" }
+  - { model_code: "inventory_regression", family: "statsmodels", horizon: "weekly", description: "Arrivals + storage-stock regression" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "weekly", description: "Gradient boosting with policy dummies" }
+
+notes: "Lasalgaon (Nashik) is the price benchmark for India and a proxy for South Asia. Three crops (kharif, late-kharif, rabi); rabi stored stock bridges Apr-Nov. Extremely politically sensitive — sudden export bans / MEP and NAFED buffer interventions cause sharp price breaks (key event risk). Domestic in INR, FOB in USD."

@@ -1,0 +1,77 @@
+commodity_code: "CORN"
+commodity_name: "Corn (Maize)"
+commodity_group: "agriculture"
+base_unit: "bushel"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "CME_ZC", exchange: "CME/CBOT", symbol: "ZC", description: "CBOT Corn Futures (benchmark)", contract_unit: "5000 bushels", currency: "USc" }
+  - { instrument_code: "BR_B3_CCM", exchange: "B3 Brazil", symbol: "CCM", description: "B3 Corn Futures", contract_unit: "450 bags", currency: "BRL" }
+  - { instrument_code: "US_GULF_FOB", exchange: "US Gulf FOB", symbol: "USGULF", description: "US Gulf corn FOB basis", contract_unit: "tonne", currency: "USD" }
+
+weather_regions:
+  - { region_code: "US_CORN_BELT", name: "US Corn Belt (Iowa, Illinois, Nebraska)", country: "US" }
+  - { region_code: "BR_MATO_GROSSO", name: "Mato Grosso (safrinha)", country: "BR" }
+  - { region_code: "AR_PAMPAS", name: "Argentine Pampas", country: "AR" }
+
+production_regions:
+  - { region_code: "US", name: "United States", role: "production" }
+  - { region_code: "CN", name: "China", role: "production" }
+  - { region_code: "BR", name: "Brazil", role: "production" }
+  - { region_code: "AR", name: "Argentina", role: "production" }
+  - { region_code: "UA", name: "Ukraine", role: "production" }
+
+consumption_regions:
+  - { region_code: "US", name: "United States (feed/ethanol)", role: "consumption" }
+  - { region_code: "CN", name: "China", role: "consumption" }
+  - { region_code: "EU", name: "European Union", role: "consumption" }
+
+export_regions:
+  - { region_code: "US", name: "United States", role: "export" }
+  - { region_code: "BR", name: "Brazil", role: "export" }
+  - { region_code: "AR", name: "Argentina", role: "export" }
+  - { region_code: "UA", name: "Ukraine", role: "export" }
+
+import_regions:
+  - { region_code: "CN", name: "China", role: "import" }
+  - { region_code: "MX", name: "Mexico", role: "import" }
+  - { region_code: "JP", name: "Japan", role: "import" }
+
+physical_drivers:
+  - { metric_code: "production_estimate", description: "USDA WASDE production" }
+  - { metric_code: "ending_stocks", description: "Ending stocks / stocks-to-use" }
+  - { metric_code: "planted_area", description: "Planted/harvested acreage" }
+  - { metric_code: "crop_condition", description: "USDA crop condition good/excellent %" }
+  - { metric_code: "yield_estimate", description: "Trend & realized yield (bu/acre)" }
+
+macro_drivers:
+  - { metric_code: "usd_brl", description: "USD/BRL exchange rate" }
+  - { metric_code: "crude_oil_ethanol", description: "Crude/ethanol margin (corn demand)" }
+  - { metric_code: "soybean_corn_ratio", description: "Soybean/corn acreage ratio" }
+  - { metric_code: "managed_money_positioning", description: "CFTC managed money net" }
+
+logistics_drivers:
+  - { metric_code: "mississippi_barge", description: "Mississippi barge freight / water levels" }
+  - { metric_code: "us_gulf_basis", description: "US Gulf export basis" }
+  - { metric_code: "freight_dry_bulk", description: "Panamax dry bulk freight" }
+
+event_risk_drivers:
+  - { metric_code: "el_nino_la_nina", description: "ENSO drought/flood risk" }
+  - { metric_code: "black_sea_disruption", description: "Black Sea export corridor risk" }
+  - { metric_code: "biofuel_policy", description: "US RFS / ethanol mandate changes" }
+  - { metric_code: "china_import_policy", description: "Chinese import quota/tariff" }
+
+data_sources:
+  - { source_code: "USDA_WASDE", name: "USDA WASDE / NASS", access: "public", url: "https://www.usda.gov" }
+  - { source_code: "CME", name: "CME Group / Barchart", access: "subscription", url: "https://www.cmegroup.com" }
+  - { source_code: "CONAB", name: "CONAB Brazil", access: "public", url: "https://www.conab.gov.br" }
+  - { source_code: "NOAA", name: "NOAA / NWS weather", access: "public", url: "https://www.noaa.gov" }
+  - { source_code: "CFTC", name: "CFTC Commitments of Traders", access: "public", url: "https://www.cftc.gov" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "weekly", description: "Planting/harvest seasonal" }
+  - { model_code: "sarimax", family: "statsmodels", horizon: "weekly", description: "SARIMAX with WASDE/weather exog" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting on condition/weather" }
+  - { model_code: "prophet_trend", family: "prophet", horizon: "monthly", description: "Trend + seasonality" }
+
+notes: "CBOT ZC is the global benchmark. Price driven by US Corn Belt summer weather (pollination Jul), Brazilian safrinha, ethanol demand and Black Sea exports. Strong substitution with soybeans via the acreage ratio."

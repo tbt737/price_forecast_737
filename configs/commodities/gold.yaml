@@ -1,0 +1,74 @@
+commodity_code: "GOLD"
+commodity_name: "Gold"
+commodity_group: "metal"
+base_unit: "troy_ounce"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "COMEX_GC", exchange: "CME/COMEX", symbol: "GC", description: "COMEX Gold Futures (benchmark)", contract_unit: "100 troy oz", currency: "USD" }
+  - { instrument_code: "LBMA_PM_FIX", exchange: "LBMA", symbol: "XAU", description: "LBMA Gold Price (PM auction)", contract_unit: "troy oz", currency: "USD" }
+  - { instrument_code: "SHFE_AU", exchange: "Shanghai Futures Exchange", symbol: "AU", description: "SHFE Gold Futures", contract_unit: "1000 g", currency: "CNY" }
+
+weather_regions:
+  - { region_code: "GLOBAL_NA", name: "Not a price driver — gold is a monetary asset; flooding can disrupt individual mines but has negligible price impact", country: "" }
+
+production_regions:
+  - { region_code: "CN", name: "China", role: "production" }
+  - { region_code: "AU", name: "Australia", role: "production" }
+  - { region_code: "RU", name: "Russia", role: "production" }
+  - { region_code: "US", name: "United States", role: "production" }
+  - { region_code: "CA", name: "Canada", role: "production" }
+
+consumption_regions:
+  - { region_code: "CN", name: "China (jewelry/investment)", role: "consumption" }
+  - { region_code: "IN", name: "India (jewelry)", role: "consumption" }
+  - { region_code: "US", name: "United States (investment)", role: "consumption" }
+
+export_regions:
+  - { region_code: "CH", name: "Switzerland (refining hub)", role: "export" }
+  - { region_code: "AU", name: "Australia", role: "export" }
+  - { region_code: "HK", name: "Hong Kong", role: "export" }
+
+import_regions:
+  - { region_code: "CN", name: "China", role: "import" }
+  - { region_code: "IN", name: "India", role: "import" }
+  - { region_code: "CH", name: "Switzerland", role: "import" }
+
+physical_drivers:
+  - { metric_code: "mine_supply", description: "Global mine production (WGC)" }
+  - { metric_code: "central_bank_demand", description: "Central bank net purchases" }
+  - { metric_code: "etf_holdings", description: "Gold ETF total known holdings" }
+  - { metric_code: "jewelry_demand", description: "India/China jewelry demand" }
+  - { metric_code: "recycling_supply", description: "Recycled gold scrap supply" }
+
+macro_drivers:
+  - { metric_code: "real_yields_10y", description: "US 10y TIPS real yield (key driver)" }
+  - { metric_code: "dxy_dollar_index", description: "US dollar index (DXY)" }
+  - { metric_code: "fed_funds_expectations", description: "Fed policy / rate-cut expectations" }
+  - { metric_code: "inflation_expectations", description: "Breakeven inflation" }
+  - { metric_code: "managed_money_positioning", description: "CFTC managed money net" }
+  - { metric_code: "gold_silver_ratio", description: "Gold/silver ratio" }
+
+logistics_drivers:
+  - { metric_code: "eft_gc_spread", description: "EFP (COMEX-London) spread" }
+  - { metric_code: "lease_rates", description: "Gold lease / GOFO rates" }
+
+event_risk_drivers:
+  - { metric_code: "geopolitical_risk", description: "Geopolitical risk index / safe-haven flows" }
+  - { metric_code: "financial_stress", description: "Banking/credit stress, VIX spikes" }
+  - { metric_code: "india_import_duty", description: "Indian gold import duty changes" }
+  - { metric_code: "de_dollarization", description: "Central-bank reserve diversification" }
+
+data_sources:
+  - { source_code: "WGC", name: "World Gold Council", access: "public", url: "https://www.gold.org" }
+  - { source_code: "LBMA", name: "London Bullion Market Association", access: "public", url: "https://www.lbma.org.uk" }
+  - { source_code: "CME", name: "CME Group / Barchart", access: "subscription", url: "https://www.cmegroup.com" }
+  - { source_code: "FRED", name: "FRED (real yields, DXY, CPI)", access: "public", url: "https://fred.stlouisfed.org" }
+  - { source_code: "CFTC", name: "CFTC Commitments of Traders", access: "public", url: "https://www.cftc.gov" }
+
+models:
+  - { model_code: "macro_factor", family: "statsmodels", horizon: "daily", description: "Real-yield + DXY factor regression" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting on macro features" }
+  - { model_code: "prophet_trend", family: "prophet", horizon: "monthly", description: "Trend with macro regressors" }
+
+notes: "Gold is a macro/monetary asset, not a seasonal crop — no weather_regions. Price is driven overwhelmingly by US real yields, the dollar (DXY), central-bank buying and safe-haven flows. Physical demand (India/China jewelry) is secondary. COMEX GC + LBMA fix are benchmarks."

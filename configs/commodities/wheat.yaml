@@ -1,0 +1,77 @@
+commodity_code: "WHEAT"
+commodity_name: "Wheat"
+commodity_group: "agriculture"
+base_unit: "bushel"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "CME_ZW", exchange: "CME/CBOT", symbol: "ZW", description: "CBOT Soft Red Winter Wheat (benchmark)", contract_unit: "5000 bushels", currency: "USc" }
+  - { instrument_code: "KC_HRW", exchange: "CME/KCBT", symbol: "KE", description: "Hard Red Winter Wheat", contract_unit: "5000 bushels", currency: "USc" }
+  - { instrument_code: "EURONEXT_MILLING", exchange: "Euronext", symbol: "EBM", description: "Euronext Milling Wheat", contract_unit: "50 tonnes", currency: "EUR" }
+
+weather_regions:
+  - { region_code: "US_PLAINS", name: "US Southern/Central Plains", country: "US" }
+  - { region_code: "RU_BLACK_SEA", name: "Russia Black Earth / Volga", country: "RU" }
+  - { region_code: "EU_FRANCE", name: "Northern France", country: "FR" }
+  - { region_code: "AU_WHEAT_BELT", name: "Australian wheat belt", country: "AU" }
+
+production_regions:
+  - { region_code: "CN", name: "China", role: "production" }
+  - { region_code: "IN", name: "India", role: "production" }
+  - { region_code: "RU", name: "Russia", role: "production" }
+  - { region_code: "US", name: "United States", role: "production" }
+  - { region_code: "EU", name: "European Union", role: "production" }
+
+consumption_regions:
+  - { region_code: "CN", name: "China", role: "consumption" }
+  - { region_code: "IN", name: "India", role: "consumption" }
+  - { region_code: "EU", name: "European Union", role: "consumption" }
+
+export_regions:
+  - { region_code: "RU", name: "Russia", role: "export" }
+  - { region_code: "US", name: "United States", role: "export" }
+  - { region_code: "EU", name: "European Union", role: "export" }
+  - { region_code: "AU", name: "Australia", role: "export" }
+  - { region_code: "UA", name: "Ukraine", role: "export" }
+
+import_regions:
+  - { region_code: "EG", name: "Egypt", role: "import" }
+  - { region_code: "ID", name: "Indonesia", role: "import" }
+  - { region_code: "TR", name: "Turkey", role: "import" }
+
+physical_drivers:
+  - { metric_code: "production_estimate", description: "USDA/IGC production estimates" }
+  - { metric_code: "ending_stocks", description: "Ending stocks / stocks-to-use" }
+  - { metric_code: "crop_condition", description: "Winter wheat condition / crop ratings" }
+  - { metric_code: "protein_quality", description: "Protein content / milling quality" }
+  - { metric_code: "planted_area", description: "Winter/spring planted area" }
+
+macro_drivers:
+  - { metric_code: "usd_rub", description: "USD/RUB exchange rate" }
+  - { metric_code: "usd_eur", description: "EUR/USD exchange rate" }
+  - { metric_code: "energy_natgas", description: "Natural gas (fertilizer input cost)" }
+  - { metric_code: "managed_money_positioning", description: "CFTC managed money net" }
+
+logistics_drivers:
+  - { metric_code: "black_sea_freight", description: "Black Sea export freight" }
+  - { metric_code: "freight_dry_bulk", description: "Panamax/Handysize dry bulk" }
+  - { metric_code: "physical_basis", description: "Export FOB differentials" }
+
+event_risk_drivers:
+  - { metric_code: "black_sea_disruption", description: "War / corridor / sanctions risk" }
+  - { metric_code: "export_quota_russia", description: "Russian export tax/quota" }
+  - { metric_code: "drought_frost", description: "Winterkill / drought / heat shocks" }
+  - { metric_code: "el_nino_la_nina", description: "ENSO impact on Australia/India" }
+
+data_sources:
+  - { source_code: "USDA_WASDE", name: "USDA WASDE / NASS", access: "public", url: "https://www.usda.gov" }
+  - { source_code: "IGC", name: "International Grains Council", access: "public", url: "https://www.igc.int" }
+  - { source_code: "SOVECON", name: "SovEcon / IKAR (Russia)", access: "subscription", url: "https://sovecon.ru" }
+  - { source_code: "EU_MARS", name: "EU MARS crop monitoring", access: "public", url: "https://agri4cast.jrc.ec.europa.eu" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "weekly", description: "Northern/southern hemisphere harvest cycles" }
+  - { model_code: "sarimax", family: "statsmodels", horizon: "weekly", description: "SARIMAX with geopolitical exog" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting" }
+
+notes: "Three US contracts (SRW/HRW/spring) plus Euronext and Black Sea FOB. Russia is the dominant exporter; Black Sea geopolitics and export taxes are the key event risk. Staggered global harvests give a complex multi-frequency seasonal signal."

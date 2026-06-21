@@ -1,0 +1,68 @@
+commodity_code: "RED_ONION_CHINA"
+commodity_name: "Red Onion (China)"
+commodity_group: "agriculture"
+base_unit: "tonne"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "CN_JINXIANG_SPOT", exchange: "China wholesale", symbol: "JINXIANG_ON", description: "Jinxiang/Shandong onion wholesale price", contract_unit: "kg", currency: "CNY" }
+  - { instrument_code: "CN_FOB_QINGDAO", exchange: "China FOB", symbol: "QDFOB_ON", description: "Qingdao FOB export price (red/yellow onion)", contract_unit: "tonne", currency: "USD" }
+  - { instrument_code: "CN_GANSU_SPOT", exchange: "China wholesale", symbol: "GANSU", description: "Gansu/Inner Mongolia production-area price", contract_unit: "kg", currency: "CNY" }
+
+weather_regions:
+  - { region_code: "CN_SHANDONG", name: "Shandong", country: "CN" }
+  - { region_code: "CN_GANSU", name: "Gansu", country: "CN" }
+  - { region_code: "CN_INNER_MONGOLIA", name: "Inner Mongolia", country: "CN" }
+  - { region_code: "CN_YUNNAN", name: "Yunnan (early crop)", country: "CN" }
+
+production_regions:
+  - { region_code: "CN", name: "China (largest global producer)", role: "production" }
+
+consumption_regions:
+  - { region_code: "CN", name: "China (domestic)", role: "consumption" }
+
+export_regions:
+  - { region_code: "CN", name: "China", role: "export" }
+
+import_regions:
+  - { region_code: "VN", name: "Vietnam", role: "import" }
+  - { region_code: "MY", name: "Malaysia", role: "import" }
+  - { region_code: "TH", name: "Thailand", role: "import" }
+  - { region_code: "JP", name: "Japan", role: "import" }
+  - { region_code: "RU", name: "Russia", role: "import" }
+
+physical_drivers:
+  - { metric_code: "cold_storage_inventory", description: "Cold-storage onion stock levels" }
+  - { metric_code: "planted_area", description: "Shandong/Gansu sown area YoY" }
+  - { metric_code: "new_crop_yield", description: "New-crop yield/quality by region" }
+  - { metric_code: "regional_harvest_calendar", description: "Yunnan(early)->Shandong->Gansu staggered harvest" }
+  - { metric_code: "bulb_size_grade", description: "Bulb size/colour grading for export" }
+
+macro_drivers:
+  - { metric_code: "usd_cny", description: "USD/CNY exchange rate" }
+  - { metric_code: "diesel_storage_cost", description: "Cold-storage energy cost" }
+  - { metric_code: "domestic_vegetable_index", description: "China vegetable wholesale price index" }
+
+logistics_drivers:
+  - { metric_code: "qingdao_port_lineup", description: "Qingdao reefer/container availability" }
+  - { metric_code: "reefer_freight", description: "Reefer freight to SE Asia" }
+  - { metric_code: "land_border_crossing", description: "Land-border crossing to Vietnam (Lang Son)" }
+
+event_risk_drivers:
+  - { metric_code: "india_export_ban_spillover", description: "Indian onion export ban diverting demand to China" }
+  - { metric_code: "phytosanitary_ban", description: "Phytosanitary / SPS import bans" }
+  - { metric_code: "spring_frost", description: "Spring frost / unseasonal weather" }
+  - { metric_code: "import_quota_destination", description: "Destination-country import quota/permits" }
+
+data_sources:
+  - { source_code: "CN_AGRI_MOA", name: "China Ministry of Agriculture wholesale prices", access: "public", url: "http://www.moa.gov.cn" }
+  - { source_code: "TRIDGE", name: "Tridge / Selina Wamucii market intelligence", access: "subscription", url: "https://www.tridge.com" }
+  - { source_code: "UN_COMTRADE", name: "UN Comtrade (HS 070310) trade flows", access: "public", url: "https://comtrade.un.org" }
+  - { source_code: "NASA_POWER", name: "NASA POWER agroclimatology", access: "public", url: "https://power.larc.nasa.gov" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "weekly", description: "Staggered regional-harvest + storage cycle" }
+  - { model_code: "inventory_regression", family: "statsmodels", horizon: "weekly", description: "Cold-storage inventory regression" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "weekly", description: "Gradient boosting on area + storage" }
+
+notes: "China is the largest global onion producer; staggered regional harvests (Yunnan early -> Shandong -> Gansu/Inner Mongolia) smooth supply. Price discovery via Shandong/Jinxiang wholesale + Qingdao FOB. A key swing factor is Indian export bans diverting Asian import demand to Chinese onions. Domestic CNY, export USD."

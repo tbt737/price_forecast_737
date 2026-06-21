@@ -1,0 +1,76 @@
+commodity_code: "PEANUTS"
+commodity_name: "Peanuts (Groundnut)"
+commodity_group: "agriculture"
+base_unit: "tonne"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "CN_FOB_QINGDAO", exchange: "China FOB", symbol: "QDPNFOB", description: "Qingdao FOB peanut kernels (Java/Hsuji 41/51)", contract_unit: "tonne", currency: "USD" }
+  - { instrument_code: "IN_FOB_GUJARAT", exchange: "India FOB", symbol: "GJPNFOB", description: "Gujarat FOB groundnut kernels (Bold/Java)", contract_unit: "tonne", currency: "USD" }
+  - { instrument_code: "US_RUNNER_SPOT", exchange: "US domestic", symbol: "USRUNNER", description: "US Runner farmer stock / shelled price", contract_unit: "tonne", currency: "USD" }
+
+weather_regions:
+  - { region_code: "CN_HENAN_SHANDONG", name: "Henan / Shandong (China)", country: "CN" }
+  - { region_code: "IN_GUJARAT", name: "Gujarat / Rajasthan (India)", country: "IN" }
+  - { region_code: "US_SOUTHEAST", name: "Georgia / Alabama / Florida (US)", country: "US" }
+  - { region_code: "AR_CORDOBA", name: "Cordoba (Argentina)", country: "AR" }
+
+production_regions:
+  - { region_code: "CN", name: "China (largest producer)", role: "production" }
+  - { region_code: "IN", name: "India", role: "production" }
+  - { region_code: "NG", name: "Nigeria", role: "production" }
+  - { region_code: "US", name: "United States", role: "production" }
+  - { region_code: "AR", name: "Argentina", role: "production" }
+
+consumption_regions:
+  - { region_code: "CN", name: "China (oil crush + food)", role: "consumption" }
+  - { region_code: "IN", name: "India (oil crush)", role: "consumption" }
+  - { region_code: "EU", name: "European Union (confectionery)", role: "consumption" }
+
+export_regions:
+  - { region_code: "AR", name: "Argentina (confectionery exporter)", role: "export" }
+  - { region_code: "IN", name: "India", role: "export" }
+  - { region_code: "US", name: "United States", role: "export" }
+  - { region_code: "CN", name: "China", role: "export" }
+
+import_regions:
+  - { region_code: "EU", name: "European Union", role: "import" }
+  - { region_code: "ID", name: "Indonesia", role: "import" }
+  - { region_code: "VN", name: "Vietnam", role: "import" }
+
+physical_drivers:
+  - { metric_code: "production_estimate", description: "Production by origin (USDA/national)" }
+  - { metric_code: "planted_area", description: "Sown area (competes with cotton/soy/corn)" }
+  - { metric_code: "crush_demand", description: "Oil-crush demand (China/India)" }
+  - { metric_code: "kernel_grade_outturn", description: "Kernel grade / oil content / outturn" }
+  - { metric_code: "ending_stocks", description: "Carryout / farmer-stock inventory" }
+
+macro_drivers:
+  - { metric_code: "usd_cny", description: "USD/CNY exchange rate" }
+  - { metric_code: "usd_inr", description: "USD/INR exchange rate" }
+  - { metric_code: "vegetable_oil_complex", description: "Soybean/palm oil prices (crush substitution)" }
+  - { metric_code: "peanut_oil_premium", description: "Peanut oil premium vs soyoil" }
+
+logistics_drivers:
+  - { metric_code: "qingdao_port_lineup", description: "Qingdao container availability" }
+  - { metric_code: "reefer_container_freight", description: "Container freight to EU/Asia" }
+  - { metric_code: "physical_basis", description: "FOB origin differentials" }
+
+event_risk_drivers:
+  - { metric_code: "aflatoxin_rejection", description: "Aflatoxin / EU MRL border rejections (key risk)" }
+  - { metric_code: "monsoon_drought", description: "Indian monsoon / drought in rainfed area" }
+  - { metric_code: "el_nino_la_nina", description: "ENSO impact on multiple origins" }
+  - { metric_code: "china_import_policy", description: "Chinese import/quality policy" }
+
+data_sources:
+  - { source_code: "USDA_FAS", name: "USDA FAS PSD (oilseeds)", access: "public", url: "https://fas.usda.gov" }
+  - { source_code: "TRIDGE", name: "Tridge / Mintec market intelligence", access: "subscription", url: "https://www.tridge.com" }
+  - { source_code: "UN_COMTRADE", name: "UN Comtrade (HS 1202) trade flows", access: "public", url: "https://comtrade.un.org" }
+  - { source_code: "AGMARKNET", name: "Agmarknet (India groundnut mandi prices)", access: "public", url: "https://agmarknet.gov.in" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "weekly", description: "Multi-origin harvest cycle" }
+  - { model_code: "sarimax", family: "statsmodels", horizon: "weekly", description: "SARIMAX with veg-oil/crush exog" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "weekly", description: "Gradient boosting" }
+
+notes: "Dual-use: oil crush (China/India) vs confectionery/edible (Argentina/US export). No deep futures market — price via origin FOB (Qingdao, Gujarat) and US farmer-stock. Linked to the vegetable-oil complex via crush substitution. Aflatoxin/MRL border rejections are the dominant trade risk; rainfed monsoon exposure in India."

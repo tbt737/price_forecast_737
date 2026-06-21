@@ -1,0 +1,70 @@
+commodity_code: "INDIAN_CHILIES"
+commodity_name: "Indian Dried Red Chilies"
+commodity_group: "agriculture"
+base_unit: "quintal"
+default_currency: "INR"
+
+market_instruments:
+  - { instrument_code: "NCDEX_CHILLI", exchange: "NCDEX", symbol: "CHARMINAR", description: "NCDEX Chilli (Guntur) Futures", contract_unit: "5 tonnes", currency: "INR" }
+  - { instrument_code: "IN_GUNTUR_SPOT", exchange: "Guntur mandi", symbol: "GUNTUR", description: "Guntur (Andhra Pradesh) spot mandi price (Teja S17)", contract_unit: "quintal", currency: "INR" }
+  - { instrument_code: "IN_FOB_CHENNAI", exchange: "India FOB", symbol: "CHFOB", description: "Chennai FOB export price", contract_unit: "tonne", currency: "USD" }
+
+weather_regions:
+  - { region_code: "IN_GUNTUR", name: "Guntur (Andhra Pradesh)", country: "IN" }
+  - { region_code: "IN_TELANGANA", name: "Khammam / Warangal (Telangana)", country: "IN" }
+  - { region_code: "IN_KARNATAKA", name: "Byadgi (Karnataka)", country: "IN" }
+
+production_regions:
+  - { region_code: "IN", name: "India (largest producer/exporter)", role: "production" }
+  - { region_code: "CN", name: "China", role: "production" }
+  - { region_code: "PE", name: "Peru", role: "production" }
+
+consumption_regions:
+  - { region_code: "IN", name: "India (domestic)", role: "consumption" }
+  - { region_code: "CN", name: "China", role: "consumption" }
+  - { region_code: "BD", name: "Bangladesh", role: "consumption" }
+
+export_regions:
+  - { region_code: "IN", name: "India", role: "export" }
+
+import_regions:
+  - { region_code: "CN", name: "China", role: "import" }
+  - { region_code: "BD", name: "Bangladesh", role: "import" }
+  - { region_code: "VN", name: "Vietnam", role: "import" }
+  - { region_code: "US", name: "United States", role: "import" }
+
+physical_drivers:
+  - { metric_code: "mandi_arrivals", description: "Guntur mandi daily arrivals (bags)" }
+  - { metric_code: "cold_storage_inventory", description: "Cold-storage stock levels" }
+  - { metric_code: "planted_area", description: "Andhra/Telangana sown area" }
+  - { metric_code: "new_crop_quality", description: "New-crop colour (ASTA) / pungency grade" }
+  - { metric_code: "variety_mix", description: "Teja / Sannam / Byadgi variety premium" }
+
+macro_drivers:
+  - { metric_code: "usd_inr", description: "USD/INR exchange rate" }
+  - { metric_code: "monsoon_rainfall", description: "Southwest/northeast monsoon rainfall" }
+  - { metric_code: "domestic_food_inflation", description: "Indian food CPI (spices)" }
+
+logistics_drivers:
+  - { metric_code: "chennai_port_lineup", description: "Chennai/Krishnapatnam port line-up" }
+  - { metric_code: "reefer_freight", description: "Reefer/container freight to China/SE Asia" }
+  - { metric_code: "physical_basis", description: "Spot-futures and FOB basis" }
+
+event_risk_drivers:
+  - { metric_code: "china_import_demand", description: "Chinese import demand swings (largest buyer)" }
+  - { metric_code: "thrips_pest_attack", description: "Black thrips / pest & disease outbreaks" }
+  - { metric_code: "unseasonal_rain", description: "Unseasonal rain damaging drying crop" }
+  - { metric_code: "pesticide_residue_ban", description: "EU/importer pesticide residue (MRL) rejections" }
+
+data_sources:
+  - { source_code: "AGMARKNET", name: "Agmarknet (India mandi prices)", access: "public", url: "https://agmarknet.gov.in" }
+  - { source_code: "NCDEX", name: "NCDEX exchange data", access: "subscription", url: "https://www.ncdex.com" }
+  - { source_code: "SPICES_BOARD", name: "Spices Board of India", access: "public", url: "https://www.indianspices.com" }
+  - { source_code: "IMD", name: "India Meteorological Department", access: "public", url: "https://mausam.imd.gov.in" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "weekly", description: "Harvest (Feb-Apr) + storage cycle" }
+  - { model_code: "inventory_regression", family: "statsmodels", horizon: "weekly", description: "Arrivals + cold-storage regression" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "weekly", description: "Gradient boosting" }
+
+notes: "India is the world's largest chili producer and exporter; Guntur is Asia's biggest market. NCDEX chilli futures plus Guntur mandi spot. Variety matters (Teja for pungency, Byadgi for colour/oleoresin). China is the swing buyer. Default currency INR; FOB priced in USD. Risks: thrips, unseasonal rain, MRL rejections."

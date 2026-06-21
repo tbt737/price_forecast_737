@@ -1,0 +1,75 @@
+commodity_code: "SUGAR"
+commodity_name: "Sugar (Raw / White)"
+commodity_group: "agriculture"
+base_unit: "lb"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "ICE_SB", exchange: "ICE US", symbol: "SB", description: "Sugar No.11 Raw Sugar Futures (benchmark)", contract_unit: "112000 lb", currency: "USc" }
+  - { instrument_code: "ICE_WHITE", exchange: "ICE Futures Europe", symbol: "W", description: "White Sugar No.5 Futures", contract_unit: "50 tonnes", currency: "USD" }
+  - { instrument_code: "BR_CEPEA_CRYSTAL", exchange: "Brazil domestic", symbol: "CEPEA", description: "CEPEA/Esalq crystal sugar (Sao Paulo)", contract_unit: "50kg bag", currency: "BRL" }
+
+weather_regions:
+  - { region_code: "BR_CENTER_SOUTH", name: "Brazil Center-South (Sao Paulo)", country: "BR" }
+  - { region_code: "IN_MAHARASHTRA", name: "Maharashtra / Uttar Pradesh", country: "IN" }
+  - { region_code: "TH_NORTHEAST", name: "Northeast Thailand", country: "TH" }
+
+production_regions:
+  - { region_code: "BR", name: "Brazil", role: "production" }
+  - { region_code: "IN", name: "India", role: "production" }
+  - { region_code: "EU", name: "European Union (beet)", role: "production" }
+  - { region_code: "TH", name: "Thailand", role: "production" }
+  - { region_code: "CN", name: "China", role: "production" }
+
+consumption_regions:
+  - { region_code: "IN", name: "India", role: "consumption" }
+  - { region_code: "EU", name: "European Union", role: "consumption" }
+  - { region_code: "CN", name: "China", role: "consumption" }
+  - { region_code: "US", name: "United States", role: "consumption" }
+
+export_regions:
+  - { region_code: "BR", name: "Brazil", role: "export" }
+  - { region_code: "TH", name: "Thailand", role: "export" }
+  - { region_code: "IN", name: "India", role: "export" }
+
+import_regions:
+  - { region_code: "CN", name: "China", role: "import" }
+  - { region_code: "ID", name: "Indonesia", role: "import" }
+  - { region_code: "US", name: "United States", role: "import" }
+
+physical_drivers:
+  - { metric_code: "production_estimate", description: "Brazil UNICA / global production" }
+  - { metric_code: "ending_stocks", description: "Ending stocks / stocks-to-use" }
+  - { metric_code: "ethanol_sugar_mix", description: "Brazil cane allocation sugar vs ethanol" }
+  - { metric_code: "atr_yield", description: "Total recoverable sugar (ATR) yield" }
+  - { metric_code: "crush_progress", description: "Center-South crush progress" }
+
+macro_drivers:
+  - { metric_code: "usd_brl", description: "USD/BRL exchange rate (key driver)" }
+  - { metric_code: "crude_oil_ethanol", description: "Crude/gasoline parity vs ethanol" }
+  - { metric_code: "white_premium", description: "White-raw premium (refining margin)" }
+  - { metric_code: "managed_money_positioning", description: "Speculative net positioning" }
+
+logistics_drivers:
+  - { metric_code: "santos_port_lineup", description: "Santos port sugar vessel line-up" }
+  - { metric_code: "freight_dry_bulk", description: "Bulk freight rates" }
+  - { metric_code: "physical_basis", description: "Raw sugar FOB differentials" }
+
+event_risk_drivers:
+  - { metric_code: "india_export_policy", description: "Indian export quota / ban" }
+  - { metric_code: "el_nino_la_nina", description: "ENSO drought (India/Thailand monsoon)" }
+  - { metric_code: "brazil_ethanol_policy", description: "Brazil fuel tax / ethanol mandate" }
+  - { metric_code: "frost_drought_brazil", description: "Center-South frost/drought" }
+
+data_sources:
+  - { source_code: "UNICA", name: "UNICA Brazil (cane/sugar/ethanol)", access: "public", url: "https://unica.com.br" }
+  - { source_code: "USDA_FAS", name: "USDA FAS PSD", access: "public", url: "https://fas.usda.gov" }
+  - { source_code: "ISO", name: "International Sugar Organization", access: "subscription", url: "https://www.isosugar.org" }
+  - { source_code: "ICE", name: "ICE / Barchart", access: "subscription", url: "https://www.theice.com" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "weekly", description: "Center-South crush season cycle" }
+  - { model_code: "sarimax", family: "statsmodels", horizon: "weekly", description: "SARIMAX with BRL/ethanol exog" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting" }
+
+notes: "Sugar No.11 (raw) is the global benchmark; price tied to Brazil's cane allocation between sugar and ethanol, USD/BRL, and crude oil parity. India's export policy and ENSO monsoon are major risks. White-raw premium signals refining demand."

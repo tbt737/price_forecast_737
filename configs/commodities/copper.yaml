@@ -1,0 +1,74 @@
+commodity_code: "COPPER"
+commodity_name: "Copper"
+commodity_group: "metal"
+base_unit: "tonne"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "LME_CA", exchange: "London Metal Exchange", symbol: "CA", description: "LME Copper (Grade A) 3-month (benchmark)", contract_unit: "25 tonnes", currency: "USD" }
+  - { instrument_code: "COMEX_HG", exchange: "CME/COMEX", symbol: "HG", description: "COMEX Copper Futures", contract_unit: "25000 lb", currency: "USc" }
+  - { instrument_code: "SHFE_CU", exchange: "Shanghai Futures Exchange", symbol: "CU", description: "SHFE Copper Futures", contract_unit: "5 tonnes", currency: "CNY" }
+
+weather_regions:
+  - { region_code: "CL_ATACAMA", name: "Atacama / Antofagasta (water-stress, drought affects mine ops)", country: "CL" }
+  - { region_code: "PE_ANDES", name: "Peruvian Andes (rainfall/landslide disruption)", country: "PE" }
+
+production_regions:
+  - { region_code: "CL", name: "Chile", role: "production" }
+  - { region_code: "PE", name: "Peru", role: "production" }
+  - { region_code: "CD", name: "DR Congo", role: "production" }
+  - { region_code: "CN", name: "China (smelting)", role: "production" }
+  - { region_code: "US", name: "United States", role: "production" }
+
+consumption_regions:
+  - { region_code: "CN", name: "China (~55% of demand)", role: "consumption" }
+  - { region_code: "EU", name: "European Union", role: "consumption" }
+  - { region_code: "US", name: "United States", role: "consumption" }
+
+export_regions:
+  - { region_code: "CL", name: "Chile", role: "export" }
+  - { region_code: "PE", name: "Peru", role: "export" }
+  - { region_code: "CD", name: "DR Congo", role: "export" }
+
+import_regions:
+  - { region_code: "CN", name: "China", role: "import" }
+  - { region_code: "JP", name: "Japan", role: "import" }
+  - { region_code: "DE", name: "Germany", role: "import" }
+
+physical_drivers:
+  - { metric_code: "mine_supply", description: "Global mine production / disruptions" }
+  - { metric_code: "exchange_inventory", description: "LME + COMEX + SHFE warehouse stocks" }
+  - { metric_code: "treatment_charges", description: "Smelter TC/RC charges (concentrate tightness)" }
+  - { metric_code: "china_demand", description: "China grid/property/EV demand" }
+  - { metric_code: "scrap_availability", description: "Copper scrap supply" }
+
+macro_drivers:
+  - { metric_code: "dxy_dollar_index", description: "US dollar index" }
+  - { metric_code: "global_pmi", description: "Global manufacturing PMI (Dr. Copper)" }
+  - { metric_code: "china_credit_impulse", description: "China credit impulse / stimulus" }
+  - { metric_code: "real_yields_10y", description: "US real yields" }
+  - { metric_code: "managed_money_positioning", description: "Speculative net positioning" }
+
+logistics_drivers:
+  - { metric_code: "lme_spread", description: "LME cash-3M spread (backwardation)" }
+  - { metric_code: "comex_lme_arb", description: "COMEX-LME arbitrage" }
+  - { metric_code: "freight_dry_bulk", description: "Concentrate shipping freight" }
+
+event_risk_drivers:
+  - { metric_code: "mine_strike_disruption", description: "Chile/Peru strikes & community protests" }
+  - { metric_code: "energy_transition_demand", description: "EV / grid electrification demand" }
+  - { metric_code: "resource_nationalism", description: "Royalty/tax/permitting policy (Chile, Peru, DRC)" }
+  - { metric_code: "china_property_stress", description: "China property sector stress" }
+
+data_sources:
+  - { source_code: "LME", name: "London Metal Exchange", access: "subscription", url: "https://www.lme.com" }
+  - { source_code: "ICSG", name: "International Copper Study Group", access: "public", url: "https://icsg.org" }
+  - { source_code: "COCHILCO", name: "COCHILCO (Chile copper commission)", access: "public", url: "https://www.cochilco.cl" }
+  - { source_code: "CME", name: "CME / Barchart", access: "subscription", url: "https://www.cmegroup.com" }
+
+models:
+  - { model_code: "macro_factor", family: "statsmodels", horizon: "daily", description: "PMI + DXY + inventory factor model" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting on macro/inventory" }
+  - { model_code: "sarimax", family: "statsmodels", horizon: "weekly", description: "SARIMAX with inventory exog" }
+
+notes: "'Dr. Copper' — a barometer of global industrial demand, with no crop-style weather seasonality; weather_regions capture mine-disruption risk only (Atacama water stress, Andes rainfall). China is ~55% of demand. Price driven by global PMI, the dollar, mine supply disruptions (Chile/Peru) and the energy-transition demand story. LME 3-month is the benchmark; TC/RC signal concentrate tightness."

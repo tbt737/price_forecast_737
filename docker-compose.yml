@@ -1,0 +1,31 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Local development stack. Phase 1 ships only PostgreSQL; the api/web services
+# are added in later phases (see ARCHITECTURE.md). Environment values are read
+# from `.env` (copy from `.env.example`); defaults below keep `up` working even
+# before `.env` is filled in. NEVER put real secrets in this file.
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cqp_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-commodity_quant}
+      POSTGRES_USER: ${POSTGRES_USER:-cqp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cqp_local_dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # SQL migrations can be mounted here for init in later phases:
+      # - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cqp} -d ${POSTGRES_DB:-commodity_quant}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+    name: cqp_pgdata

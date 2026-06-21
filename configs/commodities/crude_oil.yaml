@@ -1,0 +1,77 @@
+commodity_code: "CRUDE_OIL"
+commodity_name: "Crude Oil"
+commodity_group: "energy"
+base_unit: "barrel"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "NYMEX_CL", exchange: "CME/NYMEX", symbol: "CL", description: "WTI Crude Oil Futures", contract_unit: "1000 barrels", currency: "USD" }
+  - { instrument_code: "ICE_BRENT", exchange: "ICE Futures Europe", symbol: "B", description: "ICE Brent Crude Futures (global benchmark)", contract_unit: "1000 barrels", currency: "USD" }
+  - { instrument_code: "DUBAI_OMAN", exchange: "DME/Platts", symbol: "OQD", description: "Dubai/Oman sour benchmark", contract_unit: "barrel", currency: "USD" }
+
+weather_regions:
+  - { region_code: "US_GULF_COAST", name: "US Gulf Coast (hurricane exposure)", country: "US" }
+  - { region_code: "US_NORTHEAST", name: "US Northeast (heating demand)", country: "US" }
+
+production_regions:
+  - { region_code: "US", name: "United States (shale)", role: "production" }
+  - { region_code: "SA", name: "Saudi Arabia", role: "production" }
+  - { region_code: "RU", name: "Russia", role: "production" }
+  - { region_code: "CA", name: "Canada", role: "production" }
+  - { region_code: "IQ", name: "Iraq", role: "production" }
+
+consumption_regions:
+  - { region_code: "US", name: "United States", role: "consumption" }
+  - { region_code: "CN", name: "China", role: "consumption" }
+  - { region_code: "IN", name: "India", role: "consumption" }
+  - { region_code: "EU", name: "European Union", role: "consumption" }
+
+export_regions:
+  - { region_code: "SA", name: "Saudi Arabia", role: "export" }
+  - { region_code: "RU", name: "Russia", role: "export" }
+  - { region_code: "US", name: "United States", role: "export" }
+
+import_regions:
+  - { region_code: "CN", name: "China", role: "import" }
+  - { region_code: "IN", name: "India", role: "import" }
+  - { region_code: "EU", name: "European Union", role: "import" }
+
+physical_drivers:
+  - { metric_code: "opec_production", description: "OPEC+ production / quota compliance" }
+  - { metric_code: "us_crude_inventory", description: "EIA weekly crude inventories (Cushing)" }
+  - { metric_code: "rig_count", description: "Baker Hughes US rig count" }
+  - { metric_code: "refinery_utilization", description: "Refinery run rates / crack spreads" }
+  - { metric_code: "spare_capacity", description: "OPEC spare capacity" }
+  - { metric_code: "spr_levels", description: "Strategic Petroleum Reserve levels" }
+
+macro_drivers:
+  - { metric_code: "dxy_dollar_index", description: "US dollar index" }
+  - { metric_code: "global_pmi", description: "Global manufacturing PMI (demand proxy)" }
+  - { metric_code: "term_structure", description: "Contango/backwardation (timespreads)" }
+  - { metric_code: "managed_money_positioning", description: "Speculative net positioning" }
+  - { metric_code: "brent_wti_spread", description: "Brent-WTI spread" }
+
+logistics_drivers:
+  - { metric_code: "tanker_freight", description: "VLCC / clean tanker freight rates" }
+  - { metric_code: "strait_chokepoint_flow", description: "Hormuz / Malacca / Suez transit" }
+  - { metric_code: "floating_storage", description: "Floating storage volumes" }
+
+event_risk_drivers:
+  - { metric_code: "geopolitical_supply_risk", description: "Middle East / Russia conflict & sanctions" }
+  - { metric_code: "opec_meeting_decision", description: "OPEC+ policy meetings" }
+  - { metric_code: "hurricane_gulf", description: "Atlantic hurricanes (Gulf output)" }
+  - { metric_code: "demand_shock", description: "Recession / pandemic demand shocks" }
+
+data_sources:
+  - { source_code: "EIA", name: "US Energy Information Administration", access: "public", url: "https://www.eia.gov" }
+  - { source_code: "OPEC", name: "OPEC Monthly Oil Market Report", access: "public", url: "https://www.opec.org" }
+  - { source_code: "IEA", name: "International Energy Agency", access: "subscription", url: "https://www.iea.org" }
+  - { source_code: "BAKER_HUGHES", name: "Baker Hughes Rig Count", access: "public", url: "https://rigcount.bakerhughes.com" }
+  - { source_code: "CME", name: "CME / ICE / Barchart", access: "subscription", url: "https://www.cmegroup.com" }
+
+models:
+  - { model_code: "term_structure_factor", family: "statsmodels", horizon: "daily", description: "Inventory + timespread factor model" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting on EIA/macro features" }
+  - { model_code: "sarimax", family: "statsmodels", horizon: "weekly", description: "SARIMAX with inventory exog" }
+
+notes: "Brent is the global benchmark, WTI the US benchmark. Price driven by OPEC+ supply policy, EIA inventories, global demand (PMI) and geopolitical supply risk. Weekly inventory cycle plus winter heating / summer driving seasonality. Term structure (contango/backwardation) is a key signal."

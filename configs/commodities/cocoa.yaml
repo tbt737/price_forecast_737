@@ -1,0 +1,73 @@
+commodity_code: "COCOA"
+commodity_name: "Cocoa"
+commodity_group: "agriculture"
+base_unit: "tonne"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "ICE_CC", exchange: "ICE US", symbol: "CC", description: "ICE US Cocoa Futures (USD benchmark)", contract_unit: "10 tonnes", currency: "USD" }
+  - { instrument_code: "ICE_C", exchange: "ICE Futures Europe", symbol: "C", description: "London Cocoa Futures", contract_unit: "10 tonnes", currency: "GBP" }
+  - { instrument_code: "CIV_FARMGATE", exchange: "Cote d'Ivoire", symbol: "CCC", description: "CCC fixed farmgate price", contract_unit: "kg", currency: "XOF" }
+
+weather_regions:
+  - { region_code: "CI_SOUTHWEST", name: "Cote d'Ivoire southwest belt", country: "CI" }
+  - { region_code: "GH_ASHANTI", name: "Ghana (Ashanti, Western)", country: "GH" }
+  - { region_code: "EC_GUAYAS", name: "Ecuador (Guayas)", country: "EC" }
+
+production_regions:
+  - { region_code: "CI", name: "Cote d'Ivoire", role: "production" }
+  - { region_code: "GH", name: "Ghana", role: "production" }
+  - { region_code: "EC", name: "Ecuador", role: "production" }
+  - { region_code: "CM", name: "Cameroon", role: "production" }
+  - { region_code: "NG", name: "Nigeria", role: "production" }
+
+consumption_regions:
+  - { region_code: "EU", name: "European Union (grind)", role: "consumption" }
+  - { region_code: "US", name: "United States", role: "consumption" }
+  - { region_code: "CN", name: "China (growing)", role: "consumption" }
+
+export_regions:
+  - { region_code: "CI", name: "Cote d'Ivoire", role: "export" }
+  - { region_code: "GH", name: "Ghana", role: "export" }
+  - { region_code: "EC", name: "Ecuador", role: "export" }
+
+import_regions:
+  - { region_code: "NL", name: "Netherlands (grind hub)", role: "import" }
+  - { region_code: "US", name: "United States", role: "import" }
+  - { region_code: "DE", name: "Germany", role: "import" }
+
+physical_drivers:
+  - { metric_code: "production_estimate", description: "ICCO production estimates" }
+  - { metric_code: "port_arrivals", description: "Cote d'Ivoire port arrivals (weekly)" }
+  - { metric_code: "grind_demand", description: "Regional grindings (EU/US/Asia)" }
+  - { metric_code: "stocks_to_grind", description: "Stocks-to-grindings ratio" }
+  - { metric_code: "mid_crop_quality", description: "Main vs mid-crop bean count/quality" }
+
+macro_drivers:
+  - { metric_code: "usd_gbp", description: "GBP/USD (London-NY arbitrage)" }
+  - { metric_code: "usd_eur", description: "EUR/USD exchange rate" }
+  - { metric_code: "managed_money_positioning", description: "Speculative net positioning" }
+
+logistics_drivers:
+  - { metric_code: "abidjan_port_lineup", description: "Abidjan/San Pedro port line-up" }
+  - { metric_code: "freight_west_africa", description: "West Africa-Europe freight" }
+  - { metric_code: "physical_basis", description: "Origin differentials vs futures" }
+
+event_risk_drivers:
+  - { metric_code: "harmattan_drought", description: "Harmattan dry winds / drought" }
+  - { metric_code: "swollen_shoot_disease", description: "Cacao swollen shoot virus / black pod" }
+  - { metric_code: "eudr_compliance", description: "EU Deforestation Regulation" }
+  - { metric_code: "ivory_coast_policy", description: "CCC/Cocobod pricing & LID premium policy" }
+
+data_sources:
+  - { source_code: "ICCO", name: "International Cocoa Organization", access: "subscription", url: "https://www.icco.org" }
+  - { source_code: "ICE", name: "ICE / Barchart", access: "subscription", url: "https://www.theice.com" }
+  - { source_code: "NCA_ESA", name: "Grinding data (NCA / ESA / CAA)", access: "public", url: "https://www.nationalconfectioners.org" }
+  - { source_code: "NASA_POWER", name: "NASA POWER agroclimatology", access: "public", url: "https://power.larc.nasa.gov" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "weekly", description: "Main-crop/mid-crop cycle" }
+  - { model_code: "sarimax", family: "statsmodels", horizon: "weekly", description: "SARIMAX with arrivals/grind exog" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting" }
+
+notes: "West Africa (Cote d'Ivoire + Ghana) supplies ~60% of world cocoa; supply is highly weather- and disease-sensitive (swollen shoot, black pod, harmattan). NY (USD) and London (GBP) contracts arbitrage. Farmgate prices are administratively fixed; EUDR is a structural risk."

@@ -1,0 +1,72 @@
+commodity_code: "RICE"
+commodity_name: "Rice (Paddy / Milled)"
+commodity_group: "agriculture"
+base_unit: "tonne"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "CME_ZR", exchange: "CME/CBOT", symbol: "ZR", description: "Rough Rice Futures", contract_unit: "2000 cwt", currency: "USD" }
+  - { instrument_code: "TH_5PCT_FOB", exchange: "Thailand FOB", symbol: "THB5", description: "Thai 5% broken white rice FOB Bangkok", contract_unit: "tonne", currency: "USD" }
+  - { instrument_code: "VN_5PCT_FOB", exchange: "Vietnam FOB", symbol: "VN5", description: "Vietnam 5% broken FOB", contract_unit: "tonne", currency: "USD" }
+
+weather_regions:
+  - { region_code: "IN_GANGETIC", name: "Indo-Gangetic Plain", country: "IN" }
+  - { region_code: "VN_MEKONG", name: "Mekong Delta", country: "VN" }
+  - { region_code: "TH_CENTRAL", name: "Central Thailand", country: "TH" }
+
+production_regions:
+  - { region_code: "IN", name: "India", role: "production" }
+  - { region_code: "CN", name: "China", role: "production" }
+  - { region_code: "VN", name: "Vietnam", role: "production" }
+  - { region_code: "TH", name: "Thailand", role: "production" }
+  - { region_code: "PK", name: "Pakistan", role: "production" }
+
+consumption_regions:
+  - { region_code: "CN", name: "China", role: "consumption" }
+  - { region_code: "IN", name: "India", role: "consumption" }
+  - { region_code: "ID", name: "Indonesia", role: "consumption" }
+
+export_regions:
+  - { region_code: "IN", name: "India", role: "export" }
+  - { region_code: "TH", name: "Thailand", role: "export" }
+  - { region_code: "VN", name: "Vietnam", role: "export" }
+
+import_regions:
+  - { region_code: "PH", name: "Philippines", role: "import" }
+  - { region_code: "NG", name: "Nigeria", role: "import" }
+  - { region_code: "CN", name: "China", role: "import" }
+
+physical_drivers:
+  - { metric_code: "production_estimate", description: "USDA PSD milled rice production" }
+  - { metric_code: "ending_stocks", description: "Ending stocks / stocks-to-use ratio" }
+  - { metric_code: "monsoon_rainfall", description: "Indian monsoon cumulative rainfall" }
+  - { metric_code: "planted_area", description: "Harvested/planted area" }
+
+macro_drivers:
+  - { metric_code: "usd_inr", description: "USD/INR exchange rate" }
+  - { metric_code: "usd_thb", description: "USD/THB exchange rate" }
+  - { metric_code: "fertilizer_cost", description: "Urea/DAP fertilizer prices" }
+  - { metric_code: "energy_diesel", description: "Diesel cost for irrigation/transport" }
+
+logistics_drivers:
+  - { metric_code: "freight_asia", description: "Bulk/container freight from Asia" }
+  - { metric_code: "physical_basis", description: "FOB origin differentials" }
+
+event_risk_drivers:
+  - { metric_code: "export_ban_india", description: "Indian export restrictions/bans" }
+  - { metric_code: "el_nino_la_nina", description: "ENSO impact on monsoon" }
+  - { metric_code: "minimum_support_price", description: "Government MSP / procurement policy" }
+  - { metric_code: "import_tender", description: "Government import tenders (PH, Indonesia)" }
+
+data_sources:
+  - { source_code: "USDA_FAS", name: "USDA FAS PSD", access: "public", url: "https://fas.usda.gov" }
+  - { source_code: "FAO", name: "FAO Rice Market Monitor", access: "public", url: "https://www.fao.org" }
+  - { source_code: "TREA", name: "Thai Rice Exporters Association", access: "public", url: "http://www.thairiceexporters.or.th" }
+  - { source_code: "IMD", name: "India Meteorological Department (monsoon)", access: "public", url: "https://mausam.imd.gov.in" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "monthly", description: "Monsoon/harvest seasonal cycle" }
+  - { model_code: "sarimax", family: "statsmodels", horizon: "weekly", description: "SARIMAX with policy/FX exogenous" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "weekly", description: "Gradient boosting" }
+
+notes: "India is the swing exporter; its export bans/MSP dominate world price. Two crops (Kharif/Rabi) tied to the monsoon. ENSO drives monsoon variance. Spot benchmarks are Thai/Vietnam FOB rather than the thin CME futures."

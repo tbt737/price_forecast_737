@@ -1,0 +1,74 @@
+commodity_code: "FREIGHT_INDICES"
+commodity_name: "Freight & Logistics Indices"
+commodity_group: "logistics"
+base_unit: "index_point"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "BDI", exchange: "Baltic Exchange", symbol: "BDI", description: "Baltic Dry Index (dry bulk composite)", contract_unit: "index", currency: "USD" }
+  - { instrument_code: "BDI_CAPESIZE", exchange: "Baltic Exchange", symbol: "BCI", description: "Baltic Capesize Index (iron ore/coal)", contract_unit: "index", currency: "USD" }
+  - { instrument_code: "BDI_PANAMAX", exchange: "Baltic Exchange", symbol: "BPI", description: "Baltic Panamax Index (grains/coal)", contract_unit: "index", currency: "USD" }
+  - { instrument_code: "FBX", exchange: "Freightos", symbol: "FBX", description: "Freightos Baltic Index (global container)", contract_unit: "USD/FEU", currency: "USD" }
+  - { instrument_code: "WCI", exchange: "Drewry", symbol: "WCI", description: "Drewry World Container Index", contract_unit: "USD/FEU", currency: "USD" }
+  - { instrument_code: "BDTI", exchange: "Baltic Exchange", symbol: "BDTI", description: "Baltic Dirty Tanker Index (crude)", contract_unit: "index", currency: "USD" }
+
+weather_regions:
+  - { region_code: "PANAMA_CANAL", name: "Panama Canal (drought/draft restrictions)", country: "PA" }
+  - { region_code: "US_GULF", name: "US Gulf (hurricane exposure)", country: "US" }
+
+production_regions:
+  - { region_code: "GLOBAL_NA", name: "Not applicable — freight is a transport service, not a produced good; 'supply' is fleet capacity (see physical_drivers.vessel_supply_orderbook)", role: "production" }
+
+consumption_regions:
+  - { region_code: "GLOBAL", name: "Global seaborne trade", role: "consumption" }
+
+export_regions:
+  - { region_code: "CN", name: "China (largest trade node)", role: "export" }
+  - { region_code: "EU", name: "European Union", role: "export" }
+  - { region_code: "US", name: "United States", role: "export" }
+
+import_regions:
+  - { region_code: "CN", name: "China", role: "import" }
+  - { region_code: "EU", name: "European Union", role: "import" }
+  - { region_code: "US", name: "United States", role: "import" }
+
+physical_drivers:
+  - { metric_code: "vessel_supply_orderbook", description: "Fleet supply / newbuild orderbook / scrapping" }
+  - { metric_code: "port_congestion", description: "Global port congestion (waiting days)" }
+  - { metric_code: "fleet_utilization", description: "Fleet utilization / idle capacity" }
+  - { metric_code: "bunker_fuel_price", description: "VLSFO bunker fuel price" }
+  - { metric_code: "iron_ore_coal_volume", description: "Dry-bulk cargo volumes (iron ore, coal, grain)" }
+
+macro_drivers:
+  - { metric_code: "global_trade_volume", description: "Global trade volume (CPB / WTO)" }
+  - { metric_code: "global_pmi", description: "Global manufacturing PMI" }
+  - { metric_code: "china_industrial_activity", description: "China steel/industrial output" }
+  - { metric_code: "usd_dxy", description: "US dollar index" }
+  - { metric_code: "crude_oil_price", description: "Crude oil (bunker cost linkage)" }
+
+logistics_drivers:
+  - { metric_code: "canal_transit_capacity", description: "Suez/Panama transit capacity & restrictions" }
+  - { metric_code: "container_imbalance", description: "Empty-container repositioning imbalance" }
+  - { metric_code: "schedule_reliability", description: "Liner schedule reliability %" }
+  - { metric_code: "blank_sailings", description: "Blank-sailing / capacity-withdrawal rate" }
+
+event_risk_drivers:
+  - { metric_code: "chokepoint_disruption", description: "Suez/Red Sea/Hormuz/Panama disruption (key risk)" }
+  - { metric_code: "geopolitical_reroute", description: "Conflict-driven rerouting (Cape of Good Hope)" }
+  - { metric_code: "imo_emission_regulation", description: "IMO 2020/2023 emission & speed regulation" }
+  - { metric_code: "labor_port_strike", description: "Port labor strikes / lockouts" }
+  - { metric_code: "panama_canal_drought", description: "Panama Canal drought draft restrictions" }
+
+data_sources:
+  - { source_code: "BALTIC_EXCHANGE", name: "Baltic Exchange (BDI/BCI/BPI/BDTI)", access: "subscription", url: "https://www.balticexchange.com" }
+  - { source_code: "FREIGHTOS", name: "Freightos Baltic Index (FBX)", access: "public", url: "https://fbx.freightos.com" }
+  - { source_code: "DREWRY", name: "Drewry World Container Index", access: "subscription", url: "https://www.drewry.co.uk" }
+  - { source_code: "UNCTAD", name: "UNCTAD Review of Maritime Transport", access: "public", url: "https://unctad.org" }
+  - { source_code: "CPB", name: "CPB World Trade Monitor", access: "public", url: "https://www.cpb.nl" }
+
+models:
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "weekly", description: "Seasonal trade/restocking cycle" }
+  - { model_code: "macro_factor", family: "statsmodels", horizon: "weekly", description: "PMI + trade-volume + fleet-supply factor model" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "weekly", description: "Gradient boosting on congestion/volume" }
+
+notes: "Not a commodity but a logistics driver set: dry-bulk (BDI family), container (FBX/WCI) and tanker (BDTI) freight that feeds the logistics_drivers of physical commodities. Driven by fleet supply vs trade-volume demand, bunker costs and chokepoint disruptions (Suez/Red Sea, Panama drought). production_regions empty by design — freight is a service, not a produced good."
