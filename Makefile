@@ -7,7 +7,7 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 .DEFAULT_GOAL := help
-.PHONY: help test lint typecheck quality db-migrate api-dev web-dev etl-run \
+.PHONY: help test lint typecheck quality db-migrate db-load api-dev web-dev etl-run \
         db-up db-down env
 
 # Allow overriding the compose command (e.g. `make COMPOSE="docker compose" db-up`)
@@ -23,14 +23,14 @@ env: ## Create a local .env from the template if missing
 	@test -f .env || cp .env.example .env
 	@echo "[env] .env ready (edit it locally; never commit it)"
 
-test: ## Run the pytest suite (etl, ml, integration)
-	@echo "[test] placeholder — wire up: pytest etl/tests ml/tests tests/"
+test: ## Run the pytest suite
+	python -m pytest
 
 lint: ## Lint Python with ruff
-	@echo "[lint] placeholder — wire up: ruff check ."
+	python -m ruff check .
 
 typecheck: ## Static type-check with mypy
-	@echo "[typecheck] placeholder — wire up: mypy apps etl ml"
+	python -m mypy -p app
 
 quality: ## Run integration + data-quality gates
 	@echo "[quality] placeholder — wire up: pytest tests/integration tests/quality"
@@ -41,11 +41,14 @@ db-up: ## Start local PostgreSQL via docker-compose
 db-down: ## Stop local PostgreSQL
 	$(COMPOSE) down
 
-db-migrate: ## Apply SQL migrations in db/migrations (Phase 2+)
-	@echo "[db-migrate] placeholder — wire up: apply db/migrations/*.sql"
+db-migrate: ## Apply database migrations via Alembic (reads DATABASE_URL)
+	cd apps/api && python -m alembic upgrade head
 
-api-dev: ## Run the FastAPI dev server (Phase 8+)
-	@echo "[api-dev] placeholder — wire up: uvicorn apps.api.main:app --reload"
+db-load: ## Load commodity YAML profiles into the database (idempotent)
+	cd apps/api && python -m app.services.profile_loader
+
+api-dev: ## Run the FastAPI dev server
+	cd apps/api && python -m uvicorn app.main:app --reload
 
 web-dev: ## Run the Next.js dev server (Phase 9+)
 	@echo "[web-dev] placeholder — wire up: (cd apps/web && npm run dev)"

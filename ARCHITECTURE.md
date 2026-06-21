@@ -81,74 +81,106 @@ are just a *set of instruments + regions + drivers + sources* described in YAML.
 
 ## 3. Database design
 
-### 3.1 Normalized schema (target — implemented in Phase 3)
+### 3.1 Dimensional (star) schema
 
-Reference dimensions, then one tall fact table of observations:
+> **Implemented in Phase 2.** Source of truth = `apps/api/app/models/` (`dimensions.py`,
+> `facts.py`); mirrored by the Alembic migration
+> `apps/api/app/migrations/versions/0001_initial_star_schema.py`. The service that owns
+> this schema is the FastAPI app under `apps/api/app/`.
+
+A star schema: surrogate-keyed **dimensions** + a **profile registry**, plus one fact
+table **per data domain**. Dimensions are global and deduplicated by their natural code
+(a region/source shared by many commodities is stored once). `dim_instrument` is scoped
+to a commodity because the same `instrument_code` (e.g. `CN_FOB_QINGDAO`) denotes
+different goods for different commodities. Metric/indicator granularity is carried as
+`*_code` text columns on the facts, so a new metric is new rows — never a schema change.
+
+The 12 approved physical tables (source of truth = `apps/api/app/models/`; raw SQL
+mirror = `db/migrations/001_core_schema.sql`):
 
 ```
-commodity(commodity_id PK, commodity_code, commodity_name, commodity_group, base_unit, default_currency)
-region(region_id PK, region_code, region_name, country, role)        -- role: production|consumption|export|import|weather
-instrument(instrument_id PK, commodity_id FK, instrument_code, exchange, symbol, contract_unit, currency)
-metric(metric_code PK, description, unit, frequency)                  -- e.g. spot_price, rainfall_mm, open_interest
-data_source(source_id PK, source_code, name, url, license, access)   -- e.g. ICE, USDA, NASA_POWER, Drewry
+-- Dimensions + region map + registry
+dim_commodity(commodity_key PK, commodity_code UQ, commodity_name, commodity_group, base_unit, default_currency, notes)
+dim_region(region_key PK, region_code UQ, region_name, country)
+dim_data_source(data_source_key PK, source_code UQ, name, url, access, license)
+dim_market_instrument(market_instrument_key PK, commodity_key FK, instrument_code, ...)  -- UNIQUE(commodity_key, instrument_code)
+commodity_region_map(map_id PK, commodity_key FK, region_key FK, role, label)            -- UNIQUE(commodity_key, region_key, role)
+commodity_profile_registry(registry_id PK, commodity_key FK UQ, commodity_code UQ,
+                           source_path, checksum, version, profile JSONB)                -- full profile + sha256
 
--- Tall, generic fact table — works for every commodity/metric:
-observation(
-    observation_id PK,
-    commodity_id FK,
-    instrument_id FK NULL,        -- nullable: weather/macro rows need no instrument
-    region_id FK NULL,
-    metric_code FK,
-    source_id FK,
-    obs_date DATE,                -- the date the value REFERS to
-    value NUMERIC,
-    unit TEXT,
-    ingested_at TIMESTAMPTZ,      -- when WE first stored it
-    valid_from TIMESTAMPTZ,       -- when the source first PUBLISHED it (point-in-time)
-    revision INT DEFAULT 0,       -- supports revised macro/USDA series
-    UNIQUE(commodity_id, metric_code, region_id, instrument_id, obs_date, revision)
-)
+-- One fact table per domain. Every fact is point-in-time correct:
+--   <obs/period/event>_date = the date the value DESCRIBES
+--   release_date            = when the value first became KNOWABLE  (CHECK release_date >= <date>)
+--   revision                = append-only counter for revised series
+fact_price_daily(price_id PK, commodity_key FK, market_instrument_key FK NULL, data_source_key FK NULL,
+                 price_date, open, high, low, close, settle, volume, open_interest, currency, release_date, ...)
+fact_weather_daily(weather_id PK, commodity_key FK, region_key FK, data_source_key FK NULL,
+                   weather_date, metric_code, release_date, ...)
+fact_macro_daily(macro_id PK, commodity_key FK NULL, data_source_key FK NULL,
+                 macro_date, indicator_code, release_date, ...)
+fact_logistics_periodic(logistics_id PK, commodity_key FK NULL, region_key FK NULL, data_source_key FK NULL,
+                        period_date, period_type, indicator_code, release_date, ...)
+fact_supply_demand_periodic(sd_id PK, commodity_key FK, region_key FK NULL, data_source_key FK NULL,
+                            period_date, period_type, metric_code, release_date, ...)
+fact_event_risk(event_id PK, commodity_key FK NULL, region_key FK NULL, data_source_key FK NULL,
+                event_date, metric_code, category, release_date, ...)
+
+-- Each fact: a release_date btree index + a NULL-safe COALESCE grain unique index, e.g.:
+CREATE INDEX ix_fact_price_daily_release_date ON fact_price_daily (release_date);
+CREATE UNIQUE INDEX uq_fact_price_daily_grain ON fact_price_daily
+    (commodity_key, COALESCE(market_instrument_key,-1), price_date, revision);
+-- (analogous indexes exist for weather, macro, logistics, supply_demand, event_risk)
 ```
 
-The tall `observation` table is the heart of the "never hardcode" rule: adding a new
-metric never changes the schema — it is just new rows with a new `metric_code`.
+`commodity_key`/`region_key` are nullable on `fact_macro_daily`,
+`fact_logistics_periodic`, and `fact_event_risk` because those indicators (FX, freight
+indices, geopolitical shocks) are often shared/global rather than owned by one
+commodity. `commodity_region_map` carries the per-commodity region **role**
+(production/consumption/export/import/weather). The **profile registry** stores each
+parsed YAML profile verbatim (JSONB) plus a SHA-256 checksum so the loader is idempotent
+and can detect changes (version bump).
 
 ### 3.2 Handling look-ahead bias (point-in-time correctness)
 
 Look-ahead bias is the #1 way a commodity backtest lies to you. The schema defends
 against it on three fronts:
 
-1. **Two timestamps per row.** `obs_date` is the date a value describes; `valid_from`
+1. **Two dates per row.** `obs_date` is the date a value describes; `release_date`
    is when that value first became *knowable*. A feature for date *T* may only read
-   rows where `valid_from <= T`. USDA WASDE, export stats, and weather reanalysis are
-   all published with a lag — `valid_from` encodes that lag.
+   rows where `release_date <= T`. USDA WASDE, export stats, and weather reanalysis are
+   all published with a lag — `release_date` encodes that lag. A `CHECK (release_date
+   >= obs_date)` constraint enforces the ordering at the database level.
 2. **Revisions are append-only.** Revised macro series get a new row with an
-   incremented `revision` and a later `valid_from`; we never UPDATE a published value.
+   incremented `revision` and a later `release_date`; we never UPDATE a published value.
    Backtests reconstruct "what was known at time T" by selecting the latest revision
-   with `valid_from <= T`.
+   with `release_date <= T`. The check + COALESCE grain index apply to **every** fact
+   table, so the guarantee holds uniformly across price/weather/macro/logistics/S&D.
 3. **Point-in-time materialized views.** `db/views/` will hold ML-facing
-   materialized views that join observations *as-of* a snapshot date, so feature
+   materialized views that join the fact tables *as-of* a snapshot date, so feature
    builders physically cannot see future or future-revised data.
 
 ### 3.3 Materialized views for ML
 
-ML reads **materialized views**, never raw tables, so feature definitions are
+ML reads **materialized views**, never raw fact tables, so feature definitions are
 centralized, reproducible, and point-in-time safe. Planned views live in `db/views/`:
-wide per-commodity panels (one row per `obs_date`, columns per `metric_code`),
+wide per-commodity panels (one row per date, columns per `metric_code`/`indicator_code`),
 as-of join views, and resampled (daily/weekly) frames for Fourier + ML pipelines.
 
 ---
 
 ## 4. Core domain models
 
-- **Commodity** — what we forecast; carries `commodity_group`, `base_unit`, `default_currency`.
-- **Instrument** — a tradable/market series tied to a commodity (futures, spot index).
-- **Region** — a geography with a `role` (production / consumption / export / import / weather).
-- **Metric** — a measured quantity identified by `metric_code` with a unit + frequency.
-- **DataSource** — provenance and license/access metadata for every series.
-- **Observation** — one point-in-time fact: (commodity, metric, region?, instrument?, date, value).
-- **Driver** — a named, grouped input signal (physical / macro / logistics / event-risk)
-  declared in the profile and resolved to one or more metrics.
+- **DimCommodity** — what we forecast; carries `commodity_group`, `base_unit`, `default_currency`.
+- **DimMarketInstrument** — a tradable/market series scoped to a commodity (futures, spot index).
+- **DimRegion** — a geography (production / consumption / export / import / weather area).
+- **DimDataSource** — provenance and license/access metadata for every series.
+- **CommodityRegionMap** — maps a commodity to a region with a role (the per-commodity context).
+- **CommodityProfileRegistry** — each commodity's parsed YAML profile (JSONB) + checksum/version.
+- **Fact tables** — point-in-time observations by domain: `fact_price_daily`,
+  `fact_weather_daily`, `fact_macro_daily`, `fact_logistics_periodic`,
+  `fact_supply_demand_periodic`, `fact_event_risk`. Metric/indicator identified by a `*_code` column.
+- **Driver** — a named input signal (physical / macro / logistics / event-risk) declared
+  in the profile; resolved to a fact table + `metric_code`/`indicator_code` by the ETL phase.
 - **Model** — a forecasting configuration (family + horizon + features) recorded in `ml/registry/`.
 
 ---
