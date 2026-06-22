@@ -181,6 +181,31 @@ centralized, reproducible, and point-in-time safe. Planned views live in `db/vie
 wide per-commodity panels (one row per date, columns per `metric_code`/`indicator_code`),
 as-of join views, and resampled (daily/weekly) frames for Fourier + ML pipelines.
 
+### 3.4 ETL foundation (Phase 3A — dry-run skeleton)
+
+> **Implemented in Phase 3A.** Source = `etl/` + `db/seeds/seed_data_sources.py`.
+> No external ingestion, no network, no credentials, no fact writes yet.
+
+The `etl/` package is a generic, safe skeleton:
+
+- **`etl/contracts.py`** — `FactFamily` (the 6 families, 1:1 with the fact tables),
+  `FACT_FAMILIES` specs (target table, periodic?, code field, required dims), and the
+  source-agnostic `NormalizedRecord` (carries business *codes*, not surrogate keys).
+- **`etl/validation.py`** — structured validation returning typed `ErrorCode`s
+  (`MISSING_SOURCE`, `MISSING_RELEASE_DATE`, `INVALID_PERIOD_RANGE`, `UNKNOWN_TARGET_FACT`,
+  `MISSING_COMMODITY/REGION/INSTRUMENT/METRIC`, `LOOKAHEAD_UNSAFE`). It never sanitizes
+  or fails open. Source lineage (`data_source_code`) and `release_date` are required for
+  **every** fact; periodic facts require `period_start`/`period_end` with `period_end >=
+  period_start`; `release_date >= reference_date` enforces look-ahead safety.
+- **`etl/mapping.py`** — `dry_run()` validates, normalizes, and builds the target
+  fact-table payload, returning a report. It takes **no DB session and inserts nothing**
+  (`DryRunReport.inserted` is always 0). Code→surrogate-key resolution is a later phase.
+- **`etl/sources/<family>/`** — stub `BaseSource` adapters (market/weather/macro/
+  logistics/supply_demand/events) that declare their family and `collect()` no records.
+- **`db/seeds/seed_data_sources.py`** — idempotent, additive seed of baseline
+  `dim_data_source` rows (`manual`, `internal`, `unknown`, `seed_profile`) so periodic
+  facts (which require non-null `data_source_key`) always have source lineage available.
+
 ---
 
 ## 4. Core domain models
@@ -204,10 +229,11 @@ as-of join views, and resampled (daily/weekly) frames for Fourier + ML pipelines
 
 | Phase | Name                          | Outcome                                                                 |
 | ----- | ----------------------------- | ----------------------------------------------------------------------- |
-| **1** | **Foundation Initialization** | Monorepo tree, docs, configs, 16 commodity YAML profiles. *(this phase)* |
-| 2     | Data Contracts & Schema       | SQL migrations for normalized schema; Pydantic/SQLAlchemy domain models. |
-| 3     | ETL Source Adapters           | `etl/sources/*` fetchers (market, weather, macro, logistics, S&D, events).|
-| 4     | Loaders & Point-in-Time Store | `etl/loaders/*` normalize into `observation`; enforce `valid_from`.      |
+| 1     | Foundation Initialization     | Monorepo tree, docs, configs, 16 commodity YAML profiles. *(done)*        |
+| 2     | Data Contracts & Schema       | Star schema (dims + 6 facts + registry), Alembic, raw SQL mirror, loader. *(done)* |
+| **3A**| **ETL Foundation**            | `etl/` contracts + validation + dry-run mapping + stub sources; source-registry seed. *(this phase)* |
+| 3B    | ETL Source Adapters           | Real `etl/sources/*` connectors (market, weather, macro, logistics, S&D, events).|
+| 4     | Loaders & Point-in-Time Store | `etl/loaders/*` resolve codes→keys and insert into the fact tables; enforce `release_date`. |
 | 5     | Materialized Views & Features | `db/views/*` panels; `ml/features/*` Fourier + lag/rolling features.     |
 | 6     | Model Layer                   | `ml/models/*` (statsmodels, sklearn, xgboost, prophet) behind one API.   |
 | 7     | Backtesting & Registry        | `ml/backtests/*` walk-forward; `ml/registry/*` versioned model metadata. |

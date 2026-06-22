@@ -27,7 +27,7 @@ dev = [
 # `app` package. Tests/type-checks resolve it via the paths below; no build/install
 # step is required for development.
 [tool.pytest.ini_options]
-pythonpath = ["apps/api"]
+pythonpath = ["apps/api", "."]
 testpaths = ["tests/quality", "tests/integration", "apps/api/tests"]
 addopts = "-ra"
 
@@ -47,6 +47,8 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "f
 "apps/api/app/migrations/versions/*" = ["E501"]
 # env.py uses a star-import to register all models on the metadata.
 "apps/api/app/migrations/env.py" = ["F401", "F403"]
+# seed script bootstraps sys.path before importing the app package.
+"db/seeds/*" = ["E402"]
 
 [tool.mypy]
 python_version = "3.11"

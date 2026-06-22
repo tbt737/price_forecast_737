@@ -7,7 +7,7 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 .DEFAULT_GOAL := help
-.PHONY: help test lint typecheck quality db-migrate db-load api-dev web-dev etl-run \
+.PHONY: help test lint typecheck quality db-migrate db-load seed-sources api-dev web-dev etl-run \
         db-up db-down env
 
 # Allow overriding the compose command (e.g. `make COMPOSE="docker compose" db-up`)
@@ -47,11 +47,14 @@ db-migrate: ## Apply database migrations via Alembic (reads DATABASE_URL)
 db-load: ## Load commodity YAML profiles into the database (idempotent)
 	cd apps/api && python -m app.services.profile_loader
 
+seed-sources: ## Seed baseline dim_data_source rows (manual/internal/unknown/seed_profile; idempotent)
+	python db/seeds/seed_data_sources.py
+
 api-dev: ## Run the FastAPI dev server
 	cd apps/api && python -m uvicorn app.main:app --reload
 
 web-dev: ## Run the Next.js dev server (Phase 9+)
 	@echo "[web-dev] placeholder — wire up: (cd apps/web && npm run dev)"
 
-etl-run: ## Run the ETL ingestion pipeline (Phase 3+)
-	@echo "[etl-run] placeholder — wire up: python -m etl.run"
+etl-run: ## Real ETL ingestion (later phase). Phase 3A is dry-run only — see `make test`.
+	@echo "[etl-run] Phase 3A is a dry-run skeleton (no ingestion). Real connectors land in a later phase."
