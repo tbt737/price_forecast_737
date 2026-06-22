@@ -54,7 +54,7 @@ def map_record(record: NormalizedRecord) -> MappingResult:
     if spec.periodic:
         payload["period_start"] = record.period_start
         payload["period_end"] = record.period_end
-    else:
+    elif spec.date_field:
         payload[spec.date_field] = record.observation_date
 
     if spec.family is FactFamily.price_daily:

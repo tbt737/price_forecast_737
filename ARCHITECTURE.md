@@ -206,6 +206,22 @@ The `etl/` package is a generic, safe skeleton:
   `dim_data_source` rows (`manual`, `internal`, `unknown`, `seed_profile`) so periodic
   facts (which require non-null `data_source_key`) always have source lineage available.
 
+**Phase 3B — reference resolution + insert planning (still no persisted writes):**
+
+- **`etl/resolution.py`** — `ReferenceResolver` (read-only) maps business codes to
+  surrogate keys against the live dimensions (`commodity_code→commodity_key`,
+  `region_code→region_key`, `instrument_code→market_instrument_key` per-commodity,
+  `data_source_code→data_source_key`); a present-but-unknown code yields a typed error
+  (`UNKNOWN_COMMODITY/REGION/INSTRUMENT/SOURCE`). It never creates missing dimensions.
+- **`etl/conflicts.py`** — per-family unique-grain definitions (mirroring the COALESCE
+  indexes) and a NULL-safe `conflict_exists()` pre-check.
+- **`etl/planner.py`** — `InsertPlanner.plan()` validates → resolves → builds the
+  resolved (surrogate-key) payload → pre-checks grain conflict → returns an
+  `InsertPlan` (`target_table`, resolved keys, payload, grain fields, errors,
+  `conflict`, `would_insert`). It is **plan-only** (SELECT-only, no writes).
+  `simulate_and_rollback()` inserts the would-insert plans inside a SAVEPOINT and rolls
+  back, proving the rows are insertable while leaving persisted fact counts unchanged.
+
 ---
 
 ## 4. Core domain models

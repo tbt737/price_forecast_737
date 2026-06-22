@@ -22,6 +22,12 @@ class ErrorCode(enum.StrEnum):
     MISSING_INSTRUMENT = "MISSING_INSTRUMENT"
     MISSING_METRIC = "MISSING_METRIC"
     LOOKAHEAD_UNSAFE = "LOOKAHEAD_UNSAFE"
+    # Reference-resolution failures (Phase 3B): a code is present but maps to no
+    # dimension row.
+    UNKNOWN_COMMODITY = "UNKNOWN_COMMODITY"
+    UNKNOWN_REGION = "UNKNOWN_REGION"
+    UNKNOWN_INSTRUMENT = "UNKNOWN_INSTRUMENT"
+    UNKNOWN_SOURCE = "UNKNOWN_SOURCE"
 
 
 class Severity(enum.StrEnum):
