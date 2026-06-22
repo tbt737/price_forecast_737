@@ -149,11 +149,19 @@ def test_macro_grain_dedupes_null_commodity(session: Session) -> None:
         session.flush()
 
 
+def _data_source(session: Session, code: str) -> DimDataSource:
+    src = DimDataSource(source_code=code, name=f"src {code}")
+    session.add(src)
+    session.flush()
+    return src
+
+
 def test_periodic_fact_period_end_before_start_rejected(session: Session) -> None:
     c = _commodity(session, "SDP")
     session.add(
         FactSupplyDemandPeriodic(
             commodity_key=c.commodity_key,
+            data_source_key=_data_source(session, "SDP_S").data_source_key,
             period_start=date(2025, 2, 1),
             period_end=date(2025, 1, 1),  # end before start -> CHECK fails
             release_date=date(2025, 3, 1),
@@ -169,6 +177,7 @@ def test_periodic_fact_release_before_period_end_rejected(session: Session) -> N
     session.add(
         FactSupplyDemandPeriodic(
             commodity_key=c.commodity_key,
+            data_source_key=_data_source(session, "SDR_S").data_source_key,
             period_start=date(2025, 1, 1),
             period_end=date(2025, 1, 31),
             release_date=date(2025, 1, 15),  # released before period end -> CHECK fails
@@ -183,6 +192,7 @@ def test_periodic_fact_valid_range_accepted(session: Session) -> None:
     c = _commodity(session, "SDV")
     row = FactSupplyDemandPeriodic(
         commodity_key=c.commodity_key,
+        data_source_key=_data_source(session, "SDV_S").data_source_key,
         period_start=date(2025, 1, 1),
         period_end=date(2025, 1, 31),
         release_date=date(2025, 2, 10),
@@ -194,11 +204,21 @@ def test_periodic_fact_valid_range_accepted(session: Session) -> None:
     assert row.sd_id is not None
 
 
-def _data_source(session: Session, code: str) -> DimDataSource:
-    src = DimDataSource(source_code=code, name=f"src {code}")
-    session.add(src)
-    session.flush()
-    return src
+def test_periodic_fact_requires_data_source(session: Session) -> None:
+    """Periodic facts must carry source lineage — NULL data_source_key is rejected."""
+    c = _commodity(session, "SDN")
+    session.add(
+        FactSupplyDemandPeriodic(
+            commodity_key=c.commodity_key,
+            data_source_key=None,  # NOT NULL -> rejected
+            period_start=date(2025, 1, 1),
+            period_end=date(2025, 1, 31),
+            release_date=date(2025, 2, 10),
+            metric_code="ending_stocks",
+        )
+    )
+    with pytest.raises(IntegrityError):
+        session.flush()
 
 
 def test_periodic_grain_distinguishes_by_release_date(session: Session) -> None:

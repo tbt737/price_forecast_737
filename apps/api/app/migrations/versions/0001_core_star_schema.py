@@ -128,7 +128,7 @@ def upgrade() -> None:
     sa.Column('logistics_id', sa.Integer(), nullable=False),
     sa.Column('commodity_key', sa.Integer(), nullable=True),
     sa.Column('region_key', sa.Integer(), nullable=True),
-    sa.Column('data_source_key', sa.Integer(), nullable=True),
+    sa.Column('data_source_key', sa.Integer(), nullable=False),
     sa.Column('period_start', sa.Date(), nullable=False),
     sa.Column('period_end', sa.Date(), nullable=False),
     sa.Column('indicator_code', sa.String(length=80), nullable=False),
@@ -143,7 +143,7 @@ def upgrade() -> None:
     sa.CheckConstraint('release_date >= period_end', name='ck_fact_logistics_release'),
     sa.CheckConstraint('revision >= 0', name='ck_fact_logistics_revision'),
     sa.ForeignKeyConstraint(['commodity_key'], ['dim_commodity.commodity_key'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['data_source_key'], ['dim_data_source.data_source_key'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['data_source_key'], ['dim_data_source.data_source_key'], ondelete='RESTRICT'),
     sa.ForeignKeyConstraint(['region_key'], ['dim_region.region_key'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('logistics_id')
     )
@@ -176,7 +176,7 @@ def upgrade() -> None:
     sa.Column('sd_id', sa.Integer(), nullable=False),
     sa.Column('commodity_key', sa.Integer(), nullable=False),
     sa.Column('region_key', sa.Integer(), nullable=True),
-    sa.Column('data_source_key', sa.Integer(), nullable=True),
+    sa.Column('data_source_key', sa.Integer(), nullable=False),
     sa.Column('period_start', sa.Date(), nullable=False),
     sa.Column('period_end', sa.Date(), nullable=False),
     sa.Column('metric_code', sa.String(length=80), nullable=False),
@@ -191,7 +191,7 @@ def upgrade() -> None:
     sa.CheckConstraint('release_date >= period_end', name='ck_fact_sd_release'),
     sa.CheckConstraint('revision >= 0', name='ck_fact_sd_revision'),
     sa.ForeignKeyConstraint(['commodity_key'], ['dim_commodity.commodity_key'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['data_source_key'], ['dim_data_source.data_source_key'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['data_source_key'], ['dim_data_source.data_source_key'], ondelete='RESTRICT'),
     sa.ForeignKeyConstraint(['region_key'], ['dim_region.region_key'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('sd_id')
     )

@@ -139,8 +139,10 @@ class FactLogisticsPeriodic(_FactMixin, Base):
         ForeignKey("dim_commodity.commodity_key", ondelete="CASCADE")
     )
     region_key: Mapped[int | None] = mapped_column(ForeignKey("dim_region.region_key", ondelete="SET NULL"))
-    data_source_key: Mapped[int | None] = mapped_column(
-        ForeignKey("dim_data_source.data_source_key", ondelete="SET NULL")
+    # Required source lineage — a periodic fact must always map to a dim_data_source
+    # row (use a 'manual'/'internal'/'unknown' source rather than NULL).
+    data_source_key: Mapped[int] = mapped_column(
+        ForeignKey("dim_data_source.data_source_key", ondelete="RESTRICT"), nullable=False
     )
     # Explicit period range (start..end), not a single reference date — removes
     # ambiguity for weekly/monthly/quarterly/marketing-year logistics series.
@@ -164,8 +166,10 @@ class FactSupplyDemandPeriodic(_FactMixin, Base):
         ForeignKey("dim_commodity.commodity_key", ondelete="CASCADE"), nullable=False
     )
     region_key: Mapped[int | None] = mapped_column(ForeignKey("dim_region.region_key", ondelete="SET NULL"))
-    data_source_key: Mapped[int | None] = mapped_column(
-        ForeignKey("dim_data_source.data_source_key", ondelete="SET NULL")
+    # Required source lineage — a periodic fact must always map to a dim_data_source
+    # row (use a 'manual'/'internal'/'unknown' source rather than NULL).
+    data_source_key: Mapped[int] = mapped_column(
+        ForeignKey("dim_data_source.data_source_key", ondelete="RESTRICT"), nullable=False
     )
     # Explicit period range (e.g. a marketing year / month / quarter window).
     period_start: Mapped[date] = mapped_column(Date, nullable=False)

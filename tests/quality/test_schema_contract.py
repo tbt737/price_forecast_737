@@ -104,6 +104,12 @@ def test_periodic_facts_use_explicit_period_range() -> None:
         assert "period_type" not in cols, f"{t} still has period_type"
 
 
+def test_periodic_facts_require_data_source_key_not_null() -> None:
+    for t in PERIODIC_TABLES:
+        col = Base.metadata.tables[t].columns["data_source_key"]
+        assert col.nullable is False, f"{t}.data_source_key must be NOT NULL (source lineage)"
+
+
 def test_periodic_facts_have_period_range_check() -> None:
     sql = SQL_MIRROR.read_text(encoding="utf-8")
     assert "CHECK (period_end >= period_start)" in sql

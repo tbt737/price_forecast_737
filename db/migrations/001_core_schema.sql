@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS fact_logistics_periodic (
 	logistics_id SERIAL NOT NULL,
 	commodity_key INTEGER,
 	region_key INTEGER,
-	data_source_key INTEGER,
+	data_source_key INTEGER NOT NULL,
 	period_start DATE NOT NULL,
 	period_end DATE NOT NULL,
 	indicator_code VARCHAR(80) NOT NULL,
@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS fact_logistics_periodic (
 	CONSTRAINT ck_fact_logistics_release CHECK (release_date >= period_end),
 	FOREIGN KEY(commodity_key) REFERENCES dim_commodity (commodity_key) ON DELETE CASCADE,
 	FOREIGN KEY(region_key) REFERENCES dim_region (region_key) ON DELETE SET NULL,
-	FOREIGN KEY(data_source_key) REFERENCES dim_data_source (data_source_key) ON DELETE SET NULL
+	FOREIGN KEY(data_source_key) REFERENCES dim_data_source (data_source_key) ON DELETE RESTRICT
 );
 
 CREATE INDEX IF NOT EXISTS ix_fact_logistics_periodic_release_date ON fact_logistics_periodic (release_date);
@@ -181,7 +181,7 @@ CREATE TABLE IF NOT EXISTS fact_supply_demand_periodic (
 	sd_id SERIAL NOT NULL,
 	commodity_key INTEGER NOT NULL,
 	region_key INTEGER,
-	data_source_key INTEGER,
+	data_source_key INTEGER NOT NULL,
 	period_start DATE NOT NULL,
 	period_end DATE NOT NULL,
 	metric_code VARCHAR(80) NOT NULL,
@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS fact_supply_demand_periodic (
 	CONSTRAINT ck_fact_sd_release CHECK (release_date >= period_end),
 	FOREIGN KEY(commodity_key) REFERENCES dim_commodity (commodity_key) ON DELETE CASCADE,
 	FOREIGN KEY(region_key) REFERENCES dim_region (region_key) ON DELETE SET NULL,
-	FOREIGN KEY(data_source_key) REFERENCES dim_data_source (data_source_key) ON DELETE SET NULL
+	FOREIGN KEY(data_source_key) REFERENCES dim_data_source (data_source_key) ON DELETE RESTRICT
 );
 
 CREATE INDEX IF NOT EXISTS ix_fact_supply_demand_periodic_release_date ON fact_supply_demand_periodic (release_date);

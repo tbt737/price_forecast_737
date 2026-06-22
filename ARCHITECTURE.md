@@ -150,6 +150,11 @@ is a distinct row — e.g. logistics grain =
 `(COALESCE(commodity_key,-1), COALESCE(region_key,-1), data_source_key, indicator_code,
 period_start, period_end, release_date, revision)`.
 
+On the periodic facts, `data_source_key` is **NOT NULL** (FK `ON DELETE RESTRICT`):
+every periodic fact must carry source lineage and is therefore audit-safe and
+deterministically unique. Data with no external provider still maps to a
+`dim_data_source` row (e.g. `manual`, `internal`, `unknown`) — never a NULL source.
+
 ### 3.2 Handling look-ahead bias (point-in-time correctness)
 
 Look-ahead bias is the #1 way a commodity backtest lies to you. The schema defends
