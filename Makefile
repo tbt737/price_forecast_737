@@ -29,8 +29,9 @@ test: ## Run the pytest suite
 lint: ## Lint Python with ruff
 	python -m ruff check .
 
-typecheck: ## Static type-check with mypy
+typecheck: ## Static type-check with mypy (app package + etl)
 	python -m mypy -p app
+	python -m mypy etl
 
 quality: ## Run integration + data-quality gates
 	@echo "[quality] placeholder — wire up: pytest tests/integration tests/quality"
