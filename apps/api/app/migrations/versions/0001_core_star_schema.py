@@ -2,7 +2,7 @@
 
 Revision ID: 0001
 Revises:
-Create Date: 2026-06-22 02:42:56.682845
+Create Date: 2026-06-22 18:59:36.784197
 """
 from __future__ import annotations
 
@@ -129,8 +129,8 @@ def upgrade() -> None:
     sa.Column('commodity_key', sa.Integer(), nullable=True),
     sa.Column('region_key', sa.Integer(), nullable=True),
     sa.Column('data_source_key', sa.Integer(), nullable=True),
-    sa.Column('period_date', sa.Date(), nullable=False),
-    sa.Column('period_type', sa.String(length=12), server_default='daily', nullable=False),
+    sa.Column('period_start', sa.Date(), nullable=False),
+    sa.Column('period_end', sa.Date(), nullable=False),
     sa.Column('indicator_code', sa.String(length=80), nullable=False),
     sa.Column('release_date', sa.Date(), nullable=False),
     sa.Column('value', sa.Numeric(precision=20, scale=6), nullable=True),
@@ -139,7 +139,8 @@ def upgrade() -> None:
     sa.Column('ingested_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.CheckConstraint('release_date >= period_date', name='ck_fact_logistics_release'),
+    sa.CheckConstraint('period_end >= period_start', name='ck_fact_logistics_period'),
+    sa.CheckConstraint('release_date >= period_end', name='ck_fact_logistics_release'),
     sa.CheckConstraint('revision >= 0', name='ck_fact_logistics_revision'),
     sa.ForeignKeyConstraint(['commodity_key'], ['dim_commodity.commodity_key'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['data_source_key'], ['dim_data_source.data_source_key'], ondelete='SET NULL'),
@@ -176,8 +177,8 @@ def upgrade() -> None:
     sa.Column('commodity_key', sa.Integer(), nullable=False),
     sa.Column('region_key', sa.Integer(), nullable=True),
     sa.Column('data_source_key', sa.Integer(), nullable=True),
-    sa.Column('period_date', sa.Date(), nullable=False),
-    sa.Column('period_type', sa.String(length=12), server_default='monthly', nullable=False),
+    sa.Column('period_start', sa.Date(), nullable=False),
+    sa.Column('period_end', sa.Date(), nullable=False),
     sa.Column('metric_code', sa.String(length=80), nullable=False),
     sa.Column('release_date', sa.Date(), nullable=False),
     sa.Column('value', sa.Numeric(precision=20, scale=6), nullable=True),
@@ -186,7 +187,8 @@ def upgrade() -> None:
     sa.Column('ingested_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-    sa.CheckConstraint('release_date >= period_date', name='ck_fact_sd_release'),
+    sa.CheckConstraint('period_end >= period_start', name='ck_fact_sd_period'),
+    sa.CheckConstraint('release_date >= period_end', name='ck_fact_sd_release'),
     sa.CheckConstraint('revision >= 0', name='ck_fact_sd_revision'),
     sa.ForeignKeyConstraint(['commodity_key'], ['dim_commodity.commodity_key'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['data_source_key'], ['dim_data_source.data_source_key'], ondelete='SET NULL'),
@@ -255,8 +257,7 @@ def upgrade() -> None:
     # ### end Alembic commands ###
 
     # NULL-safe grain uniqueness for fact tables with nullable keys (autogenerate
-    # skips expression indexes). Coalescing NULL keys to -1 makes otherwise-identical
-    # rows conflict instead of silently duplicating.
+    # skips expression indexes). Periodic facts key on the explicit period range.
     op.create_index(
         "uq_fact_price_daily_grain", "fact_price_daily",
         [sa.text("commodity_key"), sa.text("coalesce(market_instrument_key, -1)"),
@@ -270,12 +271,14 @@ def upgrade() -> None:
     op.create_index(
         "uq_fact_logistics_grain", "fact_logistics_periodic",
         [sa.text("coalesce(commodity_key, -1)"), sa.text("coalesce(region_key, -1)"),
-         sa.text("indicator_code"), sa.text("period_date"), sa.text("revision")], unique=True,
+         sa.text("indicator_code"), sa.text("period_start"), sa.text("period_end"),
+         sa.text("revision")], unique=True,
     )
     op.create_index(
         "uq_fact_sd_grain", "fact_supply_demand_periodic",
         [sa.text("commodity_key"), sa.text("coalesce(region_key, -1)"),
-         sa.text("metric_code"), sa.text("period_date"), sa.text("revision")], unique=True,
+         sa.text("metric_code"), sa.text("period_start"), sa.text("period_end"),
+         sa.text("revision")], unique=True,
     )
     op.create_index(
         "uq_fact_event_risk_grain", "fact_event_risk",

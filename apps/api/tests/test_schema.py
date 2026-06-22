@@ -15,6 +15,7 @@ from app.models import (
     FactEventRisk,
     FactMacroDaily,
     FactPriceDaily,
+    FactSupplyDemandPeriodic,
     RegionRole,
 )
 from sqlalchemy import inspect
@@ -145,6 +146,51 @@ def test_macro_grain_dedupes_null_commodity(session: Session) -> None:
     session.add(FactMacroDaily(**common, commodity_key=None, revision=0, value=101))
     with pytest.raises(IntegrityError):
         session.flush()
+
+
+def test_periodic_fact_period_end_before_start_rejected(session: Session) -> None:
+    c = _commodity(session, "SDP")
+    session.add(
+        FactSupplyDemandPeriodic(
+            commodity_key=c.commodity_key,
+            period_start=date(2025, 2, 1),
+            period_end=date(2025, 1, 1),  # end before start -> CHECK fails
+            release_date=date(2025, 3, 1),
+            metric_code="ending_stocks",
+        )
+    )
+    with pytest.raises(IntegrityError):
+        session.flush()
+
+
+def test_periodic_fact_release_before_period_end_rejected(session: Session) -> None:
+    c = _commodity(session, "SDR")
+    session.add(
+        FactSupplyDemandPeriodic(
+            commodity_key=c.commodity_key,
+            period_start=date(2025, 1, 1),
+            period_end=date(2025, 1, 31),
+            release_date=date(2025, 1, 15),  # released before period end -> CHECK fails
+            metric_code="ending_stocks",
+        )
+    )
+    with pytest.raises(IntegrityError):
+        session.flush()
+
+
+def test_periodic_fact_valid_range_accepted(session: Session) -> None:
+    c = _commodity(session, "SDV")
+    row = FactSupplyDemandPeriodic(
+        commodity_key=c.commodity_key,
+        period_start=date(2025, 1, 1),
+        period_end=date(2025, 1, 31),
+        release_date=date(2025, 2, 10),
+        metric_code="ending_stocks",
+        value=123,
+    )
+    session.add(row)
+    session.flush()  # must NOT raise
+    assert row.sd_id is not None
 
 
 def test_event_risk_release_guard_and_grain(session: Session) -> None:

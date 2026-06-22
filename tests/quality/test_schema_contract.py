@@ -4,10 +4,9 @@ These lock the approved 12-table contract, the point-in-time `release_date`
 column on every fact table, the generic (no single-commodity) naming rule, and
 the raw SQL mirror invariants (idempotent, non-destructive, complete).
 
-NOTE: column-level grain of the *periodic* fact tables (period_date vs
-period_start/period_end) is intentionally NOT asserted here — that is an open
-owner decision (see the overnight report), so this guard checks only invariants
-that hold regardless of that decision.
+Periodic fact tables use an explicit period range: ``period_start`` + ``period_end``
+(+ ``release_date``), guarded by ``CHECK (period_end >= period_start)``. The old
+``period_date`` / ``period_type`` grain must not reappear.
 """
 
 from __future__ import annotations
@@ -90,3 +89,26 @@ def test_sql_mirror_has_release_date_index_per_fact_table() -> None:
     sql = SQL_MIRROR.read_text(encoding="utf-8")
     for t in FACT_TABLES:
         assert f"ix_{t}_release_date" in sql, f"{t} missing release_date index in SQL mirror"
+
+
+PERIODIC_TABLES = ("fact_logistics_periodic", "fact_supply_demand_periodic")
+
+
+def test_periodic_facts_use_explicit_period_range() -> None:
+    for t in PERIODIC_TABLES:
+        cols = {c.name for c in Base.metadata.tables[t].columns}
+        assert {"period_start", "period_end", "release_date"} <= cols, f"{t} cols={cols}"
+        assert "period_date" not in cols, f"{t} still has period_date"
+        assert "period_type" not in cols, f"{t} still has period_type"
+
+
+def test_periodic_facts_have_period_range_check() -> None:
+    sql = SQL_MIRROR.read_text(encoding="utf-8")
+    assert "CHECK (period_end >= period_start)" in sql
+    # one period-range CHECK per periodic table
+    assert sql.count("period_end >= period_start") == len(PERIODIC_TABLES)
+
+
+def test_sql_mirror_drops_old_period_grain() -> None:
+    sql = SQL_MIRROR.read_text(encoding="utf-8")
+    assert "period_date" not in sql and "period_type" not in sql

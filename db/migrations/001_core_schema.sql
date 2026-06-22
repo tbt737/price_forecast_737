@@ -132,8 +132,8 @@ CREATE TABLE IF NOT EXISTS fact_logistics_periodic (
 	commodity_key INTEGER,
 	region_key INTEGER,
 	data_source_key INTEGER,
-	period_date DATE NOT NULL,
-	period_type VARCHAR(12) DEFAULT 'daily' NOT NULL,
+	period_start DATE NOT NULL,
+	period_end DATE NOT NULL,
 	indicator_code VARCHAR(80) NOT NULL,
 	release_date DATE NOT NULL,
 	value NUMERIC(20, 6),
@@ -144,14 +144,15 @@ CREATE TABLE IF NOT EXISTS fact_logistics_periodic (
 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
 	PRIMARY KEY (logistics_id),
 	CONSTRAINT ck_fact_logistics_revision CHECK (revision >= 0),
-	CONSTRAINT ck_fact_logistics_release CHECK (release_date >= period_date),
+	CONSTRAINT ck_fact_logistics_period CHECK (period_end >= period_start),
+	CONSTRAINT ck_fact_logistics_release CHECK (release_date >= period_end),
 	FOREIGN KEY(commodity_key) REFERENCES dim_commodity (commodity_key) ON DELETE CASCADE,
 	FOREIGN KEY(region_key) REFERENCES dim_region (region_key) ON DELETE SET NULL,
 	FOREIGN KEY(data_source_key) REFERENCES dim_data_source (data_source_key) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS ix_fact_logistics_periodic_release_date ON fact_logistics_periodic (release_date);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_fact_logistics_grain ON fact_logistics_periodic (coalesce(commodity_key, -1), coalesce(region_key, -1), indicator_code, period_date, revision);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_fact_logistics_grain ON fact_logistics_periodic (coalesce(commodity_key, -1), coalesce(region_key, -1), indicator_code, period_start, period_end, revision);
 
 CREATE TABLE IF NOT EXISTS fact_macro_daily (
 	macro_id SERIAL NOT NULL,
@@ -181,8 +182,8 @@ CREATE TABLE IF NOT EXISTS fact_supply_demand_periodic (
 	commodity_key INTEGER NOT NULL,
 	region_key INTEGER,
 	data_source_key INTEGER,
-	period_date DATE NOT NULL,
-	period_type VARCHAR(12) DEFAULT 'monthly' NOT NULL,
+	period_start DATE NOT NULL,
+	period_end DATE NOT NULL,
 	metric_code VARCHAR(80) NOT NULL,
 	release_date DATE NOT NULL,
 	value NUMERIC(20, 6),
@@ -193,14 +194,15 @@ CREATE TABLE IF NOT EXISTS fact_supply_demand_periodic (
 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
 	PRIMARY KEY (sd_id),
 	CONSTRAINT ck_fact_sd_revision CHECK (revision >= 0),
-	CONSTRAINT ck_fact_sd_release CHECK (release_date >= period_date),
+	CONSTRAINT ck_fact_sd_period CHECK (period_end >= period_start),
+	CONSTRAINT ck_fact_sd_release CHECK (release_date >= period_end),
 	FOREIGN KEY(commodity_key) REFERENCES dim_commodity (commodity_key) ON DELETE CASCADE,
 	FOREIGN KEY(region_key) REFERENCES dim_region (region_key) ON DELETE SET NULL,
 	FOREIGN KEY(data_source_key) REFERENCES dim_data_source (data_source_key) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS ix_fact_supply_demand_periodic_release_date ON fact_supply_demand_periodic (release_date);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_fact_sd_grain ON fact_supply_demand_periodic (commodity_key, coalesce(region_key, -1), metric_code, period_date, revision);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_fact_sd_grain ON fact_supply_demand_periodic (commodity_key, coalesce(region_key, -1), metric_code, period_start, period_end, revision);
 
 CREATE TABLE IF NOT EXISTS fact_weather_daily (
 	weather_id SERIAL NOT NULL,

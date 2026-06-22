@@ -130,7 +130,8 @@ class FactLogisticsPeriodic(_FactMixin, Base):
     __tablename__ = "fact_logistics_periodic"
     __table_args__ = (
         CheckConstraint("revision >= 0", name="ck_fact_logistics_revision"),
-        CheckConstraint("release_date >= period_date", name="ck_fact_logistics_release"),
+        CheckConstraint("period_end >= period_start", name="ck_fact_logistics_period"),
+        CheckConstraint("release_date >= period_end", name="ck_fact_logistics_release"),
     )
 
     logistics_id: Mapped[int] = mapped_column(primary_key=True)
@@ -141,8 +142,10 @@ class FactLogisticsPeriodic(_FactMixin, Base):
     data_source_key: Mapped[int | None] = mapped_column(
         ForeignKey("dim_data_source.data_source_key", ondelete="SET NULL")
     )
-    period_date: Mapped[date] = mapped_column(Date, nullable=False)
-    period_type: Mapped[str] = mapped_column(String(12), nullable=False, server_default="daily")
+    # Explicit period range (start..end), not a single reference date — removes
+    # ambiguity for weekly/monthly/quarterly/marketing-year logistics series.
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
     indicator_code: Mapped[str] = mapped_column(String(80), nullable=False)  # BDI, FBX, port_congestion
 
 
@@ -152,7 +155,8 @@ class FactSupplyDemandPeriodic(_FactMixin, Base):
     __tablename__ = "fact_supply_demand_periodic"
     __table_args__ = (
         CheckConstraint("revision >= 0", name="ck_fact_sd_revision"),
-        CheckConstraint("release_date >= period_date", name="ck_fact_sd_release"),
+        CheckConstraint("period_end >= period_start", name="ck_fact_sd_period"),
+        CheckConstraint("release_date >= period_end", name="ck_fact_sd_release"),
     )
 
     sd_id: Mapped[int] = mapped_column(primary_key=True)
@@ -163,8 +167,9 @@ class FactSupplyDemandPeriodic(_FactMixin, Base):
     data_source_key: Mapped[int | None] = mapped_column(
         ForeignKey("dim_data_source.data_source_key", ondelete="SET NULL")
     )
-    period_date: Mapped[date] = mapped_column(Date, nullable=False)
-    period_type: Mapped[str] = mapped_column(String(12), nullable=False, server_default="monthly")
+    # Explicit period range (e.g. a marketing year / month / quarter window).
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
     metric_code: Mapped[str] = mapped_column(String(80), nullable=False)  # production_estimate, ending_stocks
 
 
@@ -226,7 +231,8 @@ Index(
     func.coalesce(FactLogisticsPeriodic.commodity_key, -1),
     func.coalesce(FactLogisticsPeriodic.region_key, -1),
     FactLogisticsPeriodic.indicator_code,
-    FactLogisticsPeriodic.period_date,
+    FactLogisticsPeriodic.period_start,
+    FactLogisticsPeriodic.period_end,
     FactLogisticsPeriodic.revision,
     unique=True,
 )
@@ -235,7 +241,8 @@ Index(
     FactSupplyDemandPeriodic.commodity_key,
     func.coalesce(FactSupplyDemandPeriodic.region_key, -1),
     FactSupplyDemandPeriodic.metric_code,
-    FactSupplyDemandPeriodic.period_date,
+    FactSupplyDemandPeriodic.period_start,
+    FactSupplyDemandPeriodic.period_end,
     FactSupplyDemandPeriodic.revision,
     unique=True,
 )

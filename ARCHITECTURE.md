@@ -119,9 +119,9 @@ fact_weather_daily(weather_id PK, commodity_key FK, region_key FK, data_source_k
 fact_macro_daily(macro_id PK, commodity_key FK NULL, data_source_key FK NULL,
                  macro_date, indicator_code, release_date, ...)
 fact_logistics_periodic(logistics_id PK, commodity_key FK NULL, region_key FK NULL, data_source_key FK NULL,
-                        period_date, period_type, indicator_code, release_date, ...)
+                        period_start, period_end, indicator_code, release_date, ...)  -- CHECK period_end >= period_start
 fact_supply_demand_periodic(sd_id PK, commodity_key FK, region_key FK NULL, data_source_key FK NULL,
-                            period_date, period_type, metric_code, release_date, ...)
+                            period_start, period_end, metric_code, release_date, ...)  -- CHECK period_end >= period_start
 fact_event_risk(event_id PK, commodity_key FK NULL, region_key FK NULL, data_source_key FK NULL,
                 event_date, metric_code, category, release_date, ...)
 
@@ -139,6 +139,11 @@ commodity. `commodity_region_map` carries the per-commodity region **role**
 (production/consumption/export/import/weather). The **profile registry** stores each
 parsed YAML profile verbatim (JSONB) plus a SHA-256 checksum so the loader is idempotent
 and can detect changes (version bump).
+
+The two **periodic** fact tables use an explicit period range — `period_start` +
+`period_end` (with `CHECK (period_end >= period_start)`) — rather than a single
+reference date, so weekly/monthly/quarterly/marketing-year/crop-report series are
+unambiguous, and `release_date >= period_end` keeps them point-in-time correct.
 
 ### 3.2 Handling look-ahead bias (point-in-time correctness)
 
