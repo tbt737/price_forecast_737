@@ -222,6 +222,27 @@ The `etl/` package is a generic, safe skeleton:
   `simulate_and_rollback()` inserts the would-insert plans inside a SAVEPOINT and rolls
   back, proving the rows are insertable while leaving persisted fact counts unchanged.
 
+**Phase 3C — controlled fixture connectors + batch report (still dry-run only):**
+
+- **`etl/sources/fixture.py`** — `FixtureSource(BaseSource)` reads tiny LOCAL JSON
+  fixtures under `etl/fixtures/` and yields `NormalizedRecord`s. Sandboxed: the
+  resolved path must stay inside the fixture root (rejects `..` traversal / absolute
+  escapes), only `.json` (or `.yaml` via `yaml.safe_load`) is accepted, malformed JSON
+  raises `FixtureError`. No network, no writes.
+- **`NormalizedRecord.from_dict()`** — parses ISO date strings; unknown input keys are
+  not silently lost (recorded → `IGNORED_FIELD` warning); a malformed date becomes an
+  `INVALID_DATE` error. No eval, no I/O.
+- **`etl/fixtures/<family>.json`** — tiny deterministic fixtures for all six families,
+  with both valid and invalid rows (unknown source/region/instrument/commodity, missing
+  release_date, reversed period) across ≥2 commodities.
+- **`etl/report.py`** — `plan_batch(session, records, *, source_code, simulate)` runs the
+  planner over a batch (one resolver per batch → batch-scoped cache) and returns a
+  deterministic `BatchPlanReport` (`totals`, `by_family`, `by_target`, `by_error_code`,
+  `by_warning_code`, `items`). `to_dict()` is JSON-safe and **leak-safe** — metadata only,
+  never raw payload values or resolved keys. `simulate=True` attaches the rollback proof.
+- Daily-fact conflict pre-checks (price/weather/macro/event_risk) are hardened with a
+  NULL-safe SQLite matrix plus an env-gated (`CQP_TEST_PG_URL`) PostgreSQL variant.
+
 ---
 
 ## 4. Core domain models

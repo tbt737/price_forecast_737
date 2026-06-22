@@ -1,0 +1,17 @@
+[
+  {
+    "commodity_code": "ROBUSTA", "data_source_code": "manual",
+    "observation_date": "2025-01-10", "release_date": "2025-01-10",
+    "indicator_code": "usd_vnd", "value": 25400.0
+  },
+  {
+    "commodity_code": "GOLD", "data_source_code": "manual",
+    "observation_date": "2025-01-10", "release_date": "2025-01-10",
+    "indicator_code": "dxy_dollar_index", "value": 104.2
+  },
+  {
+    "commodity_code": "ROBUSTA", "data_source_code": "manual",
+    "observation_date": "2025-01-10",
+    "indicator_code": "usd_vnd", "value": 25400.0
+  }
+]

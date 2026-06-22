@@ -1,0 +1,17 @@
+[
+  {
+    "commodity_code": "ROBUSTA", "region_code": "VN_TAY_NGUYEN", "data_source_code": "manual",
+    "observation_date": "2025-01-10", "release_date": "2025-01-11",
+    "metric_code": "rainfall_mm", "value": 12.4, "unit": "mm"
+  },
+  {
+    "commodity_code": "RICE", "region_code": "IN_GANGETIC", "data_source_code": "manual",
+    "observation_date": "2025-01-10", "release_date": "2025-01-11",
+    "metric_code": "tmax_c", "value": 28.1, "unit": "C"
+  },
+  {
+    "commodity_code": "ROBUSTA", "region_code": "NOWHERE", "data_source_code": "manual",
+    "observation_date": "2025-01-10", "release_date": "2025-01-11",
+    "metric_code": "rainfall_mm", "value": 1.0
+  }
+]

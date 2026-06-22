@@ -92,6 +92,61 @@ class NormalizedRecord:
     revision: int = 0
     attributes: dict[str, Any] = field(default_factory=dict)
 
+    # input keys from_dict knows how to map (besides ``family``/``attributes``)
+    _SCALAR_KEYS = frozenset(
+        {
+            "data_source_code", "commodity_code", "region_code", "instrument_code",
+            "metric_code", "indicator_code", "value", "unit", "currency", "revision",
+        }
+    )
+    _DATE_KEYS = frozenset({"release_date", "observation_date", "period_start", "period_end"})
+
+    @classmethod
+    def from_dict(cls, family: FactFamily, data: dict[str, Any]) -> NormalizedRecord:
+        """Build a record from a fixture/plain dict (ISO date strings -> date).
+
+        Safe & lossless: unknown input keys are NOT dropped silently — their names
+        are recorded in ``attributes['_ignored_fields']`` (surfaced as an
+        ``IGNORED_FIELD`` warning). A malformed date string is recorded in
+        ``attributes['_parse_issues']`` (surfaced as an ``INVALID_DATE`` error) and
+        the field is left None. No eval, no I/O.
+        """
+        kwargs: dict[str, Any] = {"family": family}
+        attributes: dict[str, Any] = dict(data.get("attributes") or {})
+        ignored: list[str] = []
+        parse_issues: list[list[Any]] = []
+
+        for key, raw in data.items():
+            if key in ("family", "attributes"):
+                continue
+            if key in cls._DATE_KEYS:
+                if raw is None:
+                    kwargs[key] = None
+                elif isinstance(raw, str):
+                    try:
+                        kwargs[key] = date.fromisoformat(raw)
+                    except ValueError:
+                        parse_issues.append([key, raw])
+                        kwargs[key] = None
+                else:
+                    parse_issues.append([key, raw])
+                    kwargs[key] = None
+            elif key in cls._SCALAR_KEYS:
+                kwargs[key] = raw
+            else:
+                ignored.append(key)
+
+        # Required fields default to None when absent so a record can still be
+        # constructed and then flagged by validation (e.g. MISSING_RELEASE_DATE).
+        kwargs.setdefault("data_source_code", None)
+        kwargs.setdefault("release_date", None)
+
+        if ignored:
+            attributes["_ignored_fields"] = ignored
+        if parse_issues:
+            attributes["_parse_issues"] = parse_issues
+        return cls(**kwargs, attributes=attributes)
+
     def spec(self) -> FamilySpec | None:
         return FACT_FAMILIES.get(self.family)
 

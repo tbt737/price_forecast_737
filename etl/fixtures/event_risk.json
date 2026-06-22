@@ -1,0 +1,14 @@
+[
+  {
+    "commodity_code": "ROBUSTA", "data_source_code": "manual", "metric_code": "el_nino_la_nina",
+    "observation_date": "2025-06-01", "release_date": "2025-06-02", "value": 1.0
+  },
+  {
+    "commodity_code": "GOLD", "data_source_code": "manual", "metric_code": "geopolitical_risk",
+    "observation_date": "2025-06-01", "release_date": "2025-06-02", "value": 0.7
+  },
+  {
+    "commodity_code": "MITHRIL", "data_source_code": "manual", "metric_code": "el_nino_la_nina",
+    "observation_date": "2025-06-01", "release_date": "2025-06-02", "value": 1.0
+  }
+]

@@ -28,6 +28,9 @@ class ErrorCode(enum.StrEnum):
     UNKNOWN_REGION = "UNKNOWN_REGION"
     UNKNOWN_INSTRUMENT = "UNKNOWN_INSTRUMENT"
     UNKNOWN_SOURCE = "UNKNOWN_SOURCE"
+    # Parse-time issues from NormalizedRecord.from_dict (Phase 3C fixtures).
+    INVALID_DATE = "INVALID_DATE"  # error
+    IGNORED_FIELD = "IGNORED_FIELD"  # warning
 
 
 class Severity(enum.StrEnum):
@@ -73,6 +76,15 @@ def validate_record(record: NormalizedRecord) -> ValidationResult:
     if spec is None:
         result.add(ErrorCode.UNKNOWN_TARGET_FACT, f"Unknown fact family: {record.family!r}")
         return result  # cannot validate further without a spec
+
+    # Surface parse-time issues recorded by NormalizedRecord.from_dict (fixtures):
+    # malformed dates are errors; unknown/ignored input fields are warnings.
+    for entry in record.attributes.get("_parse_issues", []):
+        field_name = entry[0] if isinstance(entry, list | tuple) else entry
+        result.add(ErrorCode.INVALID_DATE, f"Malformed date for field {field_name!r}")
+    ignored = record.attributes.get("_ignored_fields")
+    if ignored:
+        result.add(ErrorCode.IGNORED_FIELD, f"Ignored unknown fields: {sorted(ignored)}", Severity.warning)
 
     # Source lineage is mandatory for EVERY fact (no NULL source for facts).
     if not record.data_source_code:

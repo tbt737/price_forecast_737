@@ -1,0 +1,17 @@
+[
+  {
+    "commodity_code": "ROBUSTA", "instrument_code": "ICE_RC", "data_source_code": "manual",
+    "observation_date": "2025-01-10", "release_date": "2025-01-10", "currency": "USD",
+    "note": "unknown field -> IGNORED_FIELD warning (still valid)",
+    "attributes": {"open": 99.0, "close": 100.5}
+  },
+  {
+    "commodity_code": "GOLD", "instrument_code": "COMEX_GC", "data_source_code": "manual",
+    "observation_date": "2025-01-10", "release_date": "2025-01-10", "currency": "USD",
+    "attributes": {"close": 2650.0}
+  },
+  {
+    "commodity_code": "GOLD", "instrument_code": "FAKE_INSTR", "data_source_code": "manual",
+    "observation_date": "2025-01-10", "release_date": "2025-01-10"
+  }
+]

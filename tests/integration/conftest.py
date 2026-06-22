@@ -7,11 +7,21 @@ from collections.abc import Iterator
 import pytest
 from app.db.base import Base
 from app.models import CommodityGroup, DimCommodity, DimDataSource, DimMarketInstrument, DimRegion
+from app.services.profile_loader import load_profiles
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from db.seeds.seed_data_sources import seed_data_sources
+
+
+def _memory_engine():
+    return create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        future=True,
+    )
 
 
 @pytest.fixture()
@@ -60,3 +70,23 @@ def source_key(seeded_session: Session):
         ).scalar_one()
 
     return _get
+
+
+@pytest.fixture()
+def profiles_session() -> Iterator[Session]:
+    """Session with seeded sources + all real commodity profiles loaded.
+
+    Gives real dimension codes (ROBUSTA/GOLD/RICE, ICE_RC, VN_TAY_NGUYEN, ...) so
+    fixture records resolve. No fact rows are inserted.
+    """
+    engine = _memory_engine()
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine, future=True)()
+    seed_data_sources(session)
+    load_profiles(session)
+    session.commit()
+    try:
+        yield session
+    finally:
+        session.close()
+        engine.dispose()

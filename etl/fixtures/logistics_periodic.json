@@ -1,0 +1,17 @@
+[
+  {
+    "data_source_code": "manual", "indicator_code": "BDI",
+    "period_start": "2025-01-01", "period_end": "2025-01-31", "release_date": "2025-02-10",
+    "value": 1500.0
+  },
+  {
+    "commodity_code": "ROBUSTA", "data_source_code": "manual", "indicator_code": "freight_asia_europe",
+    "period_start": "2025-01-01", "period_end": "2025-01-31", "release_date": "2025-02-10",
+    "value": 1850.0
+  },
+  {
+    "data_source_code": "manual", "indicator_code": "BDI",
+    "period_start": "2025-02-01", "period_end": "2025-01-01", "release_date": "2025-03-01",
+    "value": 1400.0
+  }
+]
