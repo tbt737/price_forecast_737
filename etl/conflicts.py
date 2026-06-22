@@ -78,14 +78,25 @@ def grain_values(record: NormalizedRecord, resolution: ResolutionResult) -> dict
     return {col: available[col] for col in GRAIN_FIELDS[record.family]}
 
 
-def conflict_exists(session: Session, family: FactFamily, grain: dict[str, Any]) -> bool:
-    """Return True if a row with this exact grain already exists in the target table.
-
-    NULL-safe equality: a None value matches an existing NULL.
-    """
-    model = TARGET_MODELS[family]
-    conditions = [
+def _grain_conditions(model: type, grain: dict[str, Any]) -> list:
+    # NULL-safe equality: a None value matches an existing NULL.
+    return [
         getattr(model, col).is_(None) if value is None else getattr(model, col) == value
         for col, value in grain.items()
     ]
-    return session.execute(select(model).where(*conditions).limit(1)).first() is not None
+
+
+def conflict_exists(session: Session, family: FactFamily, grain: dict[str, Any]) -> bool:
+    """Return True if a row with this exact grain already exists in the target table."""
+    model = TARGET_MODELS[family]
+    return session.execute(
+        select(model).where(*_grain_conditions(model, grain)).limit(1)
+    ).first() is not None
+
+
+def find_existing_row(session: Session, family: FactFamily, grain: dict[str, Any]) -> Any | None:
+    """Return the existing ORM row for this grain (NULL-safe), or None."""
+    model = TARGET_MODELS[family]
+    return session.execute(
+        select(model).where(*_grain_conditions(model, grain)).limit(1)
+    ).scalar_one_or_none()
