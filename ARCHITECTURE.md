@@ -144,6 +144,11 @@ The two **periodic** fact tables use an explicit period range — `period_start`
 `period_end` (with `CHECK (period_end >= period_start)`) — rather than a single
 reference date, so weekly/monthly/quarterly/marketing-year/crop-report series are
 unambiguous, and `release_date >= period_end` keeps them point-in-time correct.
+For these delayed/revised series, `release_date` (the as-of date) and `data_source_key`
+are part of the **unique grain**, so the same period from a different vintage or source
+is a distinct row — e.g. logistics grain =
+`(COALESCE(commodity_key,-1), COALESCE(region_key,-1), data_source_key, indicator_code,
+period_start, period_end, release_date, revision)`.
 
 ### 3.2 Handling look-ahead bias (point-in-time correctness)
 

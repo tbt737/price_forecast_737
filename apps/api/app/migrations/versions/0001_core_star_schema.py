@@ -271,14 +271,16 @@ def upgrade() -> None:
     op.create_index(
         "uq_fact_logistics_grain", "fact_logistics_periodic",
         [sa.text("coalesce(commodity_key, -1)"), sa.text("coalesce(region_key, -1)"),
-         sa.text("indicator_code"), sa.text("period_start"), sa.text("period_end"),
-         sa.text("revision")], unique=True,
+         sa.text("data_source_key"), sa.text("indicator_code"),
+         sa.text("period_start"), sa.text("period_end"),
+         sa.text("release_date"), sa.text("revision")], unique=True,
     )
     op.create_index(
         "uq_fact_sd_grain", "fact_supply_demand_periodic",
         [sa.text("commodity_key"), sa.text("coalesce(region_key, -1)"),
-         sa.text("metric_code"), sa.text("period_start"), sa.text("period_end"),
-         sa.text("revision")], unique=True,
+         sa.text("data_source_key"), sa.text("metric_code"),
+         sa.text("period_start"), sa.text("period_end"),
+         sa.text("release_date"), sa.text("revision")], unique=True,
     )
     op.create_index(
         "uq_fact_event_risk_grain", "fact_event_risk",

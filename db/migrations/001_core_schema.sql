@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS fact_logistics_periodic (
 );
 
 CREATE INDEX IF NOT EXISTS ix_fact_logistics_periodic_release_date ON fact_logistics_periodic (release_date);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_fact_logistics_grain ON fact_logistics_periodic (coalesce(commodity_key, -1), coalesce(region_key, -1), indicator_code, period_start, period_end, revision);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_fact_logistics_grain ON fact_logistics_periodic (coalesce(commodity_key, -1), coalesce(region_key, -1), data_source_key, indicator_code, period_start, period_end, release_date, revision);
 
 CREATE TABLE IF NOT EXISTS fact_macro_daily (
 	macro_id SERIAL NOT NULL,
@@ -202,7 +202,7 @@ CREATE TABLE IF NOT EXISTS fact_supply_demand_periodic (
 );
 
 CREATE INDEX IF NOT EXISTS ix_fact_supply_demand_periodic_release_date ON fact_supply_demand_periodic (release_date);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_fact_sd_grain ON fact_supply_demand_periodic (commodity_key, coalesce(region_key, -1), metric_code, period_start, period_end, revision);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_fact_sd_grain ON fact_supply_demand_periodic (commodity_key, coalesce(region_key, -1), data_source_key, metric_code, period_start, period_end, release_date, revision);
 
 CREATE TABLE IF NOT EXISTS fact_weather_daily (
 	weather_id SERIAL NOT NULL,

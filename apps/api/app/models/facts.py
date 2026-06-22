@@ -230,9 +230,11 @@ Index(
     "uq_fact_logistics_grain",
     func.coalesce(FactLogisticsPeriodic.commodity_key, -1),
     func.coalesce(FactLogisticsPeriodic.region_key, -1),
+    FactLogisticsPeriodic.data_source_key,
     FactLogisticsPeriodic.indicator_code,
     FactLogisticsPeriodic.period_start,
     FactLogisticsPeriodic.period_end,
+    FactLogisticsPeriodic.release_date,
     FactLogisticsPeriodic.revision,
     unique=True,
 )
@@ -240,9 +242,11 @@ Index(
     "uq_fact_sd_grain",
     FactSupplyDemandPeriodic.commodity_key,
     func.coalesce(FactSupplyDemandPeriodic.region_key, -1),
+    FactSupplyDemandPeriodic.data_source_key,
     FactSupplyDemandPeriodic.metric_code,
     FactSupplyDemandPeriodic.period_start,
     FactSupplyDemandPeriodic.period_end,
+    FactSupplyDemandPeriodic.release_date,
     FactSupplyDemandPeriodic.revision,
     unique=True,
 )

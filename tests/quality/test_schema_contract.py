@@ -15,6 +15,8 @@ from pathlib import Path
 
 from app.db.base import Base
 from app.models import *  # noqa: F401,F403  (register all tables on Base.metadata)
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.schema import CreateIndex
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SQL_MIRROR = REPO_ROOT / "db" / "migrations" / "001_core_schema.sql"
@@ -112,3 +114,41 @@ def test_periodic_facts_have_period_range_check() -> None:
 def test_sql_mirror_drops_old_period_grain() -> None:
     sql = SQL_MIRROR.read_text(encoding="utf-8")
     assert "period_date" not in sql and "period_type" not in sql
+
+
+PERIODIC_GRAIN_INDEX = {
+    "fact_logistics_periodic": "uq_fact_logistics_grain",
+    "fact_supply_demand_periodic": "uq_fact_sd_grain",
+}
+
+
+def _grain_index_ddl(table: str, index_name: str) -> str:
+    idx = next(i for i in Base.metadata.tables[table].indexes if i.name == index_name)
+    assert idx.unique, f"{index_name} must be UNIQUE"
+    return str(CreateIndex(idx).compile(dialect=postgresql.dialect()))
+
+
+def test_periodic_unique_grain_includes_release_date() -> None:
+    for table, index_name in PERIODIC_GRAIN_INDEX.items():
+        ddl = _grain_index_ddl(table, index_name)
+        assert "release_date" in ddl, f"{table} grain missing release_date: {ddl}"
+
+
+def test_periodic_unique_grain_includes_data_source_key() -> None:
+    for table, index_name in PERIODIC_GRAIN_INDEX.items():
+        ddl = _grain_index_ddl(table, index_name)
+        assert "data_source_key" in ddl, f"{table} grain missing data_source_key: {ddl}"
+
+
+def test_periodic_unique_grain_includes_period_range() -> None:
+    for table, index_name in PERIODIC_GRAIN_INDEX.items():
+        ddl = _grain_index_ddl(table, index_name)
+        assert "period_start" in ddl and "period_end" in ddl, f"{table} grain missing period range: {ddl}"
+
+
+def test_sql_mirror_periodic_grain_lines_include_release_and_source() -> None:
+    sql = SQL_MIRROR.read_text(encoding="utf-8")
+    for index_name in PERIODIC_GRAIN_INDEX.values():
+        line = next(ln for ln in sql.splitlines() if index_name in ln and "UNIQUE INDEX" in ln)
+        assert "release_date" in line, line
+        assert "data_source_key" in line, line

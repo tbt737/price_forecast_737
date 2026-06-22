@@ -10,6 +10,7 @@ from app.models import (
     CommodityGroup,
     CommodityRegionMap,
     DimCommodity,
+    DimDataSource,
     DimMarketInstrument,
     DimRegion,
     FactEventRisk,
@@ -191,6 +192,50 @@ def test_periodic_fact_valid_range_accepted(session: Session) -> None:
     session.add(row)
     session.flush()  # must NOT raise
     assert row.sd_id is not None
+
+
+def _data_source(session: Session, code: str) -> DimDataSource:
+    src = DimDataSource(source_code=code, name=f"src {code}")
+    session.add(src)
+    session.flush()
+    return src
+
+
+def test_periodic_grain_distinguishes_by_release_date(session: Session) -> None:
+    """release_date is part of the as-of identity: same period, later release = new row."""
+    c = _commodity(session, "SDREL")
+    src = _data_source(session, "SREL")
+    base = dict(
+        commodity_key=c.commodity_key,
+        data_source_key=src.data_source_key,
+        period_start=date(2025, 1, 1),
+        period_end=date(2025, 1, 31),
+        metric_code="ending_stocks",
+        revision=0,
+    )
+    session.add(FactSupplyDemandPeriodic(**base, release_date=date(2025, 2, 10), value=1))
+    session.flush()
+    session.add(FactSupplyDemandPeriodic(**base, release_date=date(2025, 3, 10), value=2))
+    session.flush()  # different release_date -> distinct as-of row, must NOT raise
+
+
+def test_periodic_grain_rejects_full_duplicate(session: Session) -> None:
+    c = _commodity(session, "SDDUP")
+    src = _data_source(session, "SDUP")
+    base = dict(
+        commodity_key=c.commodity_key,
+        data_source_key=src.data_source_key,
+        period_start=date(2025, 1, 1),
+        period_end=date(2025, 1, 31),
+        metric_code="ending_stocks",
+        revision=0,
+        release_date=date(2025, 2, 10),
+    )
+    session.add(FactSupplyDemandPeriodic(**base, value=1))
+    session.flush()
+    session.add(FactSupplyDemandPeriodic(**base, value=2))
+    with pytest.raises(IntegrityError):
+        session.flush()  # identical full grain -> conflict
 
 
 def test_event_risk_release_guard_and_grain(session: Session) -> None:
