@@ -90,7 +90,7 @@ are just a *set of instruments + regions + drivers + sources* described in YAML.
 
 A star schema: surrogate-keyed **dimensions** + a **profile registry**, plus one fact
 table **per data domain**. Dimensions are global and deduplicated by their natural code
-(a region/source shared by many commodities is stored once). `dim_instrument` is scoped
+(a region/source shared by many commodities is stored once). `dim_market_instrument` is scoped
 to a commodity because the same `instrument_code` (e.g. `CN_FOB_QINGDAO`) denotes
 different goods for different commodities. Metric/indicator granularity is carried as
 `*_code` text columns on the facts, so a new metric is new rows — never a schema change.
