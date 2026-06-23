@@ -1,23 +1,28 @@
-"""Transaction-safe ETL write path (Phase 4A).
+"""Transaction-safe ETL write path (Phase 4A) + source provenance replay (Phase 4B).
 
-Turns Phase 3B/3C insert plans into a controlled DB write with explicit dry-run vs
-write modes, fail-closed lineage, deterministic idempotency, conflict safety, and
-atomic batch rollback. Still fixture/mock only — no external ingestion.
+`write_batch` turns Phase 3B/3C insert plans into a controlled DB write with explicit
+dry-run vs write modes, fail-closed lineage, deterministic idempotency, conflict
+safety, and atomic batch rollback. Still fixture/mock only — no external ingestion.
 
-Semantics (per record, classified against the DB *and* the in-batch staged set):
+Per-record classification (against the DB *and* the in-batch staged set):
   * REJECTED   — validation/resolution failed (incl. missing/unknown source). No write.
-  * NEW        — no row for this canonical identity → insert.
-  * IDEMPOTENT — a row with the same canonical identity AND the same normalized
-                 non-grain values already exists → no-op (no duplicate).
-  * CONFLICT   — same canonical identity but different normalized values → no write.
+  * NEW        — no match → insert.
+  * IDEMPOTENT — an equivalent row already exists → no-op (no duplicate).
+  * CONFLICT   — a matching slot exists with a different value → no write.
 
-Canonical identity is derived deterministically from the resolved unique grain
-(which already includes ``data_source_key`` for periodic facts and the
-instrument/region/metric/date fields per Phase 2) — NO new DB column is added.
+Two identities are used, provenance FIRST then grain (provenance never bypasses a
+grain conflict):
+  * Provenance identity = (target_table, data_source_key, source_record_id) — only
+    when the record carries a ``source_record_id`` and a resolved source. Detects
+    replay of the *same source record*: same value + same ``source_payload_hash`` →
+    idempotent; otherwise PROVENANCE conflict.
+  * Grain identity = the Phase 2 unique grain (Phase 4A behaviour, unchanged).
+    ``source_record_id``/``source_payload_hash`` are NOT part of the grain and are
+    excluded from the grain value comparison, so records without provenance behave
+    exactly as in Phase 4A.
 
 Batch atomicity: in write mode, if ANY record is REJECTED or CONFLICT, the whole
-batch is rolled back (no partial writes). Only batches that are entirely NEW/
-IDEMPOTENT commit.
+batch rolls back (no partial writes).
 """
 
 from __future__ import annotations
@@ -28,11 +33,14 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from etl.conflicts import TARGET_MODELS, find_existing_row
 from etl.contracts import NormalizedRecord
 from etl.planner import InsertPlan, InsertPlanner
+
+_PROVENANCE_KEYS = ("source_record_id", "source_payload_hash")
 
 
 class WriteOutcome(enum.StrEnum):
@@ -43,24 +51,23 @@ class WriteOutcome(enum.StrEnum):
 
 
 def canonical_identity(plan: InsertPlan) -> tuple[Any, ...]:
-    """Deterministic identity for a plan: (target_table, sorted grain items).
+    """Deterministic grain identity: (target_table, sorted grain items).
 
     Mirrors the DB unique grain exactly, so two records collide here iff they
-    collide in the database.
+    collide in the database. Provenance is NOT part of this identity.
     """
     grain = plan.grain or {}
     return (plan.target_table, *sorted((key, grain[key]) for key in grain))
 
 
 def _value_fields(plan: InsertPlan) -> dict[str, Any]:
-    """Payload columns that are NOT part of the grain (the comparable 'value')."""
+    """Payload columns that are NOT grain and NOT provenance (the comparable value)."""
     grain_keys = set(plan.grain or {})
     payload = plan.payload or {}
-    return {key: value for key, value in payload.items() if key not in grain_keys}
+    return {k: v for k, v in payload.items() if k not in grain_keys and k not in _PROVENANCE_KEYS}
 
 
 def _normalize(value: Any) -> Any:
-    """Normalize for value comparison: numerics → Decimal; others unchanged."""
     if isinstance(value, bool):
         return value
     if isinstance(value, (int, float, Decimal)):
@@ -76,12 +83,74 @@ def _values_equal(left: dict[str, Any], right: dict[str, Any]) -> bool:
     return all(_normalize(left.get(key)) == _normalize(right.get(key)) for key in keys)
 
 
-def _existing_values(session: Session, plan: InsertPlan) -> dict[str, Any] | None:
-    """Value fields of the existing row for this plan's grain, or None if absent."""
+@dataclass
+class _Existing:
+    values: dict[str, Any]
+    payload_hash: str | None
+
+
+def _existing(plan: InsertPlan, row: Any) -> _Existing:
+    return _Existing({key: getattr(row, key) for key in _value_fields(plan)}, getattr(row, "source_payload_hash", None))
+
+
+def _existing_by_grain(session: Session, plan: InsertPlan) -> _Existing | None:
     row = find_existing_row(session, plan.record.family, plan.grain or {})
-    if row is None:
+    return _existing(plan, row) if row is not None else None
+
+
+def _provenance_id(plan: InsertPlan) -> tuple[Any, ...] | None:
+    sid = plan.record.source_record_id
+    data_source_key = (plan.resolved_keys or {}).get("data_source_key")
+    if sid and data_source_key is not None:
+        return (plan.target_table, data_source_key, sid)
+    return None
+
+
+def _existing_by_provenance(session: Session, plan: InsertPlan) -> _Existing | None:
+    pid = _provenance_id(plan)
+    if pid is None:
         return None
-    return {key: getattr(row, key) for key in _value_fields(plan)}
+    model: Any = TARGET_MODELS[plan.record.family]
+    _, data_source_key, sid = pid
+    row = session.execute(
+        select(model)
+        .where(model.data_source_key == data_source_key, model.source_record_id == sid)
+        .limit(1)
+    ).scalar_one_or_none()
+    return _existing(plan, row) if row is not None else None
+
+
+def _classify(
+    session: Session,
+    plan: InsertPlan,
+    staged_grain: dict[tuple[Any, ...], _Existing],
+    staged_prov: dict[tuple[Any, ...], _Existing],
+) -> tuple[WriteOutcome, str | None]:
+    if plan.errors:
+        return WriteOutcome.rejected, None
+
+    values = _value_fields(plan)
+    incoming_hash = plan.record.source_payload_hash
+
+    # 1) Provenance-aware replay (only if the record carries source provenance).
+    pid = _provenance_id(plan)
+    if pid is not None:
+        prov = _existing_by_provenance(session, plan) or staged_prov.get(pid)
+        if prov is not None:
+            same = _values_equal(prov.values, values) and prov.payload_hash == incoming_hash
+            return (WriteOutcome.idempotent, None) if same else (WriteOutcome.conflict, "provenance")
+
+    # 2) Grain logic (Phase 4A, unchanged) — provenance never bypasses a grain conflict.
+    gid = canonical_identity(plan)
+    grain = _existing_by_grain(session, plan) or staged_grain.get(gid)
+    if grain is None:
+        staged_grain[gid] = _Existing(values, incoming_hash)
+        if pid is not None:
+            staged_prov[pid] = _Existing(values, incoming_hash)
+        return WriteOutcome.new, None
+    if _values_equal(grain.values, values):
+        return WriteOutcome.idempotent, None
+    return WriteOutcome.conflict, "grain"
 
 
 @dataclass
@@ -117,20 +186,6 @@ class WriteReport:
         )
 
 
-def _classify(session: Session, plan: InsertPlan, staged: dict[tuple[Any, ...], dict[str, Any]]) -> WriteOutcome:
-    if plan.errors:
-        return WriteOutcome.rejected
-    identity = canonical_identity(plan)
-    values = _value_fields(plan)
-    existing = _existing_values(session, plan)
-    if existing is None:
-        existing = staged.get(identity)
-    if existing is None:
-        staged[identity] = values
-        return WriteOutcome.new
-    return WriteOutcome.idempotent if _values_equal(existing, values) else WriteOutcome.conflict
-
-
 def write_batch(
     session: Session,
     records: Iterable[NormalizedRecord],
@@ -146,40 +201,42 @@ def write_batch(
     planner = InsertPlanner(session)
     plans = [planner.plan(record) for record in records]
 
-    staged: dict[tuple[Any, ...], dict[str, Any]] = {}
-    outcomes = [_classify(session, plan, staged) for plan in plans]
+    staged_grain: dict[tuple[Any, ...], _Existing] = {}
+    staged_prov: dict[tuple[Any, ...], _Existing] = {}
+    classified = [_classify(session, plan, staged_grain, staged_prov) for plan in plans]
 
     report = WriteReport(mode="dry_run" if dry_run else "write", planned=len(plans))
-    for index, (plan, outcome) in enumerate(zip(plans, outcomes, strict=True)):
+    for index, (plan, (outcome, kind)) in enumerate(zip(plans, classified, strict=True)):
         if outcome is WriteOutcome.idempotent:
             report.idempotent += 1
         elif outcome is WriteOutcome.conflict:
             report.conflict += 1
         elif outcome is WriteOutcome.rejected:
             report.rejected += 1
-        report.items.append(
-            {
-                "index": index,
-                "family": plan.record.family.value,
-                "target_table": plan.target_table,
-                "outcome": outcome.value,
-                "error_codes": sorted(plan.error_codes),
-            }
-        )
+        item: dict[str, Any] = {
+            "index": index,
+            "family": plan.record.family.value,
+            "target_table": plan.target_table,
+            "outcome": outcome.value,
+            "error_codes": sorted(plan.error_codes),
+        }
+        if kind is not None:
+            item["conflict_kind"] = kind
+        report.items.append(item)
 
     if dry_run:
         report.committed = None
         return report
 
     # Write mode — atomic batch.
-    blocked = any(o in (WriteOutcome.rejected, WriteOutcome.conflict) for o in outcomes)
+    blocked = any(outcome in (WriteOutcome.rejected, WriteOutcome.conflict) for outcome, _ in classified)
     if blocked:
         session.rollback()  # discard anything pending; no partial write
         report.committed = False
         return report
 
     try:
-        for plan, outcome in zip(plans, outcomes, strict=True):
+        for plan, (outcome, _kind) in zip(plans, classified, strict=True):
             if outcome is WriteOutcome.new:
                 session.add(TARGET_MODELS[plan.record.family](**(plan.payload or {})))
                 report.inserted += 1

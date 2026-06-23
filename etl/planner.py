@@ -38,6 +38,9 @@ def build_payload(record: NormalizedRecord, resolution: ResolutionResult, spec: 
         "value": record.value,
         "unit": record.unit,
         "revision": record.revision,
+        # Source provenance (Phase 4B) — optional; not part of the unique grain.
+        "source_record_id": record.source_record_id,
+        "source_payload_hash": record.source_payload_hash,
     }
     if spec.requires_commodity or record.commodity_code:
         payload["commodity_key"] = resolution.commodity_key

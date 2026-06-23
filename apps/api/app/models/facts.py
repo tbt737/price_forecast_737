@@ -46,6 +46,10 @@ class _FactMixin(TimestampMixin):
     value: Mapped[float | None] = mapped_column(Numeric(20, 6))
     unit: Mapped[str | None] = mapped_column(String(40))
     revision: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    # Source provenance (Phase 4B) — NULLABLE/optional; required-provenance is Phase 4C.
+    # Not part of the unique grain; used for provenance-aware replay detection.
+    source_record_id: Mapped[str | None] = mapped_column(String(200))
+    source_payload_hash: Mapped[str | None] = mapped_column(String(64))
     ingested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

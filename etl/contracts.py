@@ -90,6 +90,9 @@ class NormalizedRecord:
     unit: str | None = None
     currency: str | None = None
     revision: int = 0
+    # Source provenance (Phase 4B) — optional; persisted but NOT part of the grain.
+    source_record_id: str | None = None
+    source_payload_hash: str | None = None
     attributes: dict[str, Any] = field(default_factory=dict)
 
     # input keys from_dict knows how to map (besides ``family``/``attributes``)
@@ -97,6 +100,7 @@ class NormalizedRecord:
         {
             "data_source_code", "commodity_code", "region_code", "instrument_code",
             "metric_code", "indicator_code", "value", "unit", "currency", "revision",
+            "source_record_id", "source_payload_hash",
         }
     )
     _DATE_KEYS = frozenset({"release_date", "observation_date", "period_start", "period_end"})
