@@ -25,6 +25,11 @@ Provenance is checked **first**, then grain (provenance never bypasses a grain c
    - existing match, same value **and** same `source_payload_hash` → **idempotent** no-op.
    - existing match, different value or hash → **conflict** (`conflict_kind="provenance"`),
      no write.
+   - `data_source_key` is part of the identity **even when it is not part of the fact's
+     unique grain** (e.g. daily facts grain on commodity/instrument/date, not source).
+     So the *same* `source_record_id` under a *different* data source is **not** read as a
+     replay — it falls through to grain logic, where a same-grain/different-value row
+     still raises a grain conflict. Provenance never bypasses a grain conflict.
 2. **Grain identity** (Phase 4A, unchanged) — used when there is no provenance match.
    `source_record_id`/`source_payload_hash` are excluded from the grain value comparison,
    so records **without** provenance behave exactly as in Phase 4A.
