@@ -22,6 +22,7 @@ const config: Config = {
         demo: "var(--demo)",
         pos: "var(--pos)",
         neg: "var(--neg)",
+        "brand-soft": "var(--brand-soft)",
         "sector-agriculture": "var(--sector-agriculture)",
         "sector-energy": "var(--sector-energy)",
         "sector-metal": "var(--sector-metal)",
@@ -30,7 +31,19 @@ const config: Config = {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
-      borderRadius: { card: "10px" },
+      borderRadius: { card: "12px" },
+      boxShadow: {
+        card: "var(--shadow)",
+        sm2: "var(--shadow-sm)",
+      },
+      keyframes: {
+        shimmer: { "100%": { transform: "translateX(100%)" } },
+        "fade-in": { from: { opacity: "0", transform: "translateY(4px)" }, to: { opacity: "1", transform: "translateY(0)" } },
+      },
+      animation: {
+        shimmer: "shimmer 1.4s infinite",
+        "fade-in": "fade-in 0.25s ease-out",
+      },
     },
   },
   plugins: [],
