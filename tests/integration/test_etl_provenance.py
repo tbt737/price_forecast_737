@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from datetime import date
 
-from app.models import FactSupplyDemandPeriodic
+from app.models import FactPriceDaily, FactSupplyDemandPeriodic
 from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,15 @@ def _sd(**ov) -> NormalizedRecord:
         family=FactFamily.supply_demand_periodic, data_source_code="manual", commodity_code="ALPHA",
         metric_code="ending_stocks", period_start=date(2025, 1, 1), period_end=date(2025, 1, 31),
         release_date=date(2025, 2, 10), value=100,
+    )
+    return NormalizedRecord(**{**base, **ov})
+
+
+def _price(**ov) -> NormalizedRecord:
+    base = dict(
+        family=FactFamily.price_daily, data_source_code="manual", commodity_code="ALPHA",
+        instrument_code="INST1", observation_date=date(2025, 1, 10), release_date=date(2025, 1, 10),
+        value=100, currency="USD",
     )
     return NormalizedRecord(**{**base, **ov})
 
@@ -118,3 +127,40 @@ def test_atomic_rollback_on_provenance_conflict(seeded_session: Session) -> None
         select(FactSupplyDemandPeriodic).where(FactSupplyDemandPeriodic.period_start == date(2025, 2, 1))
     ).scalar_one_or_none()
     assert feb is None
+
+
+# ── daily facts: provenance keys on data_source_key, which is NOT in the daily grain ──
+def test_daily_provenance_persists_and_replays_idempotent(seeded_session: Session) -> None:
+    rec = _price(source_record_id="P-1", source_payload_hash=HASH_1)
+    write_batch(seeded_session, [rec], dry_run=False)
+    row = seeded_session.execute(select(FactPriceDaily)).scalar_one()
+    assert row.source_record_id == "P-1" and row.source_payload_hash == HASH_1
+    report = write_batch(seeded_session, [rec], dry_run=False)  # exact replay
+    assert report.idempotent == 1 and report.inserted == 0
+    assert _count(seeded_session, FactPriceDaily) == 1  # no duplicate
+
+
+def test_daily_same_provenance_changed_value_is_conflict(seeded_session: Session) -> None:
+    write_batch(seeded_session, [_price(source_record_id="P-1", source_payload_hash=HASH_1, value=100)], dry_run=False)
+    report = write_batch(
+        seeded_session, [_price(source_record_id="P-1", source_payload_hash=HASH_1, value=200)], dry_run=False
+    )
+    assert report.conflict == 1 and report.committed is False
+    assert report.items[0].get("conflict_kind") == "provenance"
+    assert float(seeded_session.execute(select(FactPriceDaily)).scalar_one().value) == 100.0
+
+
+def test_daily_provenance_identity_includes_data_source(seeded_session: Session) -> None:
+    # Same source_record_id but a DIFFERENT data source must NOT be read as a replay:
+    # provenance identity = (table, data_source_key, source_record_id). data_source_key
+    # is not in the daily grain, so the SAME grain with a different value still conflicts
+    # at the grain level (provenance never bypasses a grain conflict).
+    write_batch(
+        seeded_session, [_price(data_source_code="manual", source_record_id="P-1", value=100)], dry_run=False
+    )
+    report = write_batch(
+        seeded_session, [_price(data_source_code="internal", source_record_id="P-1", value=200)], dry_run=False
+    )
+    assert report.conflict == 1 and report.inserted == 0 and report.committed is False
+    assert report.items[0].get("conflict_kind") == "grain"
+    assert _count(seeded_session, FactPriceDaily) == 1
