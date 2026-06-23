@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Multi-Commodity Quant Forecasting — Dashboard</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel-2: #1c232c; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #2ea043; --accent-2: #58a6ff;
+    --warn: #d29922; --chip: #21262d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  header {
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #11161d, #0d1117);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 650; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  .badges { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+  .badge {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 12px; text-align: center; min-width: 76px;
+  }
+  .badge .n { font-size: 18px; font-weight: 700; color: var(--accent); }
+  .badge .l { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 16px; padding: 16px 24px; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted);
+    margin: 0; padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--panel-2); }
+  .list { max-height: 72vh; overflow: auto; }
+  .row { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+  .row:hover { background: var(--panel-2); }
+  .row.active { background: #1f6feb22; border-left: 3px solid var(--accent-2); padding-left: 11px; }
+  .row .code { font-weight: 650; }
+  .row .name { color: var(--muted); font-size: 12px; }
+  .row .grp { margin-left: auto; font-size: 10px; color: var(--muted); background: var(--chip);
+    border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
+  .detail { padding: 16px; }
+  .detail .placeholder { color: var(--muted); padding: 40px; text-align: center; }
+  .dhead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .dhead h3 { margin: 0; font-size: 20px; }
+  .dhead .ccode { color: var(--accent-2); font-family: ui-monospace, monospace; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: 12px; margin: 6px 0 14px; }
+  .meta b { color: var(--text); font-weight: 600; }
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 4px 0 18px; }
+  @media (max-width: 720px) { .charts { grid-template-columns: 1fr; } }
+  .chart { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .chart .ct { font-size: 12px; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .demo-tag { color: var(--warn); border: 1px solid var(--warn); border-radius: 999px; font-size: 9px;
+    padding: 0 6px; text-transform: uppercase; letter-spacing: .4px; }
+  .real-tag { color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; font-size: 9px;
+    padding: 0 6px; text-transform: uppercase; letter-spacing: .4px; }
+  section.block { margin: 16px 0; }
+  section.block > .bt { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--accent-2);
+    border-bottom: 1px solid var(--border); padding-bottom: 5px; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  td a { color: var(--accent-2); text-decoration: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips span { background: var(--chip); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+  .notes { background: var(--panel-2); border-left: 3px solid var(--accent); padding: 10px 12px; border-radius: 0 6px 6px 0; color: var(--text); }
+  .banner { background: #d2992218; border: 1px solid var(--warn); color: var(--warn); border-radius: 8px;
+    padding: 8px 12px; font-size: 12px; margin: 0 24px; }
+  footer { color: var(--muted); font-size: 11px; padding: 12px 24px 28px; }
+  .err { color: #f85149; }
+  svg text { fill: var(--muted); font-size: 9px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🌾 Multi-Commodity Quant Forecasting</h1>
+    <div class="sub">Configuration-driven platform · read-only data layer · <a href="/docs" style="color:var(--accent-2)">API docs</a></div>
+  </div>
+  <div class="badges" id="badges"></div>
+</header>
+
+<div class="banner" id="banner">
+  ⓘ Bảng dữ liệu giá/forecast (fact) hiện <b>TRỐNG</b> — chưa có ingestion thật. Dữ liệu commodities &amp; profiles bên dưới là <b>THẬT</b> (từ 16 YAML profile). Biểu đồ giá là <b>DEMO (dữ liệu giả)</b>.
+</div>
+
+<div class="layout">
+  <div class="card">
+    <h2>Commodities (<span id="ccount">…</span>)</h2>
+    <div class="list" id="list"></div>
+  </div>
+  <div class="card">
+    <h2>Chi tiết profile</h2>
+    <div class="detail" id="detail">
+      <div class="placeholder">← Chọn một commodity để xem chi tiết</div>
+    </div>
+  </div>
+</div>
+
+<footer id="footer">Đang tải…</footer>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const titleCase = (s) => String(s).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+async function getJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + " → HTTP " + r.status);
+  return r.json();
+}
+
+// ---- deterministic demo data (stable per commodity, clearly fake) ----
+function hashStr(s) { let h = 2166136261; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function demoSeries(code, n = 30) {
+  const rnd = mulberry32(hashStr(code)); let v = 50 + rnd() * 50; const out = [];
+  for (let i = 0; i < n; i++) { v += (rnd() - 0.48) * v * 0.05; out.push(Math.max(1, v)); }
+  return out;
+}
+
+// ---- tiny inline SVG charts (no external libs) ----
+function svgLine(series, color) {
+  const W = 300, H = 120, p = 8, min = Math.min(...series), max = Math.max(...series), rng = (max - min) || 1;
+  const x = i => p + i * (W - 2 * p) / (series.length - 1);
+  const y = v => H - p - (v - min) / rng * (H - 2 * p);
+  const d = series.map((v, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1)).join(" ");
+  const area = d + ` L${x(series.length - 1).toFixed(1)} ${H - p} L${x(0).toFixed(1)} ${H - p} Z`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none">
+    <path d="${area}" fill="${color}22"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2"/>
+    <text x="${p}" y="12">${max.toFixed(1)}</text><text x="${p}" y="${H - 2}">${min.toFixed(1)}</text></svg>`;
+}
+function svgBars(items, color) {
+  const W = 300, H = 120, p = 18, n = items.length, bw = (W - 2 * p) / n * 0.6;
+  const max = Math.max(1, ...items.map(i => i.v));
+  let bars = "";
+  items.forEach((it, i) => {
+    const cx = p + (i + 0.5) * (W - 2 * p) / n, h = it.v / max * (H - 2 * p);
+    bars += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${(H - p - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${color}"/>
+      <text x="${cx.toFixed(1)}" y="${H - 6}" text-anchor="middle">${esc(it.l)}</text>
+      <text x="${cx.toFixed(1)}" y="${(H - p - h - 3).toFixed(1)}" text-anchor="middle" style="fill:var(--text)">${it.v}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%">${bars}</svg>`;
+}
+
+// ---- generic profile renderer (handles whatever the YAML carries) ----
+const SKIP = new Set(["commodity_code", "commodity_name", "notes", "base_unit", "default_currency", "commodity_group"]);
+function renderValue(val) {
+  if (Array.isArray(val)) {
+    if (val.length && typeof val[0] === "object" && val[0] !== null) {
+      const cols = [...new Set(val.flatMap(o => Object.keys(o)))];
+      const head = cols.map(c => `<th>${esc(titleCase(c))}</th>`).join("");
+      const rows = val.map(o => "<tr>" + cols.map(c => {
+        const cell = o[c];
+        if (typeof cell === "string" && /^https?:\/\//.test(cell)) return `<td><a href="${esc(cell)}" target="_blank" rel="noopener">link ↗</a></td>`;
+        return `<td>${esc(cell ?? "")}</td>`;
+      }).join("") + "</tr>").join("");
+      return `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    return `<div class="chips">${val.map(v => `<span>${esc(v)}</span>`).join("")}</div>`;
+  }
+  if (val && typeof val === "object") {
+    return `<table><tbody>${Object.entries(val).map(([k, v]) =>
+      `<tr><th style="width:32%">${esc(titleCase(k))}</th><td>${esc(typeof v === "object" ? JSON.stringify(v) : v)}</td></tr>`).join("")}</tbody></table>`;
+  }
+  return `<div>${esc(val)}</div>`;
+}
+
+function renderDetail(commodity, prof) {
+  const p = prof.profile || {};
+  const counts = [
+    { l: "Instr", v: (p.instruments || commodity.instruments || []).length },
+    { l: "Regions", v: ["import_regions","export_regions","production_regions","consumption_regions","weather_regions","macro_regions"]
+        .reduce((s, k) => s + (Array.isArray(p[k]) ? p[k].length : 0), 0) },
+    { l: "Models", v: (p.models || []).length },
+    { l: "Sources", v: (p.data_sources || []).length },
+  ];
+  const blocks = Object.entries(p).filter(([k, v]) => !SKIP.has(k) && v != null &&
+    !(Array.isArray(v) && v.length === 0))
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([k, v]) => `<section class="block"><div class="bt">${esc(titleCase(k))}</div>${renderValue(v)}</section>`).join("");
+
+  $("detail").innerHTML = `
+    <div class="dhead"><h3>${esc(commodity.commodity_name)}</h3><span class="ccode">${esc(commodity.commodity_code)}</span></div>
+    <div class="meta">
+      <span>Nhóm: <b>${esc(commodity.commodity_group)}</b></span>
+      <span>Đơn vị: <b>${esc(commodity.base_unit)}</b></span>
+      <span>Tiền tệ: <b>${esc(commodity.default_currency)}</b></span>
+      <span>Profile v<b>${esc(prof.version)}</b></span>
+      <span>Source: <b>${esc(prof.source_path || "—")}</b></span>
+      <span>Checksum: <b>${esc((prof.checksum || "").slice(0, 10))}…</b></span>
+    </div>
+    <div class="charts">
+      <div class="chart"><div class="ct"><span>Giá 30 phiên</span><span class="demo-tag">demo · dữ liệu giả</span></div>${svgLine(demoSeries(commodity.commodity_code), "#d29922")}</div>
+      <div class="chart"><div class="ct"><span>Cấu trúc profile</span><span class="real-tag">dữ liệu thật</span></div>${svgBars(counts, "#2ea043")}</div>
+    </div>
+    ${p.notes ? `<section class="block"><div class="bt">Notes</div><div class="notes">${esc(p.notes)}</div></section>` : ""}
+    ${blocks}`;
+}
+
+let activeRow = null;
+async function selectCommodity(code, rowEl) {
+  if (activeRow) activeRow.classList.remove("active");
+  if (rowEl) { rowEl.classList.add("active"); activeRow = rowEl; }
+  $("detail").innerHTML = `<div class="placeholder">Đang tải ${esc(code)}…</div>`;
+  try {
+    const [commodity, prof] = await Promise.all([getJSON("/commodities/" + code), getJSON("/profiles/" + code)]);
+    renderDetail(commodity, prof);
+  } catch (e) {
+    $("detail").innerHTML = `<div class="placeholder err">Lỗi tải ${esc(code)}: ${esc(e.message)}</div>`;
+  }
+}
+
+async function boot() {
+  try {
+    const [stats, commodities] = await Promise.all([getJSON("/stats"), getJSON("/commodities")]);
+    $("badges").innerHTML = [
+      ["Commodities", stats.commodities], ["Instruments", stats.instruments],
+      ["Regions", stats.regions], ["Sources", stats.data_sources], ["Fact rows", stats.fact_rows],
+    ].map(([l, n]) => `<div class="badge"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+    $("ccount").textContent = commodities.length;
+    $("list").innerHTML = commodities.map(c =>
+      `<div class="row" data-code="${esc(c.commodity_code)}">
+        <span class="code">${esc(c.commodity_code)}</span>
+        <span class="name">${esc(c.commodity_name)}</span>
+        <span class="grp">${esc(c.commodity_group)}</span></div>`).join("");
+    $("list").querySelectorAll(".row").forEach(r =>
+      r.addEventListener("click", () => selectCommodity(r.dataset.code, r)));
+    $("footer").innerHTML = `Đã tải ${commodities.length} commodities · ${stats.instruments} instruments · ${stats.fact_rows} fact rows (chưa ingest). ` +
+      `API: <a href="/docs" style="color:var(--accent-2)">/docs</a>`;
+    const first = $("list").querySelector(".row");
+    if (first) selectCommodity(first.dataset.code, first);
+  } catch (e) {
+    $("footer").innerHTML = `<span class="err">Không tải được dữ liệu: ${esc(e.message)} — kiểm tra server &amp; DB.</span>`;
+  }
+}
+boot();
+</script>
+</body>
+</html>

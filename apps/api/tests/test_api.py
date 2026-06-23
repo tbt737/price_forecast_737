@@ -49,3 +49,21 @@ def test_list_and_get_profiles(client: TestClient) -> None:
     assert body["commodity_code"] == "GOLD"
     assert body["profile"]["commodity_group"] == "metal"
     assert body["version"] == 1
+
+
+def test_stats(client: TestClient) -> None:
+    r = client.get("/stats")
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"commodities", "profiles", "instruments", "regions", "data_sources", "fact_rows"}
+    assert body["commodities"] == 16
+    assert body["profiles"] == 16
+    assert body["instruments"] > 0
+    assert body["fact_rows"] == 0  # no ingestion yet
+
+
+def test_dashboard_root_serves_html(client: TestClient) -> None:
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    assert "Multi-Commodity Quant Forecasting" in r.text

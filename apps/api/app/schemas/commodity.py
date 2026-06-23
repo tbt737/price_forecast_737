@@ -45,6 +45,17 @@ class ProfileDetailOut(ProfileRegistryOut):
     profile: dict[str, Any]
 
 
+class StatsOut(BaseModel):
+    """Read-only dashboard summary counts."""
+
+    commodities: int
+    profiles: int
+    instruments: int
+    regions: int
+    data_sources: int
+    fact_rows: int
+
+
 class HealthOut(BaseModel):
     status: str
     version: str

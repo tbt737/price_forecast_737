@@ -7,19 +7,53 @@ their phases). Fully generic — nothing is special-cased per commodity.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.session import get_db
-from app.models import CommodityProfileRegistry, DimCommodity
+from app.models import (
+    CommodityProfileRegistry,
+    DimCommodity,
+    DimDataSource,
+    DimMarketInstrument,
+    DimRegion,
+    FactEventRisk,
+    FactLogisticsPeriodic,
+    FactMacroDaily,
+    FactPriceDaily,
+    FactSupplyDemandPeriodic,
+    FactWeatherDaily,
+)
 from app.schemas.commodity import (
     CommodityDetailOut,
     CommodityOut,
     ProfileDetailOut,
     ProfileRegistryOut,
+    StatsOut,
 )
 
 router = APIRouter(tags=["commodities"])
+
+_FACT_MODELS = (
+    FactPriceDaily, FactWeatherDaily, FactMacroDaily,
+    FactLogisticsPeriodic, FactSupplyDemandPeriodic, FactEventRisk,
+)
+
+
+@router.get("/stats", response_model=StatsOut)
+def get_stats(db: Session = Depends(get_db)) -> StatsOut:
+    """Read-only summary counts for the dashboard header."""
+    def count(model: type) -> int:
+        return db.scalar(select(func.count()).select_from(model)) or 0
+
+    return StatsOut(
+        commodities=count(DimCommodity),
+        profiles=count(CommodityProfileRegistry),
+        instruments=count(DimMarketInstrument),
+        regions=count(DimRegion),
+        data_sources=count(DimDataSource),
+        fact_rows=sum(count(model) for model in _FACT_MODELS),
+    )
 
 
 @router.get("/commodities", response_model=list[CommodityOut])
