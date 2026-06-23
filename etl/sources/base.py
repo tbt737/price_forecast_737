@@ -13,6 +13,7 @@ from collections.abc import Iterable
 
 from etl.contracts import FactFamily, NormalizedRecord
 from etl.mapping import DryRunReport, dry_run
+from etl.provenance import ConnectorGateReport, gate_records
 
 
 class BaseSource(abc.ABC):
@@ -31,3 +32,9 @@ class BaseSource(abc.ABC):
     def dry_run(self) -> DryRunReport:
         """Validate + map this source's records in dry-run mode (no DB writes)."""
         return dry_run(self.collect())
+
+    def gate(self) -> ConnectorGateReport:
+        """Phase 4C-A connector boundary: collect, then fail-closed on missing/invalid
+        provenance. Connector-originated records must carry a deterministic source
+        identity before they reach the planner/writer."""
+        return gate_records(self.collect())

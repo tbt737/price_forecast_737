@@ -18,6 +18,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from etl.contracts import FactFamily, NormalizedRecord
+from etl.provenance import attach_provenance
 from etl.sources.base import BaseSource
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures"  # etl/fixtures
@@ -76,8 +77,22 @@ class FixtureSource(BaseSource):
         self._path = _safe_path(path, root)
 
     def collect(self) -> Iterable[NormalizedRecord]:
+        """Emit records with deterministic provenance (Phase 4C-A connector contract).
+
+        ``source_record_id`` = ``<source_code>:<fixture-stem>:<row-index>`` (stable for a
+        stable fixture; honours an explicit id in the row), and ``source_payload_hash``
+        = canonical SHA-256 of the raw row. No random ids, no volatile fields.
+        """
         rows = _parse(self._path.read_text(encoding="utf-8"), self._path.suffix.lower(), self._path.name)
-        return [NormalizedRecord.from_dict(self.family, row) for row in rows]
+        origin = self._path.stem
+        records = []
+        for index, row in enumerate(rows):
+            record = NormalizedRecord.from_dict(self.family, row)
+            record = attach_provenance(
+                record, row, source_code=record.data_source_code or self.source_code, origin=origin, key=index
+            )
+            records.append(record)
+        return records
 
 
 def load_family_fixture(family: FactFamily, *, root: Path = FIXTURE_ROOT) -> FixtureSource:

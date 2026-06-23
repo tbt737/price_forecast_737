@@ -31,6 +31,12 @@ class ErrorCode(enum.StrEnum):
     # Parse-time issues from NormalizedRecord.from_dict (Phase 3C fixtures).
     INVALID_DATE = "INVALID_DATE"  # error
     IGNORED_FIELD = "IGNORED_FIELD"  # warning
+    # Connector/ETL boundary provenance gate (Phase 4C-A). These are enforced ONLY at
+    # the connector boundary (see etl/provenance.py) — NOT in validate_record() — so
+    # legacy/direct writer records without provenance keep Phase 4A/4B behaviour.
+    MISSING_SOURCE_RECORD_ID = "MISSING_SOURCE_RECORD_ID"
+    MISSING_SOURCE_PAYLOAD_HASH = "MISSING_SOURCE_PAYLOAD_HASH"
+    INVALID_SOURCE_PAYLOAD_HASH = "INVALID_SOURCE_PAYLOAD_HASH"
 
 
 class Severity(enum.StrEnum):
