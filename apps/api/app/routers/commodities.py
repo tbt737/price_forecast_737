@@ -6,6 +6,8 @@ their phases). Fully generic — nothing is special-cased per commodity.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -40,19 +42,37 @@ _FACT_MODELS = (
 )
 
 
+def _count(model: type) -> Any:
+    """Scalar subquery: COUNT(*) of a table, usable as a SELECT column."""
+    return select(func.count()).select_from(model).scalar_subquery()
+
+
 @router.get("/stats", response_model=StatsOut)
 def get_stats(db: Session = Depends(get_db)) -> StatsOut:
-    """Read-only summary counts for the dashboard header."""
-    def count(model: type) -> int:
-        return db.scalar(select(func.count()).select_from(model)) or 0
+    """Read-only summary counts for the dashboard header.
+
+    Single round-trip: all counts are scalar subqueries in one SELECT (was 11
+    separate queries — meaningful on a high-latency remote DB).
+    """
+    fact_labels = [f"fact_{i}" for i in range(len(_FACT_MODELS))]
+    row = db.execute(
+        select(
+            _count(DimCommodity).label("commodities"),
+            _count(CommodityProfileRegistry).label("profiles"),
+            _count(DimMarketInstrument).label("instruments"),
+            _count(DimRegion).label("regions"),
+            _count(DimDataSource).label("data_sources"),
+            *[_count(model).label(label) for model, label in zip(_FACT_MODELS, fact_labels, strict=True)],
+        )
+    ).mappings().one()
 
     return StatsOut(
-        commodities=count(DimCommodity),
-        profiles=count(CommodityProfileRegistry),
-        instruments=count(DimMarketInstrument),
-        regions=count(DimRegion),
-        data_sources=count(DimDataSource),
-        fact_rows=sum(count(model) for model in _FACT_MODELS),
+        commodities=row["commodities"],
+        profiles=row["profiles"],
+        instruments=row["instruments"],
+        regions=row["regions"],
+        data_sources=row["data_sources"],
+        fact_rows=sum(row[label] for label in fact_labels),
     )
 
 
