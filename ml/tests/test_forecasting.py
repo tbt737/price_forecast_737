@@ -11,10 +11,12 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import numpy as np
+import pytest
 
 from ml.backtests.walk_forward import walk_forward_ar
 from ml.features.tabular import LOOKBACK, feature_row, training_matrix
 from ml.models.baseline import FourierTrendForecaster
+from ml.models.gbm_forecaster import GBMForecaster, is_available
 from ml.models.ridge_forecaster import RidgeARForecaster
 
 
@@ -92,6 +94,22 @@ def test_damped_trend_reduces_extrapolation() -> None:
 
 
 # ── walk-forward backtest ─────────────────────────────────────────────────────
+@pytest.mark.skipif(not is_available(), reason="xgboost not installed")
+def test_gbm_is_deterministic_and_falls_back() -> None:
+    rng = np.random.default_rng(5)
+    logy = np.cumsum(rng.normal(0, 0.01, 400)) + np.log(100.0)
+    doy = _doy(400)
+    a = GBMForecaster(horizon=30).fit(logy, doy).predict_return(logy, doy, 399)
+    b = GBMForecaster(horizon=30).fit(logy, doy).predict_return(logy, doy, 399)
+    assert a == b  # seed + single thread ⇒ bit-for-bit deterministic
+    # too few rows to fit ⇒ no booster ⇒ flat (naive) forecast
+    short = np.log(np.linspace(100.0, 110.0, 90))
+    sdoy = _doy(90)
+    model = GBMForecaster(horizon=30).fit(short, sdoy)
+    assert model.booster_ is None
+    assert np.allclose(model.forecast(short, sdoy, 89, 110.0, 5), 110.0)
+
+
 def test_walk_forward_ar_produces_finite_folds() -> None:
     n = 500
     rng = np.random.default_rng(3)

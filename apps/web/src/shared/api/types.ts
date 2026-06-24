@@ -72,10 +72,10 @@ export interface ForecastPoint {
 
 export interface BacktestSummary {
   folds: number;
-  mape_pct: number;
-  rmse: number;
-  naive_mape_pct: number;
+  mape_pct: number | null;
+  naive_mape_pct: number | null;
   beats_naive: boolean;
+  candidates?: Record<string, number>;
 }
 
 export interface HorizonForecast {

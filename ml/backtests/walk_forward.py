@@ -7,13 +7,23 @@ MAPE/RMSE alongside the naive benchmark's MAPE so accuracy claims are grounded.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
+from typing import Any, Protocol
 
 import numpy as np
 
 from ml.models.baseline import FourierTrendForecaster, naive_last
+from ml.models.gbm_forecaster import GBMForecaster
 from ml.models.ridge_forecaster import RidgeARForecaster
+
+
+class _AnchoredModel(Protocol):
+    def fit(self, logy: np.ndarray, doy: np.ndarray, *, end: int | None = ...) -> Any: ...
+    def forecast(
+        self, logy: np.ndarray, doy: np.ndarray, anchor_idx: int, y_anchor: float, steps: int
+    ) -> np.ndarray: ...
 
 
 @dataclass
@@ -82,22 +92,22 @@ def walk_forward(
     )
 
 
-def walk_forward_ar(
+def _walk_forward_anchored(
     dates: list[date],
     values: np.ndarray,
     *,
     horizon: int,
+    make_model: Callable[[int], _AnchoredModel],
     folds: int = 5,
     min_train: int = 252,
-    l2: float = 5.0,
 ) -> BacktestResult:
-    """Rolling-origin backtest for the Ridge AR forecaster. Each fold fits ONLY on
-    data before the cutoff (``end=cut``) — features are point-in-time, so this is
-    an honest out-of-sample estimate."""
+    """Rolling-origin backtest for any anchored feature model. ``make_model(cut)``
+    must return a model already fit ONLY on data before ``cut`` (``end=cut``) — the
+    features are point-in-time, so this is an honest out-of-sample estimate."""
     yv = np.asarray(values, dtype=float)
+    n = len(yv)
     logy = np.log(yv)
     doy = np.array([d.timetuple().tm_yday for d in dates], dtype=float)
-    n = len(yv)
 
     model_mapes: list[float] = []
     model_rmses: list[float] = []
@@ -108,7 +118,7 @@ def walk_forward_ar(
         for cut in np.unique(np.linspace(min_train, last_cut, folds).astype(int)):
             if cut < min_train or cut + horizon > n:
                 continue
-            model = RidgeARForecaster(horizon=horizon, l2=l2).fit(logy, doy, end=int(cut))
+            model = make_model(int(cut))
             actual = yv[cut : cut + horizon]
             pred = model.forecast(logy, doy, int(cut) - 1, float(yv[cut - 1]), horizon)
             model_mapes.append(_mape(actual, pred))
@@ -121,4 +131,36 @@ def walk_forward_ar(
         model_mape=float(np.mean(model_mapes)) if model_mapes else float("nan"),
         model_rmse=float(np.mean(model_rmses)) if model_rmses else float("nan"),
         naive_mape=float(np.mean(naive_mapes)) if naive_mapes else float("nan"),
+    )
+
+
+def walk_forward_ar(
+    dates: list[date], values: np.ndarray, *, horizon: int, folds: int = 5, min_train: int = 252, l2: float = 5.0
+) -> BacktestResult:
+    """Walk-forward backtest for the Ridge AR forecaster."""
+    logy = np.log(np.asarray(values, dtype=float))
+    doy = np.array([d.timetuple().tm_yday for d in dates], dtype=float)
+    return _walk_forward_anchored(
+        dates,
+        values,
+        horizon=horizon,
+        folds=folds,
+        min_train=min_train,
+        make_model=lambda cut: RidgeARForecaster(horizon=horizon, l2=l2).fit(logy, doy, end=cut),
+    )
+
+
+def walk_forward_gbm(
+    dates: list[date], values: np.ndarray, *, horizon: int, folds: int = 5, min_train: int = 252
+) -> BacktestResult:
+    """Walk-forward backtest for the gradient-boosted (XGBoost) forecaster."""
+    logy = np.log(np.asarray(values, dtype=float))
+    doy = np.array([d.timetuple().tm_yday for d in dates], dtype=float)
+    return _walk_forward_anchored(
+        dates,
+        values,
+        horizon=horizon,
+        folds=folds,
+        min_train=min_train,
+        make_model=lambda cut: GBMForecaster(horizon=horizon).fit(logy, doy, end=cut),
     )

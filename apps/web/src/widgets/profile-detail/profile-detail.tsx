@@ -247,7 +247,12 @@ export function ProfileDetail({ code }: { code: string }) {
           {overlay && fc30 ? (
             <p className="mt-1 text-[11px] leading-snug text-subtle">
               <span style={{ color: "var(--brand)" }}>┄┄</span> Dự báo 30 phiên (
-              {fc30.model_used === "ridge_ar" ? "Ridge AR" : "naive"}) · backtest MAPE{" "}
+              {fc30.model_used === "ridge_ar"
+                ? "Ridge AR"
+                : fc30.model_used === "gbm"
+                  ? "XGBoost"
+                  : "naive"}
+              ) · backtest MAPE{" "}
               <b className="text-text">{fc30.backtest.mape_pct}%</b> (naive {fc30.backtest.naive_mape_pct}%
               {fc30.backtest.beats_naive
                 ? " — thắng naive ✓"

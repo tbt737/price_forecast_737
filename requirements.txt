@@ -14,3 +14,4 @@ yfinance>=0.2
 requests>=2.31
 numpy>=1.26
 pandas>=2.0
+xgboost>=2.0

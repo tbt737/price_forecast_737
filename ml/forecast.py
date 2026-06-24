@@ -20,11 +20,14 @@ from app.models import DimCommodity, DimMarketInstrument, FactPriceDaily  # noqa
 from sqlalchemy import func, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from ml.backtests.walk_forward import walk_forward_ar  # noqa: E402
+from ml.backtests.walk_forward import walk_forward_ar, walk_forward_gbm  # noqa: E402
+from ml.models.gbm_forecaster import GBMForecaster  # noqa: E402
+from ml.models.gbm_forecaster import is_available as gbm_available  # noqa: E402
 from ml.models.ridge_forecaster import RidgeARForecaster  # noqa: E402
 
 MIN_HISTORY = 252  # ~1 trading year required to fit the model
 Z_80 = 1.2816  # ~80% normal band half-width
+SWITCH_MARGIN = 0.02  # require >=2% relative MAPE improvement to leave the naive benchmark
 
 
 def _next_business_days(last: date, count: int) -> list[date]:
@@ -117,16 +120,30 @@ def forecast_commodity(
     horizon_out: dict[str, Any] = {}
     for h in horizons:
         future_dates = _next_business_days(dates[-1], h)
-        bt = walk_forward_ar(dates, y, horizon=h, l2=l2)
-        # Only show the model's directional forecast when the honest backtest says
-        # it beats the naive random walk; otherwise fall back to a flat naive line.
-        if bt.beats_naive:
-            model = RidgeARForecaster(horizon=h, l2=l2).fit(logy, doy)
+
+        # Backtest every candidate out-of-sample; the naive MAPE is the bar to beat.
+        ar = walk_forward_ar(dates, y, horizon=h, l2=l2)
+        naive_mape = ar.naive_mape
+        candidates: dict[str, float] = {"ridge_ar": ar.model_mape}
+        builders: dict[str, Any] = {"ridge_ar": lambda hh=h: RidgeARForecaster(horizon=hh, l2=l2).fit(logy, doy)}
+        if gbm_available():
+            gb = walk_forward_gbm(dates, y, horizon=h)
+            candidates["gbm"] = gb.model_mape
+            builders["gbm"] = lambda hh=h: GBMForecaster(horizon=hh).fit(logy, doy)
+
+        finite = {k: v for k, v in candidates.items() if np.isfinite(v)}
+        best = min(finite, key=lambda k: finite[k]) if finite else None
+        # Switch off naive only when the best model clears it by a margin (guards
+        # against picking a noise-level "winner" out of several candidates).
+        if best is not None and np.isfinite(naive_mape) and finite[best] < naive_mape * (1.0 - SWITCH_MARGIN):
+            model = builders[best]()
             point, lower, upper = model.forecast_interval(logy, doy, anchor_idx, y_anchor, h)
-            model_used = "ridge_ar"
+            model_used, chosen_mape = best, finite[best]
         else:
             point, lower, upper = _naive_interval(y_anchor, ret_sigma, h)
             model_used = "naive"
+            chosen_mape = finite[best] if best is not None else float("nan")
+
         horizon_out[str(h)] = {
             "model_used": model_used,
             "points": [
@@ -139,11 +156,11 @@ def forecast_commodity(
                 for d, pt, lo, hi in zip(future_dates, point, lower, upper, strict=True)
             ],
             "backtest": {
-                "folds": bt.folds,
-                "mape_pct": round(bt.model_mape, 2),
-                "rmse": round(bt.model_rmse, 4),
-                "naive_mape_pct": round(bt.naive_mape, 2),
-                "beats_naive": bt.beats_naive,
+                "folds": ar.folds,
+                "mape_pct": round(chosen_mape, 2) if np.isfinite(chosen_mape) else None,
+                "naive_mape_pct": round(naive_mape, 2) if np.isfinite(naive_mape) else None,
+                "beats_naive": model_used != "naive",
+                "candidates": {k: round(v, 2) for k, v in candidates.items() if np.isfinite(v)},
             },
         }
 
