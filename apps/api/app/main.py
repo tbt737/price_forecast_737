@@ -7,13 +7,21 @@ self-contained static dashboard at ``/`` (no Node/npm toolchain).
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse
+# The /forecast endpoint lazily imports the repo-root ``ml`` package. Ensure the
+# repo root is importable no matter how uvicorn is launched (from apps/api or root),
+# otherwise the forecast endpoint fails with ModuleNotFoundError: No module named 'ml'.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-from app import __version__
-from app.routers import commodities, health
+from fastapi import FastAPI  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
+
+from app import __version__  # noqa: E402
+from app.routers import commodities, health  # noqa: E402
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
