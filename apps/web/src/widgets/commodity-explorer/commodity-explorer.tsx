@@ -94,34 +94,52 @@ export function CommodityExplorer() {
         <Stat label="Fact rows" value={stats.fact_rows} hint="chưa ingest" accent="var(--demo)" />
       </section>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border border-border bg-surface-2 p-0.5">
+          <button
+            type="button"
+            onClick={() => setCompareMode(false)}
+            aria-pressed={!compareMode}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              !compareMode ? "bg-brand text-white shadow-sm" : "text-muted hover:text-text",
+            )}
+          >
+            📋 Khám phá
+          </button>
+          <button
+            type="button"
+            onClick={() => setCompareMode(true)}
+            aria-pressed={compareMode}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              compareMode ? "bg-brand text-white shadow-sm" : "text-muted hover:text-text",
+            )}
+          >
+            ⚖ So sánh hàng hóa
+          </button>
+        </div>
+        {compareMode ? (
+          <span className="text-xs text-muted">
+            Tích vào các hàng bên trái (2 trở lên) để so sánh dự báo · đang chọn{" "}
+            <b className="text-text">{compareSet.size}</b>
+          </span>
+        ) : null}
+      </div>
+
       <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
         <Card className="self-start">
           <CardHeader
             title={compareMode ? `So sánh · ${compareSet.size} chọn` : `Commodities · ${filtered.length}`}
             right={
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCompareMode((m) => !m)}
-                  aria-pressed={compareMode}
-                  className={cn(
-                    "rounded-md border px-2 py-1 text-xs font-medium transition-colors",
-                    compareMode
-                      ? "border-brand bg-brand-soft text-brand"
-                      : "border-border bg-surface-2 text-muted hover:border-brand",
-                  )}
-                >
-                  ⚖ So sánh
-                </button>
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Tìm…"
-                  aria-label="Tìm commodity"
-                  className="w-24 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs outline-none placeholder:text-subtle focus:w-32 focus:border-brand"
-                />
-              </div>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Tìm…"
+                aria-label="Tìm commodity"
+                className="w-28 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs outline-none placeholder:text-subtle focus:w-36 focus:border-brand"
+              />
             }
           />
           <div className="max-h-[68vh] overflow-y-auto">
