@@ -1,0 +1,33 @@
+name: Daily ingestion
+
+# Automated data collection. Runs the idempotent ingest CLI on a schedule and
+# on manual dispatch. Requires a repository secret DATABASE_URL pointing at the
+# platform database (e.g. the Supabase session-pooler connection string).
+#
+# NOTE: this runs only once the repo is pushed to GitHub and the DATABASE_URL
+# secret is configured (Settings → Secrets and variables → Actions).
+
+on:
+  schedule:
+    - cron: "0 22 * * *" # daily 22:00 UTC (~after US futures settle)
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run ingestion (write)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m etl.ingest --write
