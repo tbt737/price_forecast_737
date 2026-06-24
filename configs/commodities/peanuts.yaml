@@ -8,6 +8,7 @@ market_instruments:
   - { instrument_code: "CN_FOB_QINGDAO", exchange: "China FOB", symbol: "QDPNFOB", description: "Qingdao FOB peanut kernels (Java/Hsuji 41/51)", contract_unit: "tonne", currency: "USD" }
   - { instrument_code: "IN_FOB_GUJARAT", exchange: "India FOB", symbol: "GJPNFOB", description: "Gujarat FOB groundnut kernels (Bold/Java)", contract_unit: "tonne", currency: "USD" }
   - { instrument_code: "US_RUNNER_SPOT", exchange: "US domestic", symbol: "USRUNNER", description: "US Runner farmer stock / shelled price", contract_unit: "tonne", currency: "USD" }
+  - { instrument_code: "IN_NATIONAL_MEDIAN", exchange: "Agmarknet (all-India)", symbol: "IN_NATIONAL", description: "Indian national daily median groundnut price across Agmarknet mandis (~24y)", contract_unit: "quintal", currency: "INR" }
 
 weather_regions:
   - { region_code: "CN_HENAN_SHANDONG", name: "Henan / Shandong (China)", country: "CN" }

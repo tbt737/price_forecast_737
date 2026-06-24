@@ -151,3 +151,52 @@ imports:
     date_column: Arrival_Date
     date_format: "%Y-%m-%d"
     aggregate: median
+
+  # Indian groundnut national median (2001-2026) -> PEANUTS, same stitch pattern.
+  peanut_national_hist:
+    path: data/hist/Groundnut.csv
+    commodity_code: PEANUTS
+    instrument_code: IN_NATIONAL_MEDIAN
+    currency: INR
+    source_code: csv_import
+    value_column: "Modal Price (Rs./Quintal)"
+    date_column: "Reported Date"
+    date_format: "%d %b %Y"
+    aggregate: median
+  peanut_national_fresh:
+    path: "data/hist/202[456].csv"
+    commodity_code: PEANUTS
+    instrument_code: IN_NATIONAL_MEDIAN
+    currency: INR
+    source_code: csv_import
+    commodity_column: Commodity
+    commodity_filter: Groundnut
+    value_column: Modal_Price
+    date_column: Arrival_Date
+    date_format: "%Y-%m-%d"
+    aggregate: median
+
+  # Indian coffee national median -> ROBUSTA (PROXY: India is ~70% robusta; this is
+  # mandi coffee price, not ICE Robusta futures). 2001-2026, same stitch pattern.
+  robusta_national_hist:
+    path: data/hist/Coffee.csv
+    commodity_code: ROBUSTA
+    instrument_code: IN_NATIONAL_MEDIAN
+    currency: INR
+    source_code: csv_import
+    value_column: "Modal Price (Rs./Quintal)"
+    date_column: "Reported Date"
+    date_format: "%d %b %Y"
+    aggregate: median
+  robusta_national_fresh:
+    path: "data/hist/202[456].csv"
+    commodity_code: ROBUSTA
+    instrument_code: IN_NATIONAL_MEDIAN
+    currency: INR
+    source_code: csv_import
+    commodity_column: Commodity
+    commodity_filter: Coffee
+    value_column: Modal_Price
+    date_column: Arrival_Date
+    date_format: "%Y-%m-%d"
+    aggregate: median

@@ -16,6 +16,9 @@ prices:
     - { commodity_code: SUGAR, instrument_code: ICE_SB, ticker: "SB=F", currency: USc }
     - { commodity_code: COCOA, instrument_code: ICE_CC, ticker: "CC=F", currency: USD }
     - { commodity_code: COPPER, instrument_code: COMEX_HG, ticker: "HG=F", currency: USD }
+    - { commodity_code: RICE, instrument_code: CME_ZR, ticker: "ZR=F", currency: USD } # CBOT rough rice
+    # FREIGHT: Baltic Dry has no Yahoo feed; BDRY (Breakwave Dry Bulk ETF) is a tradable proxy.
+    - { commodity_code: FREIGHT_INDICES, instrument_code: BDI, ticker: "BDRY", currency: USD }
 
 weather:
   source_code: NASA_POWER

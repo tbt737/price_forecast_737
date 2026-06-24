@@ -23,6 +23,12 @@ market_instruments:
     description: "ICO Robusta indicator price"
     contract_unit: "lb"
     currency: "USc"
+  - instrument_code: "IN_NATIONAL_MEDIAN"
+    exchange: "Agmarknet (all-India)"
+    symbol: "IN_NATIONAL"
+    description: "Indian national daily median coffee price across Agmarknet mandis (proxy: India ~70% robusta, ~24y)"
+    contract_unit: "quintal"
+    currency: "INR"
 
 weather_regions:
   - { region_code: "VN_TAY_NGUYEN", name: "Central Highlands (Dak Lak, Lam Dong, Dak Nong, Gia Lai, Kon Tum)", country: "VN" }
