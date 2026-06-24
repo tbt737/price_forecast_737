@@ -100,6 +100,14 @@ def test_commodity_prices_empty_and_unknown(client: TestClient) -> None:
     assert client.get("/commodities/NOT_A_COMMODITY/prices").status_code == 404
 
 
+def test_commodity_forecast_unavailable_without_history(client: TestClient) -> None:
+    # GOLD exists but has no price history in the test DB → available: false
+    r = client.get("/commodities/GOLD/forecast")
+    assert r.status_code == 200
+    assert r.json()["available"] is False
+    assert client.get("/commodities/NOT_A_COMMODITY/forecast").status_code == 404
+
+
 def test_dashboard_root_serves_html(client: TestClient) -> None:
     r = client.get("/")
     assert r.status_code == 200

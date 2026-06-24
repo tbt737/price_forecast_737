@@ -62,3 +62,35 @@ export interface PriceSeries {
   currency?: string | null;
   points: PricePoint[];
 }
+
+export interface ForecastPoint {
+  date: string;
+  value: number;
+  lower: number;
+  upper: number;
+}
+
+export interface BacktestSummary {
+  folds: number;
+  mape_pct: number;
+  rmse: number;
+  naive_mape_pct: number;
+  beats_naive: boolean;
+}
+
+export interface HorizonForecast {
+  points: ForecastPoint[];
+  backtest: BacktestSummary;
+}
+
+export interface Forecast {
+  available: boolean;
+  reason?: string;
+  commodity_code: string;
+  instrument_code?: string | null;
+  currency?: string | null;
+  model?: string;
+  last_date?: string;
+  last_price?: number;
+  horizons?: Record<string, HorizonForecast>;
+}

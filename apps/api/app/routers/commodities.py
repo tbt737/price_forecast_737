@@ -148,6 +148,22 @@ def get_commodity_prices(
     )
 
 
+@router.get("/commodities/{commodity_code}/forecast", response_model=None)
+def get_commodity_forecast(commodity_code: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Baseline (Fourier + trend, anchored) price forecast for 30 & 90 trading days,
+    each with an ~80% band and an honest walk-forward backtest (MAPE vs naive).
+    ``available: false`` when there is too little price history."""
+    commodity = db.execute(
+        select(DimCommodity).filter_by(commodity_code=commodity_code.upper())
+    ).scalar_one_or_none()
+    if commodity is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Unknown commodity '{commodity_code}'")
+
+    from ml.forecast import forecast_commodity
+
+    return forecast_commodity(db, commodity_code)
+
+
 @router.get("/profiles/{commodity_code}", response_model=ProfileDetailOut)
 def get_profile(commodity_code: str, db: Session = Depends(get_db)) -> CommodityProfileRegistry:
     reg = db.execute(

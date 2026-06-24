@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type CommodityDetail, type PriceSeries, type ProfileDetail as Profile } from "@/shared/api";
+import {
+  api,
+  type CommodityDetail,
+  type Forecast,
+  type PriceSeries,
+  type ProfileDetail as Profile,
+} from "@/shared/api";
 import { demoSeries } from "@/shared/lib/demo";
 import { titleCase } from "@/shared/lib/format";
 import { sectorMeta } from "@/shared/lib/sectors";
@@ -124,6 +130,7 @@ interface Data {
   commodity: CommodityDetail;
   profile: Profile;
   prices: PriceSeries;
+  forecast: Forecast;
 }
 type State = { s: "loading" } | { s: "error"; m: string } | { s: "ready"; d: Data };
 
@@ -135,12 +142,13 @@ export function ProfileDetail({ code }: { code: string }) {
     setState({ s: "loading" });
     (async () => {
       try {
-        const [commodity, profile, prices] = await Promise.all([
+        const [commodity, profile, prices, forecast] = await Promise.all([
           api.getCommodity(code),
           api.getProfile(code),
           api.getPrices(code, 730),
+          api.getForecast(code),
         ]);
-        if (active) setState({ s: "ready", d: { commodity, profile, prices } });
+        if (active) setState({ s: "ready", d: { commodity, profile, prices, forecast } });
       } catch (e) {
         if (active) setState({ s: "error", m: e instanceof Error ? e.message : "unknown" });
       }
@@ -168,12 +176,22 @@ export function ProfileDetail({ code }: { code: string }) {
     return <p className="text-sm text-neg">Lỗi tải {code}: {state.m}</p>;
   }
 
-  const { commodity, profile: prof, prices } = state.d;
+  const { commodity, profile: prof, prices, forecast } = state.d;
   const p = prof.profile;
   const sector = sectorMeta(commodity.commodity_group);
   const hasRealPrices = prices.points.length > 0;
   const priceValues = hasRealPrices ? prices.points.map((pt) => pt.value) : demoSeries(commodity.commodity_code);
   const priceLabels = hasRealPrices ? prices.points.map((pt) => pt.date) : undefined;
+  const fc30 = forecast.available ? forecast.horizons?.["30"] : undefined;
+  const overlay =
+    hasRealPrices && fc30
+      ? {
+          dates: fc30.points.map((pt) => pt.date),
+          value: fc30.points.map((pt) => pt.value),
+          lower: fc30.points.map((pt) => pt.lower),
+          upper: fc30.points.map((pt) => pt.upper),
+        }
+      : undefined;
   const counts = [
     { label: "Instr", value: commodity.instruments.length },
     {
@@ -220,7 +238,19 @@ export function ProfileDetail({ code }: { code: string }) {
               <Badge tone="demo">DEMO · chưa ingest</Badge>
             )}
           </div>
-          <PriceChart data={priceValues} labels={priceLabels} tone={hasRealPrices ? "real" : "demo"} />
+          <PriceChart
+            data={priceValues}
+            labels={priceLabels}
+            tone={hasRealPrices ? "real" : "demo"}
+            forecast={overlay}
+          />
+          {overlay && fc30 ? (
+            <p className="mt-1 text-[11px] leading-snug text-subtle">
+              <span style={{ color: "var(--brand)" }}>┄┄</span> Dự báo 30 phiên (Fourier+trend) · backtest MAPE{" "}
+              <b className="text-text">{fc30.backtest.mape_pct}%</b> (naive {fc30.backtest.naive_mape_pct}%
+              {fc30.backtest.beats_naive ? " — thắng naive" : " — ~ngang naive"})
+            </p>
+          ) : null}
         </div>
         <div className="rounded-card border border-border bg-surface-2 p-3">
           <div className="mb-1 flex items-center justify-between text-xs text-muted">
