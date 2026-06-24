@@ -1,0 +1,23 @@
+# Local CSV import registry — one-off historical backfills from downloaded
+# datasets (e.g. Kaggle Agmarknet). CSV files live under data/ (gitignored).
+# Config-over-code: map a dataset's columns/commodity to our codes here.
+#
+# Run:  python -m etl.ingest --csv-import <name>
+
+imports:
+  # Indian onion daily mandi prices (Lasalgaon benchmark) -> RED_ONION_INDIA.
+  # Source: Kaggle arjunyadav99/indian-agricultural-mandi-prices-20232025 (Agmarknet).
+  onion_india_lasalgaon:
+    path: data/Agriculture_price_dataset.csv
+    commodity_code: RED_ONION_INDIA
+    instrument_code: IN_LASALGAON_SPOT
+    currency: INR
+    source_code: csv_import
+    commodity_column: Commodity
+    commodity_filter: Onion
+    market_column: "Market Name"
+    market_filter: Lasalgaon # benchmark onion market (Maharashtra)
+    value_column: Modal_Price
+    date_column: "Price Date"
+    date_format: "%m/%d/%Y"
+    aggregate: median # collapse multiple varieties/grades per day to one price

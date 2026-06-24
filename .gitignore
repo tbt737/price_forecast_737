@@ -58,3 +58,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Raw downloaded datasets (not committed)
+/data/

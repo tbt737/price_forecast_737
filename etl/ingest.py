@@ -88,6 +88,9 @@ def main() -> int:
     parser.add_argument(
         "--backfill", action="store_true", help="bulk historical backfill (fast ON CONFLICT DO NOTHING path)"
     )
+    parser.add_argument(
+        "--csv-import", dest="csv_import", help="run a named import from configs/ingestion/csv_imports.yaml"
+    )
     parser.add_argument("--sources", choices=["prices", "weather", "all"], default="all")
     parser.add_argument("--period", default="5d", help="yfinance history period (e.g. 5d, 1mo, 1y, 10y, max)")
     parser.add_argument("--weather-days", type=int, default=10, help="weather lookback window (days)")
@@ -101,7 +104,14 @@ def main() -> int:
     try:
         seed_ingestion_sources(session)
         session.commit()
-        if args.backfill:
+        if args.csv_import:
+            from etl.backfill import backfill
+            from etl.ingestion.config import load_csv_imports
+            from etl.sources.csv_file import CsvPriceSource
+
+            spec = load_csv_imports()[args.csv_import]
+            result = backfill(session, connectors=[CsvPriceSource(spec)])
+        elif args.backfill:
             from etl.backfill import backfill
 
             result = backfill(

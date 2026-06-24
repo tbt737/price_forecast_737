@@ -9,8 +9,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from etl.backfill import backfill
-from etl.ingestion.config import PriceSpec, WeatherSpec, load_ingestion_config
+from etl.ingestion.config import CsvImportSpec, PriceSpec, WeatherSpec, load_ingestion_config
 from etl.provenance import gate_record
+from etl.sources.csv_file import CsvPriceSource
 from etl.sources.market.yahoo import YahooPriceSource
 from etl.sources.weather.nasa_power import NasaPowerSource
 from etl.writer import write_batch
@@ -87,6 +88,30 @@ def test_backfill_bulk_insert_is_idempotent(seeded_session: Session) -> None:
     report = backfill(seeded_session, connectors=[YahooPriceSource([spec], fetch=many_fetch)])
     assert report["inserted_total"] == 0
     assert _count(seeded_session, FactPriceDaily) == 10
+
+
+def test_csv_price_source_filters_and_aggregates(tmp_path) -> None:
+    csv = tmp_path / "p.csv"
+    csv.write_text(
+        "Commodity,Market Name,Modal_Price,Price Date\n"
+        "Onion,Lasalgaon APMC,100,1/2/2025\n"
+        "Onion,Lasalgaon APMC,120,1/2/2025\n"  # same day -> median with 100 = 110
+        "Onion,Other Market,999,1/2/2025\n"  # wrong market -> excluded
+        "Wheat,Lasalgaon APMC,50,1/2/2025\n"  # wrong commodity -> excluded
+        "Onion,Lasalgaon APMC,200,1/3/2025\n",
+        encoding="utf-8",
+    )
+    spec = CsvImportSpec(
+        name="t", path=str(csv), commodity_code="ALPHA", instrument_code="INST1", currency="INR",
+        source_code="manual", commodity_column="Commodity", commodity_filter="Onion",
+        value_column="Modal_Price", date_column="Price Date", date_format="%m/%d/%Y",
+        aggregate="median", market_column="Market Name", market_filter="Lasalgaon",
+    )
+    records = list(CsvPriceSource(spec).collect())
+    by_day = {r.observation_date.isoformat(): float(r.value) for r in records}
+    assert by_day == {"2025-01-02": 110.0, "2025-01-03": 200.0}
+    assert all(gate_record(r) == [] for r in records)
+    assert records[0].source_record_id == "manual:INST1:2025-01-02"
 
 
 def test_nasa_ingest_writes_weather(seeded_session: Session) -> None:
