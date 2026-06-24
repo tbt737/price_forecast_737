@@ -6,6 +6,7 @@ import { api, type Commodity, type Stats } from "@/shared/api";
 import { cn } from "@/shared/lib/cn";
 import { sectorMeta } from "@/shared/lib/sectors";
 import { Card, CardBody, CardHeader, EmptyState, SectorChip, Skeleton, Stat } from "@/shared/ui";
+import { ForecastCompare } from "@/widgets/commodity-explorer/forecast-compare";
 import { ProfileDetail } from "@/widgets/profile-detail";
 
 interface Loaded {
@@ -18,6 +19,16 @@ export function CommodityExplorer() {
   const [state, setState] = useState<State>({ s: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
+
+  const toggleCompare = (code: string) =>
+    setCompareSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
 
   useEffect(() => {
     let active = true;
@@ -86,32 +97,59 @@ export function CommodityExplorer() {
       <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
         <Card className="self-start">
           <CardHeader
-            title={`Commodities · ${filtered.length}`}
+            title={compareMode ? `So sánh · ${compareSet.size} chọn` : `Commodities · ${filtered.length}`}
             right={
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Tìm…"
-                aria-label="Tìm commodity"
-                className="w-28 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs outline-none placeholder:text-subtle focus:w-36 focus:border-brand"
-              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCompareMode((m) => !m)}
+                  aria-pressed={compareMode}
+                  className={cn(
+                    "rounded-md border px-2 py-1 text-xs font-medium transition-colors",
+                    compareMode
+                      ? "border-brand bg-brand-soft text-brand"
+                      : "border-border bg-surface-2 text-muted hover:border-brand",
+                  )}
+                >
+                  ⚖ So sánh
+                </button>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Tìm…"
+                  aria-label="Tìm commodity"
+                  className="w-24 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs outline-none placeholder:text-subtle focus:w-32 focus:border-brand"
+                />
+              </div>
             }
           />
           <div className="max-h-[68vh] overflow-y-auto">
             {filtered.map((c) => {
-              const on = c.commodity_code === selected;
+              const on = compareMode ? compareSet.has(c.commodity_code) : c.commodity_code === selected;
               const s = sectorMeta(c.commodity_group);
               return (
                 <button
                   key={c.commodity_code}
-                  onClick={() => setSelected(c.commodity_code)}
+                  onClick={() =>
+                    compareMode ? toggleCompare(c.commodity_code) : setSelected(c.commodity_code)
+                  }
                   className={cn(
                     "flex w-full items-center gap-2 border-b border-border/60 px-4 py-2.5 text-left transition-colors last:border-0 hover:bg-surface-2",
                     on && "bg-brand-soft",
                   )}
                   style={on ? { boxShadow: "inset 3px 0 0 var(--brand)" } : undefined}
                 >
+                  {compareMode ? (
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      readOnly
+                      tabIndex={-1}
+                      aria-hidden
+                      className="h-3.5 w-3.5 shrink-0 accent-brand"
+                    />
+                  ) : null}
                   <span aria-hidden>{s.icon}</span>
                   <span className="font-mono text-sm font-semibold">{c.commodity_code}</span>
                   <span className="truncate text-xs text-muted">{c.commodity_name}</span>
@@ -129,9 +167,19 @@ export function CommodityExplorer() {
 
         <Card>
           <CardHeader
-            title="Chi tiết profile"
+            title={compareMode ? "So sánh dự báo" : "Chi tiết profile"}
             right={
-              selected ? (
+              compareMode ? (
+                compareSet.size > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setCompareSet(new Set())}
+                    className="text-xs font-medium text-info hover:underline"
+                  >
+                    Bỏ chọn ({compareSet.size})
+                  </button>
+                ) : null
+              ) : selected ? (
                 <Link href={`/commodities/${selected}`} className="text-xs font-medium text-info hover:underline">
                   Mở trang riêng ↗
                 </Link>
@@ -139,7 +187,9 @@ export function CommodityExplorer() {
             }
           />
           <CardBody>
-            {selected ? (
+            {compareMode ? (
+              <ForecastCompare codes={[...compareSet]} />
+            ) : selected ? (
               <ProfileDetail code={selected} />
             ) : (
               <EmptyState title="Chọn một commodity" hint="Bấm vào một hàng ở danh sách bên trái để xem hồ sơ chi tiết." />
