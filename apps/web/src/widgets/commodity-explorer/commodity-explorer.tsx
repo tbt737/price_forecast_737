@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { api, type Commodity, type Stats } from "@/shared/api";
 import { cn } from "@/shared/lib/cn";
 import { sectorMeta } from "@/shared/lib/sectors";
-import { Badge, Card, CardBody, CardHeader, SectorChip, Skeleton, Stat } from "@/shared/ui";
+import { Card, CardBody, CardHeader, EmptyState, SectorChip, Skeleton, Stat } from "@/shared/ui";
 import { ProfileDetail } from "@/widgets/profile-detail";
 
 interface Loaded {
@@ -127,12 +128,21 @@ export function CommodityExplorer() {
         </Card>
 
         <Card>
-          <CardHeader title="Chi tiết profile" right={<Badge tone="info">read-only</Badge>} />
+          <CardHeader
+            title="Chi tiết profile"
+            right={
+              selected ? (
+                <Link href={`/commodities/${selected}`} className="text-xs font-medium text-info hover:underline">
+                  Mở trang riêng ↗
+                </Link>
+              ) : null
+            }
+          />
           <CardBody>
             {selected ? (
               <ProfileDetail code={selected} />
             ) : (
-              <p className="py-10 text-center text-sm text-subtle">← Chọn một commodity</p>
+              <EmptyState title="Chọn một commodity" hint="Bấm vào một hàng ở danh sách bên trái để xem hồ sơ chi tiết." />
             )}
           </CardBody>
         </Card>

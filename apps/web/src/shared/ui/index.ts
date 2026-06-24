@@ -1,5 +1,7 @@
 export { Card, CardHeader, CardBody } from "@/shared/ui/card";
 export { Badge } from "@/shared/ui/badge";
+export { Breadcrumb } from "@/shared/ui/breadcrumb";
+export { EmptyState } from "@/shared/ui/empty-state";
 export { Stat } from "@/shared/ui/stat";
 export { Skeleton } from "@/shared/ui/skeleton";
 export { SectorChip } from "@/shared/ui/sector-chip";
