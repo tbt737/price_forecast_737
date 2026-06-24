@@ -9,7 +9,7 @@ name: Daily ingestion
 
 on:
   schedule:
-    - cron: "0 22 * * *" # daily 22:00 UTC (~after US futures settle)
+    - cron: "0 22 * * *" # daily 22:00 UTC, after US futures settle
   workflow_dispatch: {} # allow manual runs from the Actions tab
 
 concurrency:
