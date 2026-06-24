@@ -20,8 +20,16 @@ function horizonChange(fc: Forecast, h: "30" | "90"): number | null {
   return ((end - last) / last) * 100;
 }
 
+function friendlyReason(reason?: string): string {
+  if (!reason) return "không khả dụng";
+  if (reason.includes("positive prices")) return "Chưa có nguồn dữ liệu giá";
+  if (reason.toLowerCase().includes("unknown commodity")) return "Không rõ mặt hàng";
+  return reason;
+}
+
 function Trend({ pct }: { pct: number | null }) {
   if (pct == null) return <span className="text-subtle">—</span>;
+  if (Math.abs(pct) < 0.05) return <span className="font-mono text-muted">→ ~0%</span>; // flat
   const up = pct >= 0;
   return (
     <span className={cn("font-mono font-semibold", up ? "text-pos" : "text-neg")}>
@@ -134,7 +142,7 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
                 </>
               ) : (
                 <td className="px-3 py-2 text-subtle" colSpan={2}>
-                  {fc.reason ?? "không khả dụng"}
+                  {friendlyReason(fc.reason)}
                 </td>
               )}
             </tr>
