@@ -26,3 +26,8 @@ weather:
   # region_code must exist in dim_region; latitude/longitude drive the NASA POWER point query.
   locations:
     - { commodity_code: ROBUSTA, region_code: VN_TAY_NGUYEN, latitude: 12.7, longitude: 108.1 }
+    # Indian growing belts for the produce series (drive supply -> price via monsoon):
+    - { commodity_code: RED_ONION_INDIA, region_code: IN_NASHIK, latitude: 20.0, longitude: 73.79 }
+    - { commodity_code: INDIAN_CHILIES, region_code: IN_GUNTUR, latitude: 16.31, longitude: 80.44 }
+    # Indian garlic belt (Mandsaur, Madhya Pradesh) — proxy origin for the garlic series:
+    - { commodity_code: CHINESE_GARLIC, region_code: IN_MADHYA_PRADESH, latitude: 24.07, longitude: 75.07 }
