@@ -251,7 +251,9 @@ export function ProfileDetail({ code }: { code: string }) {
                 ? "Ridge AR"
                 : fc30.model_used === "gbm"
                   ? "XGBoost"
-                  : "naive"}
+                  : fc30.model_used === "gbm_cyc"
+                    ? "XGBoost + chu kỳ"
+                    : "naive"}
               ) · backtest MAPE{" "}
               <b className="text-text">{fc30.backtest.mape_pct}%</b> (naive {fc30.backtest.naive_mape_pct}%
               {fc30.backtest.beats_naive

@@ -14,12 +14,13 @@ with ``seed`` + single-threaded training.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 
-from ml.features.tabular import FEATURE_NAMES, feature_row, training_matrix
+from ml.features.tabular import feature_row, training_matrix
 
 # tree params (shallow + regularised for ~1-2k noisy samples); seed+1 thread ⇒ deterministic
 DEFAULT_PARAMS: dict[str, Any] = {
@@ -52,13 +53,14 @@ class GBMForecaster:
     horizon: int
     num_round: int = NUM_ROUND
     params: dict[str, Any] = field(default_factory=lambda: dict(DEFAULT_PARAMS))
+    cycle_periods: Sequence[float] = ()  # multi-year cycle periods (rows); () = none
     booster_: Any = None  # None ⇒ predicts zero return ⇒ falls back to naive
     ret_sigma_: float = 0.0
 
     def fit(self, logy: np.ndarray, doy: np.ndarray, *, end: int | None = None) -> GBMForecaster:
         import xgboost as xgb
 
-        x, y = training_matrix(logy, doy, horizon=self.horizon, end=end)
+        x, y = training_matrix(logy, doy, horizon=self.horizon, end=end, cycle_periods=self.cycle_periods)
         if x.shape[0] >= MIN_ROWS:
             dtrain = xgb.DMatrix(x[:, 1:], label=y)  # drop the intercept column for trees
             self.booster_ = xgb.train(self.params, dtrain, num_boost_round=self.num_round)
@@ -73,7 +75,7 @@ class GBMForecaster:
             return 0.0
         import xgboost as xgb
 
-        feat = feature_row(logy, doy, i)[1:].reshape(1, len(FEATURE_NAMES) - 1)
+        feat = feature_row(logy, doy, i, cycle_periods=self.cycle_periods)[1:].reshape(1, -1)
         return float(self.booster_.predict(xgb.DMatrix(feat))[0])
 
     def forecast(self, logy: np.ndarray, doy: np.ndarray, anchor_idx: int, y_anchor: float, steps: int) -> np.ndarray:

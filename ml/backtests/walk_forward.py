@@ -14,9 +14,15 @@ from typing import Any, Protocol
 
 import numpy as np
 
+from ml.features.cycles import detect_cycles
 from ml.models.baseline import FourierTrendForecaster, naive_last
 from ml.models.gbm_forecaster import GBMForecaster
 from ml.models.ridge_forecaster import RidgeARForecaster
+
+
+def _rows_per_year(dates: list[date], n: int) -> float:
+    span_days = max(1, (dates[-1] - dates[0]).days)
+    return n / (span_days / 365.25)
 
 
 class _AnchoredModel(Protocol):
@@ -151,16 +157,27 @@ def walk_forward_ar(
 
 
 def walk_forward_gbm(
-    dates: list[date], values: np.ndarray, *, horizon: int, folds: int = 5, min_train: int = 252
+    dates: list[date],
+    values: np.ndarray,
+    *,
+    horizon: int,
+    folds: int = 5,
+    min_train: int = 252,
+    use_cycles: bool = False,
 ) -> BacktestResult:
-    """Walk-forward backtest for the gradient-boosted (XGBoost) forecaster."""
+    """Walk-forward backtest for the gradient-boosted (XGBoost) forecaster.
+
+    With ``use_cycles``, each fold detects its multi-year cycle(s) from the training
+    slice only (``logy[:cut]``) — point-in-time, so cycle periods can shift fold to
+    fold ("no spring is identical") without leaking the future."""
     logy = np.log(np.asarray(values, dtype=float))
     doy = np.array([d.timetuple().tm_yday for d in dates], dtype=float)
+    rpy = _rows_per_year(dates, len(values))
+
+    def make(cut: int) -> GBMForecaster:
+        periods = detect_cycles(logy[:cut], rows_per_year=rpy) if use_cycles else []
+        return GBMForecaster(horizon=horizon, cycle_periods=periods).fit(logy, doy, end=cut)
+
     return _walk_forward_anchored(
-        dates,
-        values,
-        horizon=horizon,
-        folds=folds,
-        min_train=min_train,
-        make_model=lambda cut: GBMForecaster(horizon=horizon).fit(logy, doy, end=cut),
+        dates, values, horizon=horizon, folds=folds, min_train=min_train, make_model=make
     )

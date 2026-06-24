@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 from ml.backtests.walk_forward import walk_forward_ar
+from ml.features.cycles import detect_cycles
 from ml.features.tabular import LOOKBACK, feature_row, training_matrix
 from ml.models.baseline import FourierTrendForecaster
 from ml.models.gbm_forecaster import GBMForecaster, is_available
@@ -94,6 +95,33 @@ def test_damped_trend_reduces_extrapolation() -> None:
 
 
 # ── walk-forward backtest ─────────────────────────────────────────────────────
+# ── multi-year cycle detection ────────────────────────────────────────────────
+def test_detect_cycles_finds_injected_period() -> None:
+    rpy = 250.0
+    n = int(rpy * 12)  # 12 years
+    t = np.arange(n, dtype=float)
+    period_rows = rpy * 3.0  # inject a clean 3-year cycle
+    rng = np.random.default_rng(0)
+    logy = np.log(100.0) + 0.001 * t + 0.25 * np.sin(2 * np.pi * t / period_rows) + rng.normal(0, 0.02, n)
+    periods = detect_cycles(logy, rows_per_year=rpy, n=2)
+    assert any(abs(p / rpy - 3.0) < 0.6 for p in periods)  # ~3-year cycle recovered
+
+
+def test_detect_cycles_empty_on_short_history() -> None:
+    rpy = 250.0
+    logy = np.log(np.linspace(100.0, 120.0, int(rpy * 3)))  # 3 years < MIN_YEARS
+    assert detect_cycles(logy, rows_per_year=rpy) == []
+
+
+def test_feature_row_appends_cycle_harmonics() -> None:
+    logy = np.log(np.linspace(100.0, 130.0, 120))
+    doy = _doy(120)
+    base = feature_row(logy, doy, 80)
+    augmented = feature_row(logy, doy, 80, cycle_periods=[500.0, 900.0])
+    assert len(augmented) == len(base) + 4  # 2 periods x (sin, cos)
+    assert np.allclose(augmented[: len(base)], base)  # base features unchanged
+
+
 @pytest.mark.skipif(not is_available(), reason="xgboost not installed")
 def test_gbm_is_deterministic_and_falls_back() -> None:
     rng = np.random.default_rng(5)
