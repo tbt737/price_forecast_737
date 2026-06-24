@@ -21,3 +21,54 @@ imports:
     date_column: "Price Date"
     date_format: "%m/%d/%Y"
     aggregate: median # collapse multiple varieties/grades per day to one price
+
+  # ── Kaggle khandelwalmanas/daily-commodity-prices-india (Agmarknet, per-year
+  # files 2001-2026; columns: Commodity/Market/Arrival_Date/Modal_Price). We pull
+  # 2022-2025 via the glob path. National daily median across all markets unless a
+  # market filter is given. ──
+
+  # Indian dry red chilli -> INDIAN_CHILIES (Guntur spot, the Indian benchmark).
+  chilli_india:
+    path: "data/202[2-5].csv"
+    commodity_code: INDIAN_CHILIES
+    instrument_code: IN_GUNTUR_SPOT
+    currency: INR
+    source_code: csv_import
+    commodity_column: Commodity
+    commodity_filter: Dry Chillies
+    value_column: Modal_Price
+    date_column: Arrival_Date
+    date_format: "%Y-%m-%d"
+    aggregate: median # national daily median across markets
+
+  # Indian garlic -> CHINESE_GARLIC as a PROXY (no free Chinese-garlic feed is
+  # reachable; Indian garlic stands in). Value is INR, mapped onto the Jinxiang
+  # instrument purely as a placeholder series — treat as a proxy, not CN spot.
+  garlic_india_proxy:
+    path: "data/202[2-5].csv"
+    commodity_code: CHINESE_GARLIC
+    instrument_code: CN_JINXIANG_SPOT
+    currency: INR
+    source_code: csv_import
+    commodity_column: Commodity
+    commodity_filter: Garlic
+    value_column: Modal_Price
+    date_column: Arrival_Date
+    date_format: "%Y-%m-%d"
+    aggregate: median
+
+  # Extend the onion history back to 2022 (same Lasalgaon benchmark) -> RED_ONION_INDIA.
+  onion_india_extended:
+    path: "data/202[2-5].csv"
+    commodity_code: RED_ONION_INDIA
+    instrument_code: IN_LASALGAON_SPOT
+    currency: INR
+    source_code: csv_import
+    commodity_column: Commodity
+    commodity_filter: Onion
+    market_column: Market
+    market_filter: Lasalgaon
+    value_column: Modal_Price
+    date_column: Arrival_Date
+    date_format: "%Y-%m-%d"
+    aggregate: median

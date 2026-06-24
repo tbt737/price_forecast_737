@@ -8,6 +8,7 @@ provenance. Config-driven via ``configs/ingestion/csv_imports.yaml``.
 
 from __future__ import annotations
 
+import glob
 from collections.abc import Iterable
 from datetime import date, timedelta
 
@@ -31,12 +32,24 @@ class CsvPriceSource(BaseSource):
         usecols = [spec.commodity_column, spec.value_column, spec.date_column]
         if spec.market_column:
             usecols.append(spec.market_column)
-        frame = pd.read_csv(spec.path, usecols=usecols, low_memory=False)
 
-        frame = frame[frame[spec.commodity_column].astype(str) == spec.commodity_filter]
-        if spec.market_column and spec.market_filter:
-            mask = frame[spec.market_column].astype(str).str.contains(spec.market_filter, case=False, na=False)
-            frame = frame[mask]
+        # ``path`` may be a glob (e.g. "data/202[2-5].csv") spanning per-year files.
+        paths = sorted(glob.glob(spec.path)) or [spec.path]
+
+        # Read each file in chunks and keep only the target commodity (+ market)
+        # rows, so a multi-GB all-commodity dump filters down to a small frame.
+        matched = []
+        for path in paths:
+            for chunk in pd.read_csv(path, usecols=usecols, low_memory=False, chunksize=500_000):
+                chunk = chunk[chunk[spec.commodity_column].astype(str) == spec.commodity_filter]
+                if spec.market_column and spec.market_filter:
+                    mask = chunk[spec.market_column].astype(str).str.contains(spec.market_filter, case=False, na=False)
+                    chunk = chunk[mask]
+                if len(chunk):
+                    matched.append(chunk)
+        if not matched:
+            return []
+        frame = pd.concat(matched, ignore_index=True)
 
         days = pd.to_datetime(frame[spec.date_column], format=spec.date_format, errors="coerce")
         values = pd.to_numeric(frame[spec.value_column], errors="coerce")
