@@ -114,6 +114,25 @@ def test_csv_price_source_filters_and_aggregates(tmp_path) -> None:
     assert records[0].source_record_id == "manual:INST1:2025-01-02"
 
 
+def test_csv_price_source_single_commodity_file(tmp_path) -> None:
+    # A per-commodity file has no Commodity column -> no commodity filter needed.
+    csv = tmp_path / "onion.csv"
+    csv.write_text(
+        "Modal Price (Rs./Quintal),Reported Date\n"
+        "1000,02 Jan 2025\n"
+        "1200,02 Jan 2025\n"  # same day -> median 1100
+        "2000,03 Jan 2025\n",
+        encoding="utf-8",
+    )
+    spec = CsvImportSpec(
+        name="t", path=str(csv), commodity_code="ALPHA", instrument_code="INST1", currency="INR",
+        source_code="manual", value_column="Modal Price (Rs./Quintal)", date_column="Reported Date",
+        date_format="%d %b %Y", aggregate="median",
+    )
+    by_day = {r.observation_date.isoformat(): float(r.value) for r in CsvPriceSource(spec).collect()}
+    assert by_day == {"2025-01-02": 1100.0, "2025-01-03": 2000.0}
+
+
 def test_nasa_ingest_writes_weather(seeded_session: Session) -> None:
     # source_code 'manual' is seeded in the test session (real NASA_POWER is seeded in prod).
     spec = WeatherSpec("ALPHA", "REG1", 12.7, 108.1, "manual", 3, {"T2M": "temp_mean", "PRECTOTCORR": "precip"})

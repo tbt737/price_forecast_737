@@ -29,7 +29,9 @@ class CsvPriceSource(BaseSource):
         import pandas as pd
 
         spec = self.spec
-        usecols = [spec.commodity_column, spec.value_column, spec.date_column]
+        usecols = [spec.value_column, spec.date_column]
+        if spec.commodity_column:
+            usecols.append(spec.commodity_column)
         if spec.market_column:
             usecols.append(spec.market_column)
 
@@ -38,10 +40,12 @@ class CsvPriceSource(BaseSource):
 
         # Read each file in chunks and keep only the target commodity (+ market)
         # rows, so a multi-GB all-commodity dump filters down to a small frame.
+        # Single-commodity files (no commodity_column) skip the commodity filter.
         matched = []
         for path in paths:
             for chunk in pd.read_csv(path, usecols=usecols, low_memory=False, chunksize=500_000):
-                chunk = chunk[chunk[spec.commodity_column].astype(str) == spec.commodity_filter]
+                if spec.commodity_column and spec.commodity_filter:
+                    chunk = chunk[chunk[spec.commodity_column].astype(str) == spec.commodity_filter]
                 if spec.market_column and spec.market_filter:
                     mask = chunk[spec.market_column].astype(str).str.contains(spec.market_filter, case=False, na=False)
                     chunk = chunk[mask]

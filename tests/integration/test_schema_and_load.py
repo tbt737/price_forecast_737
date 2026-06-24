@@ -53,5 +53,6 @@ def test_create_all_and_load_all_profiles() -> None:
         assert session.scalar(select(func.count()).select_from(DimCommodity)) == 16
         assert session.scalar(select(func.count()).select_from(CommodityProfileRegistry)) == 16
         assert session.scalar(select(func.count()).select_from(CommodityRegionMap)) > 0
-        assert session.scalar(select(func.count()).select_from(DimMarketInstrument)) == 52
+        # 52 baseline + 3 IN_NATIONAL_MEDIAN (onion/chilli/garlic 23y national series)
+        assert session.scalar(select(func.count()).select_from(DimMarketInstrument)) == 55
     eng.dispose()

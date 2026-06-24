@@ -72,3 +72,82 @@ imports:
     date_column: Arrival_Date
     date_format: "%Y-%m-%d"
     aggregate: median
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # 23-year NATIONAL-MEDIAN series (the forecastable benchmark) -> IN_NATIONAL_MEDIAN.
+  # Stitched from two Agmarknet snapshots, both national daily median modal price:
+  #   *_hist  = Kaggle vandeetshah/india-commodity-wise-mandi-dataset (per-commodity
+  #             file, single commodity, 2001 -> 2024-02)
+  #   *_fresh = Kaggle khandelwalmanas year files (2024-2025 tail)
+  # The two agree on the overlap (median ratio 1.000), so importing *_hist first then
+  # *_fresh (ON CONFLICT DO NOTHING) keeps the long history and only appends the tail.
+  # IN_NATIONAL_MEDIAN then has the most data -> the forecaster selects it.
+  # ════════════════════════════════════════════════════════════════════════════
+  onion_national_hist:
+    path: data/hist/Onion.csv
+    commodity_code: RED_ONION_INDIA
+    instrument_code: IN_NATIONAL_MEDIAN
+    currency: INR
+    source_code: csv_import
+    value_column: "Modal Price (Rs./Quintal)"
+    date_column: "Reported Date"
+    date_format: "%d %b %Y"
+    aggregate: median
+  onion_national_fresh:
+    path: "data/hist/202[45].csv"
+    commodity_code: RED_ONION_INDIA
+    instrument_code: IN_NATIONAL_MEDIAN
+    currency: INR
+    source_code: csv_import
+    commodity_column: Commodity
+    commodity_filter: Onion
+    value_column: Modal_Price
+    date_column: Arrival_Date
+    date_format: "%Y-%m-%d"
+    aggregate: median
+
+  chilli_national_hist:
+    path: data/hist/Dry_Chillies.csv
+    commodity_code: INDIAN_CHILIES
+    instrument_code: IN_NATIONAL_MEDIAN
+    currency: INR
+    source_code: csv_import
+    value_column: "Modal Price (Rs./Quintal)"
+    date_column: "Reported Date"
+    date_format: "%d %b %Y"
+    aggregate: median
+  chilli_national_fresh:
+    path: "data/hist/202[45].csv"
+    commodity_code: INDIAN_CHILIES
+    instrument_code: IN_NATIONAL_MEDIAN
+    currency: INR
+    source_code: csv_import
+    commodity_column: Commodity
+    commodity_filter: Dry Chillies
+    value_column: Modal_Price
+    date_column: Arrival_Date
+    date_format: "%Y-%m-%d"
+    aggregate: median
+
+  garlic_national_hist:
+    path: data/hist/Garlic.csv
+    commodity_code: CHINESE_GARLIC
+    instrument_code: IN_NATIONAL_MEDIAN
+    currency: INR
+    source_code: csv_import
+    value_column: "Modal Price (Rs./Quintal)"
+    date_column: "Reported Date"
+    date_format: "%d %b %Y"
+    aggregate: median
+  garlic_national_fresh:
+    path: "data/hist/202[45].csv"
+    commodity_code: CHINESE_GARLIC
+    instrument_code: IN_NATIONAL_MEDIAN
+    currency: INR
+    source_code: csv_import
+    commodity_column: Commodity
+    commodity_filter: Garlic
+    value_column: Modal_Price
+    date_column: Arrival_Date
+    date_format: "%Y-%m-%d"
+    aggregate: median

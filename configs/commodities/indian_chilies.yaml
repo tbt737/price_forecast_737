@@ -8,6 +8,7 @@ market_instruments:
   - { instrument_code: "NCDEX_CHILLI", exchange: "NCDEX", symbol: "CHARMINAR", description: "NCDEX Chilli (Guntur) Futures", contract_unit: "5 tonnes", currency: "INR" }
   - { instrument_code: "IN_GUNTUR_SPOT", exchange: "Guntur mandi", symbol: "GUNTUR", description: "Guntur (Andhra Pradesh) spot mandi price (Teja S17)", contract_unit: "quintal", currency: "INR" }
   - { instrument_code: "IN_FOB_CHENNAI", exchange: "India FOB", symbol: "CHFOB", description: "Chennai FOB export price", contract_unit: "tonne", currency: "USD" }
+  - { instrument_code: "IN_NATIONAL_MEDIAN", exchange: "Agmarknet (all-India)", symbol: "IN_NATIONAL", description: "National daily median modal price across all Agmarknet mandis (~22y history)", contract_unit: "quintal", currency: "INR" }
 
 weather_regions:
   - { region_code: "IN_GUNTUR", name: "Guntur (Andhra Pradesh)", country: "IN" }

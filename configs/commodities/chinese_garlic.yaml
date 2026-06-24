@@ -8,6 +8,7 @@ market_instruments:
   - { instrument_code: "CN_JINXIANG_SPOT", exchange: "China wholesale", symbol: "JINXIANG", description: "Jinxiang (Shandong) cold-storage garlic wholesale price", contract_unit: "kg", currency: "CNY" }
   - { instrument_code: "CN_FOB_QINGDAO", exchange: "China FOB", symbol: "QDFOB", description: "Qingdao FOB export price (pure white)", contract_unit: "tonne", currency: "USD" }
   - { instrument_code: "CN_COLD_STORAGE_IDX", exchange: "China domestic", symbol: "CSIDX", description: "Cold-storage inventory-implied price index", contract_unit: "kg", currency: "CNY" }
+  - { instrument_code: "IN_NATIONAL_MEDIAN", exchange: "Agmarknet (all-India)", symbol: "IN_NATIONAL", description: "Indian national daily median garlic price across Agmarknet mandis (proxy origin, ~23y)", contract_unit: "quintal", currency: "INR" }
 
 weather_regions:
   - { region_code: "CN_SHANDONG", name: "Shandong (Jinxiang, Jinmen)", country: "CN" }

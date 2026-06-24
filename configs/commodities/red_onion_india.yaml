@@ -8,6 +8,7 @@ market_instruments:
   - { instrument_code: "IN_LASALGAON_SPOT", exchange: "Lasalgaon APMC", symbol: "LASALGAON", description: "Lasalgaon (Nashik) APMC benchmark onion price (Asia's largest onion market)", contract_unit: "quintal", currency: "INR" }
   - { instrument_code: "IN_PIMPALGAON_SPOT", exchange: "Pimpalgaon APMC", symbol: "PIMPALGAON", description: "Pimpalgaon (Nashik) APMC modal price", contract_unit: "quintal", currency: "INR" }
   - { instrument_code: "IN_FOB_MUMBAI", exchange: "India FOB", symbol: "JNPTFOB", description: "JNPT/Mumbai FOB export price", contract_unit: "tonne", currency: "USD" }
+  - { instrument_code: "IN_NATIONAL_MEDIAN", exchange: "Agmarknet (all-India)", symbol: "IN_NATIONAL", description: "National daily median modal price across all Agmarknet mandis (~23y history)", contract_unit: "quintal", currency: "INR" }
 
 weather_regions:
   - { region_code: "IN_NASHIK", name: "Nashik (Maharashtra)", country: "IN" }

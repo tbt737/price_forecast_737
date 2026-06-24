@@ -51,11 +51,12 @@ class CsvImportSpec:
     instrument_code: str
     currency: str
     source_code: str
-    commodity_column: str
-    commodity_filter: str
     value_column: str
     date_column: str
     date_format: str
+    # Optional: filter rows to one commodity. Omit for single-commodity files.
+    commodity_column: str | None = None
+    commodity_filter: str | None = None
     aggregate: str = "median"
     market_column: str | None = None
     market_filter: str | None = None
@@ -72,8 +73,8 @@ def load_csv_imports(path: Path = CSV_IMPORTS_PATH) -> dict[str, CsvImportSpec]:
             instrument_code=c["instrument_code"],
             currency=c.get("currency", "USD"),
             source_code=c.get("source_code", "csv_import"),
-            commodity_column=c["commodity_column"],
-            commodity_filter=c["commodity_filter"],
+            commodity_column=c.get("commodity_column"),
+            commodity_filter=c.get("commodity_filter"),
             value_column=c["value_column"],
             date_column=c["date_column"],
             date_format=c["date_format"],
