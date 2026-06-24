@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -43,6 +44,20 @@ class ProfileRegistryOut(BaseModel):
 
 class ProfileDetailOut(ProfileRegistryOut):
     profile: dict[str, Any]
+
+
+class PricePoint(BaseModel):
+    date: date
+    value: float
+
+
+class PriceSeriesOut(BaseModel):
+    """Daily price history for a commodity's benchmark instrument."""
+
+    commodity_code: str
+    instrument_code: str | None = None
+    currency: str | None = None
+    points: list[PricePoint] = []
 
 
 class StatsOut(BaseModel):

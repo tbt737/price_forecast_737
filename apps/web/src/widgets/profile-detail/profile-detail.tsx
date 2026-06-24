@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type CommodityDetail, type ProfileDetail as Profile } from "@/shared/api";
+import { api, type CommodityDetail, type PriceSeries, type ProfileDetail as Profile } from "@/shared/api";
 import { demoSeries } from "@/shared/lib/demo";
 import { titleCase } from "@/shared/lib/format";
 import { sectorMeta } from "@/shared/lib/sectors";
@@ -123,6 +123,7 @@ function buildTabs(commodity: CommodityDetail, profile: Record<string, unknown>)
 interface Data {
   commodity: CommodityDetail;
   profile: Profile;
+  prices: PriceSeries;
 }
 type State = { s: "loading" } | { s: "error"; m: string } | { s: "ready"; d: Data };
 
@@ -134,8 +135,12 @@ export function ProfileDetail({ code }: { code: string }) {
     setState({ s: "loading" });
     (async () => {
       try {
-        const [commodity, profile] = await Promise.all([api.getCommodity(code), api.getProfile(code)]);
-        if (active) setState({ s: "ready", d: { commodity, profile } });
+        const [commodity, profile, prices] = await Promise.all([
+          api.getCommodity(code),
+          api.getProfile(code),
+          api.getPrices(code, 730),
+        ]);
+        if (active) setState({ s: "ready", d: { commodity, profile, prices } });
       } catch (e) {
         if (active) setState({ s: "error", m: e instanceof Error ? e.message : "unknown" });
       }
@@ -163,9 +168,12 @@ export function ProfileDetail({ code }: { code: string }) {
     return <p className="text-sm text-neg">Lỗi tải {code}: {state.m}</p>;
   }
 
-  const { commodity, profile: prof } = state.d;
+  const { commodity, profile: prof, prices } = state.d;
   const p = prof.profile;
   const sector = sectorMeta(commodity.commodity_group);
+  const hasRealPrices = prices.points.length > 0;
+  const priceValues = hasRealPrices ? prices.points.map((pt) => pt.value) : demoSeries(commodity.commodity_code);
+  const priceLabels = hasRealPrices ? prices.points.map((pt) => pt.date) : undefined;
   const counts = [
     { label: "Instr", value: commodity.instruments.length },
     {
@@ -201,10 +209,18 @@ export function ProfileDetail({ code }: { code: string }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-card border border-border bg-surface-2 p-3">
           <div className="mb-1 flex items-center justify-between text-xs text-muted">
-            <span>Giá 32 phiên</span>
-            <Badge tone="demo">DEMO · dữ liệu giả</Badge>
+            <span>
+              {hasRealPrices
+                ? `Giá ${prices.points.length} phiên · ${prices.instrument_code} (${prices.currency})`
+                : "Giá 32 phiên"}
+            </span>
+            {hasRealPrices ? (
+              <Badge tone="info">dữ liệu thật</Badge>
+            ) : (
+              <Badge tone="demo">DEMO · chưa ingest</Badge>
+            )}
           </div>
-          <PriceChart data={demoSeries(commodity.commodity_code)} />
+          <PriceChart data={priceValues} labels={priceLabels} tone={hasRealPrices ? "real" : "demo"} />
         </div>
         <div className="rounded-card border border-border bg-surface-2 p-3">
           <div className="mb-1 flex items-center justify-between text-xs text-muted">

@@ -6,6 +6,7 @@ their phases). Fully generic — nothing is special-cased per commodity.
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -29,6 +30,7 @@ from app.models import (
 from app.schemas.commodity import (
     CommodityDetailOut,
     CommodityOut,
+    PriceSeriesOut,
     ProfileDetailOut,
     ProfileRegistryOut,
     StatsOut,
@@ -99,6 +101,50 @@ def list_profiles(db: Session = Depends(get_db)) -> list[CommodityProfileRegistr
         db.execute(
             select(CommodityProfileRegistry).order_by(CommodityProfileRegistry.commodity_code)
         ).scalars()
+    )
+
+
+@router.get("/commodities/{commodity_code}/prices", response_model=PriceSeriesOut)
+def get_commodity_prices(
+    commodity_code: str, days: int = 365, db: Session = Depends(get_db)
+) -> PriceSeriesOut:
+    """Daily close series for the commodity's benchmark instrument (the one with the
+    most price history), over the last ``days`` days. Empty if no prices ingested."""
+    commodity = db.execute(
+        select(DimCommodity).filter_by(commodity_code=commodity_code.upper())
+    ).scalar_one_or_none()
+    if commodity is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Unknown commodity '{commodity_code}'")
+
+    best = db.execute(
+        select(FactPriceDaily.market_instrument_key)
+        .where(FactPriceDaily.commodity_key == commodity.commodity_key)
+        .group_by(FactPriceDaily.market_instrument_key)
+        .order_by(func.count().desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if best is None:  # no prices ingested for this commodity yet
+        return PriceSeriesOut(commodity_code=commodity.commodity_code, points=[])
+
+    instrument = db.get(DimMarketInstrument, best)
+    cutoff = date.today() - timedelta(days=max(1, days))
+    rows = db.execute(
+        select(FactPriceDaily.price_date, FactPriceDaily.value, FactPriceDaily.currency)
+        .where(
+            FactPriceDaily.commodity_key == commodity.commodity_key,
+            FactPriceDaily.market_instrument_key == best,
+            FactPriceDaily.price_date >= cutoff,
+        )
+        .order_by(FactPriceDaily.price_date)
+    ).all()
+
+    points = [{"date": r.price_date, "value": float(r.value)} for r in rows if r.value is not None]
+    currency = rows[0].currency if rows else (instrument.currency if instrument else None)
+    return PriceSeriesOut(
+        commodity_code=commodity.commodity_code,
+        instrument_code=instrument.instrument_code if instrument else None,
+        currency=currency,
+        points=points,  # type: ignore[arg-type]
     )
 
 

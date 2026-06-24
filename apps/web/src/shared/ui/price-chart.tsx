@@ -5,10 +5,22 @@ import type { EChartsOption } from "echarts";
 import { useChartTheme } from "@/shared/lib/use-chart-theme";
 import { EChart } from "@/shared/ui/echart";
 
-/** DEMO price series as a smooth gradient area line with tooltip (synthetic data). */
-export function PriceChart({ data, height = 150 }: { data: number[]; height?: number }) {
+/** Daily price line (gradient area, tooltip). `tone="real"` for ingested prices
+ *  (blue), `tone="demo"` for synthetic placeholder data (amber). */
+export function PriceChart({
+  data,
+  labels,
+  tone = "demo",
+  height = 150,
+}: {
+  data: number[];
+  labels?: string[];
+  tone?: "real" | "demo";
+  height?: number;
+}) {
   const c = useChartTheme();
-  const color = c["--demo"] || "#f59e0b";
+  const color = tone === "real" ? c["--info"] || "#38bdf8" : c["--demo"] || "#f59e0b";
+  const suffix = tone === "demo" ? " (demo)" : "";
 
   const option = useMemo<EChartsOption>(
     () => ({
@@ -18,21 +30,22 @@ export function PriceChart({ data, height = 150 }: { data: number[]; height?: nu
         backgroundColor: c["--surface-2"] || "#1a232e",
         borderColor: c["--border"] || "#243140",
         textStyle: { color: c["--text"] || "#e6edf3", fontSize: 12 },
-        valueFormatter: (v) => `${Number(v).toFixed(1)} (demo)`,
+        valueFormatter: (v) => `${Number(v).toFixed(2)}${suffix}`,
       },
       xAxis: {
         type: "category",
         show: false,
         boundaryGap: false,
-        data: data.map((_, i) => `Phiên ${i + 1}`),
+        data: labels ?? data.map((_, i) => `Phiên ${i + 1}`),
       },
       yAxis: { type: "value", show: false, scale: true },
       series: [
         {
           type: "line",
           data,
-          smooth: true,
+          smooth: data.length < 120,
           symbol: "none",
+          sampling: "lttb",
           lineStyle: { color, width: 2 },
           areaStyle: {
             color: {
@@ -50,7 +63,7 @@ export function PriceChart({ data, height = 150 }: { data: number[]; height?: nu
         },
       ],
     }),
-    [data, color, c],
+    [data, labels, color, suffix, c],
   );
 
   return <EChart option={option} height={height} />;

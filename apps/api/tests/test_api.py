@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import date
+
+from app.models import DimCommodity, DimMarketInstrument, FactPriceDaily
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 
 def test_health(client: TestClient) -> None:
@@ -60,6 +65,39 @@ def test_stats(client: TestClient) -> None:
     assert body["profiles"] == 16
     assert body["instruments"] > 0
     assert body["fact_rows"] == 0  # no ingestion yet
+
+
+def test_commodity_prices_series(client: TestClient, seeded_session: Session) -> None:
+    com = seeded_session.execute(select(DimCommodity).filter_by(commodity_code="GOLD")).scalar_one()
+    inst = seeded_session.execute(select(DimMarketInstrument).filter_by(instrument_code="COMEX_GC")).scalar_one()
+    seeded_session.add_all(
+        [
+            FactPriceDaily(
+                commodity_key=com.commodity_key, market_instrument_key=inst.market_instrument_key,
+                price_date=date(2025, 1, 2), release_date=date(2025, 1, 3), value=100, currency="USD", revision=0,
+            ),
+            FactPriceDaily(
+                commodity_key=com.commodity_key, market_instrument_key=inst.market_instrument_key,
+                price_date=date(2025, 1, 3), release_date=date(2025, 1, 4), value=101.5, currency="USD", revision=0,
+            ),
+        ]
+    )
+    seeded_session.commit()
+
+    r = client.get("/commodities/gold/prices?days=100000")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["commodity_code"] == "GOLD"
+    assert body["instrument_code"] == "COMEX_GC"
+    assert body["currency"] == "USD"
+    assert [p["value"] for p in body["points"]] == [100.0, 101.5]
+    assert body["points"][0]["date"] == "2025-01-02"
+
+
+def test_commodity_prices_empty_and_unknown(client: TestClient) -> None:
+    empty = client.get("/commodities/CORN/prices")  # no facts in test DB
+    assert empty.status_code == 200 and empty.json()["points"] == []
+    assert client.get("/commodities/NOT_A_COMMODITY/prices").status_code == 404
 
 
 def test_dashboard_root_serves_html(client: TestClient) -> None:

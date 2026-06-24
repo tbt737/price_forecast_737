@@ -5,6 +5,8 @@ export type {
   CommodityDetail,
   Health,
   Instrument,
+  PricePoint,
+  PriceSeries,
   ProfileDetail,
   ProfileRegistry,
   Ready,

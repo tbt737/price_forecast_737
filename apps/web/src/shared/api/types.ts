@@ -50,3 +50,15 @@ export interface ProfileRegistry {
 export interface ProfileDetail extends ProfileRegistry {
   profile: Record<string, unknown>;
 }
+
+export interface PricePoint {
+  date: string;
+  value: number;
+}
+
+export interface PriceSeries {
+  commodity_code: string;
+  instrument_code?: string | null;
+  currency?: string | null;
+  points: PricePoint[];
+}
