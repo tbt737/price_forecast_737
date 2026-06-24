@@ -148,21 +148,38 @@ def get_commodity_prices(
     )
 
 
+# In-process forecast cache. Forecasting is a multi-second walk-forward; the price
+# data only changes on (infrequent) ingest, so cache the result keyed by a cheap
+# data fingerprint (row count + latest date) that auto-invalidates on new data.
+_FORECAST_CACHE: dict[str, tuple[tuple[int, str | None], dict[str, Any]]] = {}
+
+
 @router.get("/commodities/{commodity_code}/forecast", response_model=None)
 def get_commodity_forecast(commodity_code: str, db: Session = Depends(get_db)) -> dict[str, Any]:
-    """Ridge autoregressive price forecast for 30 & 90 trading days, each with an
+    """Ridge/XGBoost (+cycle) price forecast for 30 & 90 trading days, each with an
     ~80% band and an honest walk-forward backtest (MAPE vs naive). Falls back to a
-    flat naive line per-horizon where the model can't beat naive out-of-sample.
-    ``available: false`` when there is too little price history."""
-    commodity = db.execute(
-        select(DimCommodity).filter_by(commodity_code=commodity_code.upper())
-    ).scalar_one_or_none()
+    flat naive line per-horizon where no model beats naive out-of-sample. Cached per
+    commodity until its price data changes. ``available: false`` with too little history."""
+    code = commodity_code.upper()
+    commodity = db.execute(select(DimCommodity).filter_by(commodity_code=code)).scalar_one_or_none()
     if commodity is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Unknown commodity '{commodity_code}'")
 
+    row = db.execute(
+        select(func.count(), func.max(FactPriceDaily.price_date)).where(
+            FactPriceDaily.commodity_key == commodity.commodity_key
+        )
+    ).one()
+    fingerprint = (int(row[0]), row[1].isoformat() if row[1] else None)
+    cached = _FORECAST_CACHE.get(code)
+    if cached is not None and cached[0] == fingerprint:
+        return cached[1]
+
     from ml.forecast import forecast_commodity
 
-    return forecast_commodity(db, commodity_code)
+    result = forecast_commodity(db, code)
+    _FORECAST_CACHE[code] = (fingerprint, result)
+    return result
 
 
 @router.get("/profiles/{commodity_code}", response_model=ProfileDetailOut)

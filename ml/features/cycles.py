@@ -75,7 +75,37 @@ def propose_cycles(
     return kept
 
 
-MIN_R2 = 0.01  # a cycle must explain >=1% of the h-ahead return variance to be kept
+MIN_R2 = 0.006  # a cycle must explain >=0.6% of the h-ahead return variance to be kept
+
+
+def _is_stable(logy: np.ndarray, period: float, *, frac: float = 0.5) -> bool:
+    """Phase 4 (light) — is ``period`` a recurring peak, not a one-off?
+
+    Rolling-window spectrogram: split the history into windows ~3 cycles long and
+    require the period to stand out (power in the top third of its window's band)
+    in at least ``frac`` of them. Too few windows to judge ⇒ not rejected ("no
+    spring is identical" — we only drop cycles that clearly appear once)."""
+    m = len(logy)
+    wlen = int(3.0 * period)
+    if wlen < 48 or m < 2 * wlen:
+        return True
+    nwin = m // wlen
+    if nwin < 2:
+        return True
+    target_f = 1.0 / period
+    hits = 0
+    for w in range(nwin):
+        seg = logy[w * wlen : (w + 1) * wlen]
+        tt = np.arange(len(seg), dtype=float)
+        seg = seg - np.polyval(np.polyfit(tt, seg, 1), tt)
+        power = np.abs(np.fft.rfft(seg * np.hanning(len(seg)))) ** 2
+        freq = np.fft.rfftfreq(len(seg), d=1.0)
+        band = (freq > 0.5 * target_f) & (freq < 1.5 * target_f)  # near the candidate period
+        if not band.any():
+            continue
+        if power[band].max() >= np.quantile(power[1:], 0.67):  # stands out vs the window's spectrum
+            hits += 1
+    return hits >= max(1, int(round(frac * nwin)))
 
 
 def select_cycles(
@@ -85,7 +115,7 @@ def select_cycles(
     rows_per_year: float,
     horizon: int,
     end: int | None = None,
-    max_keep: int = 2,
+    max_keep: int = 3,
 ) -> list[float]:
     """Phase 3 — keep candidate cycles whose harmonic actually predicts the
     ``horizon``-ahead return in-window (cheap linear R^2 filter).
@@ -116,7 +146,7 @@ def select_cycles(
         x = np.column_stack([ones, np.sin(a), np.cos(a)])
         beta, *_ = np.linalg.lstsq(x, fut, rcond=None)
         r2 = 1.0 - float(np.sum((fut - x @ beta) ** 2)) / ss_tot
-        if r2 >= MIN_R2:
+        if r2 >= MIN_R2 and _is_stable(logy[:m], period):  # predictive AND recurring
             scored.append((period, r2))
     scored.sort(key=lambda s: s[1], reverse=True)
     return [p for p, _ in scored[:max_keep]]
