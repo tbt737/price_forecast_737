@@ -18,6 +18,13 @@ ETL_DIR = REPO_ROOT / "etl"
 SCHEMA_FACT_TABLES = {t for t in Base.metadata.tables if t.startswith("fact_")}
 SINGLE_COMMODITY_TOKENS = ("robusta", "gold", "copper", "rice", "corn", "wheat", "cocoa", "sugar", "soybean")
 NETWORK_TOKENS = ("import requests", "import httpx", "import urllib", "import socket", "urlopen", "yfinance")
+# Real-source connectors are the DELIBERATE network boundary (automated ingestion);
+# the core pipeline stays offline. Only these adapters may touch the network.
+NETWORK_EXEMPT = {
+    ETL_DIR / "ingest.py",
+    ETL_DIR / "sources" / "market" / "yahoo.py",
+    ETL_DIR / "sources" / "weather" / "nasa_power.py",
+}
 
 
 def _valid_sd() -> NormalizedRecord:
@@ -134,8 +141,11 @@ def test_etl_code_is_generic_no_single_commodity() -> None:
             assert not re.search(rf"\b{token}\b", text), f"{path} hardcodes commodity '{token}'"
 
 
-def test_etl_needs_no_network_or_credentials() -> None:
+def test_core_pipeline_needs_no_network_or_credentials() -> None:
+    exempt = {p.resolve() for p in NETWORK_EXEMPT}
     for path in ETL_DIR.rglob("*.py"):
+        if path.resolve() in exempt:
+            continue  # connector adapters are the sanctioned network boundary
         text = path.read_text(encoding="utf-8")
         for token in NETWORK_TOKENS:
             assert token not in text, f"{path} references network/external dependency '{token}'"

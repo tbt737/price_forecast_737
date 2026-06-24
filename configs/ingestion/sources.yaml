@@ -1,0 +1,28 @@
+# Ingestion source registry — config-over-code.
+# Connectors read THIS file (symbols, tickers, coordinates), never hardcoded per
+# commodity. Add a commodity here to ingest it; do not edit connector engines.
+# Unknown instrument/region codes are rejected cleanly by the pipeline, not crashed.
+
+prices:
+  source_code: yahoo # must exist in dim_data_source (seeded by seed_ingestion_sources)
+  release_lag_days: 1 # close is treated as available the next day (point-in-time safe)
+  # instrument_code must exist in dim_market_instrument; ticker is the Yahoo Finance symbol.
+  instruments:
+    - { commodity_code: GOLD, instrument_code: COMEX_GC, ticker: "GC=F", currency: USD }
+    - { commodity_code: CRUDE_OIL, instrument_code: NYMEX_CL, ticker: "CL=F", currency: USD }
+    - { commodity_code: CORN, instrument_code: CME_ZC, ticker: "ZC=F", currency: USc }
+    - { commodity_code: WHEAT, instrument_code: CME_ZW, ticker: "ZW=F", currency: USc }
+    - { commodity_code: SOYBEAN, instrument_code: CME_ZS, ticker: "ZS=F", currency: USc }
+    - { commodity_code: SUGAR, instrument_code: ICE_SB, ticker: "SB=F", currency: USc }
+    - { commodity_code: COCOA, instrument_code: ICE_CC, ticker: "CC=F", currency: USD }
+    - { commodity_code: COPPER, instrument_code: COMEX_HG, ticker: "HG=F", currency: USD }
+
+weather:
+  source_code: NASA_POWER
+  release_lag_days: 3 # NASA POWER has a few-days publication latency
+  parameters: # NASA POWER api param -> our metric_code
+    T2M: temp_mean
+    PRECTOTCORR: precip
+  # region_code must exist in dim_region; latitude/longitude drive the NASA POWER point query.
+  locations:
+    - { commodity_code: ROBUSTA, region_code: VN_TAY_NGUYEN, latitude: 12.7, longitude: 108.1 }
