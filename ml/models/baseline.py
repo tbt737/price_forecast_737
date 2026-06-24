@@ -13,12 +13,18 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ml.features.seasonal import design_matrix
+from ml.features.seasonal import ANNUAL, design_matrix
 
 
 @dataclass
 class FourierTrendForecaster:
     harmonics: int = 3
+    # Damped trend (Gardner): the linear-trend increment beyond the anchor decays
+    # geometrically per day, so a steep fitted slope can't extrapolate without
+    # bound (the #1 cause of the baseline overshooting on volatile produce). The
+    # seasonal/harmonic part is left intact. 1.0 = undamped (original behaviour);
+    # phi<1 caps the total trend move at slope_per_day * phi/(1-phi).
+    trend_damping: float = 1.0
     coef_: np.ndarray = field(default_factory=lambda: np.empty(0))
     resid_sigma_: float = 0.0  # log-residual std (fit quality)
     ret_sigma_: float = 0.0  # daily log-return std (drives the widening band)
@@ -37,14 +43,28 @@ class FourierTrendForecaster:
     def _mu(self, t: np.ndarray) -> np.ndarray:
         return design_matrix(t, harmonics=self.harmonics) @ self.coef_
 
+    def _mu_seasonal(self, t: np.ndarray) -> np.ndarray:
+        """Fitted level WITHOUT the linear-trend column (intercept + harmonics)."""
+        coef = self.coef_.copy()
+        coef[1] = 0.0  # zero the trend coefficient
+        return design_matrix(t, harmonics=self.harmonics) @ coef
+
     def predict(self, t: np.ndarray) -> np.ndarray:
         """Absolute fitted level (for inspecting fit quality, not forecasting)."""
         return np.exp(self._mu(t))
 
     def forecast(self, t_anchor: float, y_anchor: float, t_future: np.ndarray) -> np.ndarray:
         """Anchored forecast: start at the last actual price and apply the model's
-        trend+seasonal increment from the anchor to each future point."""
-        increment = self._mu(np.asarray(t_future, dtype=float)) - float(self._mu(np.array([t_anchor]))[0])
+        seasonal increment (full) plus a damped linear-trend increment."""
+        tf = np.asarray(t_future, dtype=float)
+        ta = float(t_anchor)
+        seasonal_inc = self._mu_seasonal(tf) - float(self._mu_seasonal(np.array([ta]))[0])
+        slope_per_day = float(self.coef_[1]) / ANNUAL  # d/dt of the (coef[1] * t/period) trend term
+        d = tf - ta
+        phi = self.trend_damping
+        # damped cumulative trend distance: sum_{k=1..d} phi^k -> d when phi>=1, else saturates
+        damped_d = d if phi >= 1.0 else phi * (1.0 - np.power(phi, d)) / (1.0 - phi)
+        increment = seasonal_inc + slope_per_day * damped_d
         return float(y_anchor) * np.exp(increment)
 
     def forecast_interval(

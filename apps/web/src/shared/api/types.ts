@@ -79,6 +79,7 @@ export interface BacktestSummary {
 }
 
 export interface HorizonForecast {
+  model_used?: string;
   points: ForecastPoint[];
   backtest: BacktestSummary;
 }

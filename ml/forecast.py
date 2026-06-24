@@ -20,10 +20,11 @@ from app.models import DimCommodity, DimMarketInstrument, FactPriceDaily  # noqa
 from sqlalchemy import func, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from ml.backtests.walk_forward import walk_forward  # noqa: E402
-from ml.models.baseline import FourierTrendForecaster  # noqa: E402
+from ml.backtests.walk_forward import walk_forward_ar  # noqa: E402
+from ml.models.ridge_forecaster import RidgeARForecaster  # noqa: E402
 
-MIN_HISTORY = 252  # ~1 trading year required to fit the seasonal baseline
+MIN_HISTORY = 252  # ~1 trading year required to fit the model
+Z_80 = 1.2816  # ~80% normal band half-width
 
 
 def _next_business_days(last: date, count: int) -> list[date]:
@@ -70,12 +71,20 @@ def load_price_series(session: Session, commodity_code: str) -> dict[str, Any] |
     }
 
 
+def _naive_interval(y_anchor: float, ret_sigma: float, steps: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Flat last-value forecast with a random-walk band (the conservative fallback)."""
+    point = np.repeat(float(y_anchor), steps)
+    s = np.arange(1, steps + 1)
+    band = Z_80 * ret_sigma * np.sqrt(s)
+    return point, point * np.exp(-band), point * np.exp(band)
+
+
 def forecast_commodity(
     session: Session,
     commodity_code: str,
     *,
     horizons: tuple[int, ...] = (30, 90),
-    harmonics: int = 3,
+    l2: float = 5.0,
 ) -> dict[str, Any]:
     loaded = load_price_series(session, commodity_code)
     if loaded is None:
@@ -89,8 +98,7 @@ def forecast_commodity(
         "commodity_code": commodity.commodity_code,
         "instrument_code": instrument.instrument_code if instrument else None,
         "currency": instrument.currency if instrument else None,
-        "model": "fourier_trend",
-        "harmonics": harmonics,
+        "model": "ridge_ar",  # Ridge autoregressive; falls back to naive where it can't beat it
     }
     # drop non-positive prices (e.g. the 2020 negative-oil episode) before log-fitting
     clean = [(d, v) for d, v in zip(dates, values, strict=True) if v > 0]
@@ -99,20 +107,28 @@ def forecast_commodity(
     if len(values) < MIN_HISTORY:
         return {**base, "available": False, "reason": f"need >= {MIN_HISTORY} positive prices, have {len(values)}"}
 
-    start = dates[0]
-    t = np.array([(d - start).days for d in dates], dtype=float)
     y = np.array(values, dtype=float)
-    model = FourierTrendForecaster(harmonics=harmonics).fit(t, y)
-    t_anchor = float(t[-1])
+    logy = np.log(y)
+    doy = np.array([d.timetuple().tm_yday for d in dates], dtype=float)
+    ret_sigma = float(np.std(np.diff(logy), ddof=1)) if len(logy) > 1 else 0.0
+    anchor_idx = len(values) - 1
     y_anchor = float(values[-1])
 
     horizon_out: dict[str, Any] = {}
     for h in horizons:
         future_dates = _next_business_days(dates[-1], h)
-        t_future = np.array([(d - start).days for d in future_dates], dtype=float)
-        point, lower, upper = model.forecast_interval(t_anchor, y_anchor, t_future)
-        bt = walk_forward(t, y, horizon=h, harmonics=harmonics)
+        bt = walk_forward_ar(dates, y, horizon=h, l2=l2)
+        # Only show the model's directional forecast when the honest backtest says
+        # it beats the naive random walk; otherwise fall back to a flat naive line.
+        if bt.beats_naive:
+            model = RidgeARForecaster(horizon=h, l2=l2).fit(logy, doy)
+            point, lower, upper = model.forecast_interval(logy, doy, anchor_idx, y_anchor, h)
+            model_used = "ridge_ar"
+        else:
+            point, lower, upper = _naive_interval(y_anchor, ret_sigma, h)
+            model_used = "naive"
         horizon_out[str(h)] = {
+            "model_used": model_used,
             "points": [
                 {
                     "date": d.isoformat(),

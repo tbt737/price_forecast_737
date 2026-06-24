@@ -150,8 +150,9 @@ def get_commodity_prices(
 
 @router.get("/commodities/{commodity_code}/forecast", response_model=None)
 def get_commodity_forecast(commodity_code: str, db: Session = Depends(get_db)) -> dict[str, Any]:
-    """Baseline (Fourier + trend, anchored) price forecast for 30 & 90 trading days,
-    each with an ~80% band and an honest walk-forward backtest (MAPE vs naive).
+    """Ridge autoregressive price forecast for 30 & 90 trading days, each with an
+    ~80% band and an honest walk-forward backtest (MAPE vs naive). Falls back to a
+    flat naive line per-horizon where the model can't beat naive out-of-sample.
     ``available: false`` when there is too little price history."""
     commodity = db.execute(
         select(DimCommodity).filter_by(commodity_code=commodity_code.upper())
