@@ -14,7 +14,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from ml.features.cycles import detect_cycles
+from ml.features.cycles import select_cycles
 from ml.models.baseline import FourierTrendForecaster, naive_last
 from ml.models.gbm_forecaster import GBMForecaster
 from ml.models.ridge_forecaster import RidgeARForecaster
@@ -175,7 +175,9 @@ def walk_forward_gbm(
     rpy = _rows_per_year(dates, len(values))
 
     def make(cut: int) -> GBMForecaster:
-        periods = detect_cycles(logy[:cut], rows_per_year=rpy) if use_cycles else []
+        periods = (
+            select_cycles(logy, doy, rows_per_year=rpy, horizon=horizon, end=cut) if use_cycles else []
+        )
         return GBMForecaster(horizon=horizon, cycle_periods=periods).fit(logy, doy, end=cut)
 
     return _walk_forward_anchored(

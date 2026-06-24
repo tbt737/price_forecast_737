@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from ml.backtests.walk_forward import walk_forward_ar
-from ml.features.cycles import detect_cycles
+from ml.features.cycles import propose_cycles, select_cycles
 from ml.features.tabular import LOOKBACK, feature_row, training_matrix
 from ml.models.baseline import FourierTrendForecaster
 from ml.models.gbm_forecaster import GBMForecaster, is_available
@@ -95,22 +95,41 @@ def test_damped_trend_reduces_extrapolation() -> None:
 
 
 # ── walk-forward backtest ─────────────────────────────────────────────────────
-# ── multi-year cycle detection ────────────────────────────────────────────────
-def test_detect_cycles_finds_injected_period() -> None:
-    rpy = 250.0
-    n = int(rpy * 12)  # 12 years
+# ── multi-scale cycle search (Phases 1-3) ─────────────────────────────────────
+def test_propose_cycles_finds_short_and_long() -> None:
+    rpy = 300.0  # ~daily produce
+    n = int(rpy * 14)  # 14 years
     t = np.arange(n, dtype=float)
-    period_rows = rpy * 3.0  # inject a clean 3-year cycle
     rng = np.random.default_rng(0)
-    logy = np.log(100.0) + 0.001 * t + 0.25 * np.sin(2 * np.pi * t / period_rows) + rng.normal(0, 0.02, n)
-    periods = detect_cycles(logy, rows_per_year=rpy, n=2)
-    assert any(abs(p / rpy - 3.0) < 0.6 for p in periods)  # ~3-year cycle recovered
+    short = rpy / 4.0  # ~90-day (quarter) cycle
+    long_ = rpy * 3.5  # ~3.5-year Cobweb cycle
+    logy = (
+        np.log(100.0)
+        + 0.0005 * t
+        + 0.15 * np.sin(2 * np.pi * t / short)
+        + 0.25 * np.sin(2 * np.pi * t / long_)
+        + rng.normal(0, 0.02, n)
+    )
+    periods = propose_cycles(logy, rows_per_year=rpy, n=4)
+    assert any(abs(p - short) < 0.3 * short for p in periods)  # multi-scale: short recovered
+    assert any(abs(p - long_) < 0.3 * long_ for p in periods)  # ... and long recovered
 
 
-def test_detect_cycles_empty_on_short_history() -> None:
-    rpy = 250.0
-    logy = np.log(np.linspace(100.0, 120.0, int(rpy * 3)))  # 3 years < MIN_YEARS
-    assert detect_cycles(logy, rows_per_year=rpy) == []
+def test_propose_cycles_empty_on_short_history() -> None:
+    assert propose_cycles(np.log(np.linspace(100.0, 110.0, 80)), rows_per_year=300.0) == []
+
+
+@pytest.mark.skipif(not is_available(), reason="xgboost not installed")
+def test_select_cycles_is_subset_of_proposed() -> None:
+    rpy = 300.0
+    n = int(rpy * 9)  # 9 years
+    t = np.arange(n, dtype=float)
+    rng = np.random.default_rng(1)
+    logy = np.log(100.0) + 0.0005 * t + 0.2 * np.sin(2 * np.pi * t / (rpy / 4.0)) + rng.normal(0, 0.02, n)
+    doy = _doy(n)
+    proposed = {round(p, 1) for p in propose_cycles(logy, rows_per_year=rpy)}
+    selected = select_cycles(logy, doy, rows_per_year=rpy, horizon=30)
+    assert all(round(p, 1) in proposed for p in selected)  # backtest filter only keeps proposed cycles
 
 
 def test_feature_row_appends_cycle_harmonics() -> None:

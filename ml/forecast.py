@@ -21,7 +21,7 @@ from sqlalchemy import func, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from ml.backtests.walk_forward import walk_forward_ar, walk_forward_gbm  # noqa: E402
-from ml.features.cycles import detect_cycles  # noqa: E402
+from ml.features.cycles import select_cycles  # noqa: E402
 from ml.models.gbm_forecaster import GBMForecaster  # noqa: E402
 from ml.models.gbm_forecaster import is_available as gbm_available  # noqa: E402
 from ml.models.ridge_forecaster import RidgeARForecaster  # noqa: E402
@@ -117,10 +117,8 @@ def forecast_commodity(
     ret_sigma = float(np.std(np.diff(logy), ddof=1)) if len(logy) > 1 else 0.0
     anchor_idx = len(values) - 1
     y_anchor = float(values[-1])
-    # Dominant multi-year cycle(s) of THIS series (the structural "Cobweb" cycle),
-    # for the cycle-augmented candidate. Empty when history is too short / acyclic.
     span_days = max(1, (dates[-1] - dates[0]).days)
-    cycle_periods = detect_cycles(logy, rows_per_year=len(values) / (span_days / 365.25))
+    rpy = len(values) / (span_days / 365.25)  # rows per year (for cycle scales)
 
     horizon_out: dict[str, Any] = {}
     for h in horizons:
@@ -135,11 +133,13 @@ def forecast_commodity(
             gb = walk_forward_gbm(dates, y, horizon=h)
             candidates["gbm"] = gb.model_mape
             builders["gbm"] = lambda hh=h: GBMForecaster(horizon=hh).fit(logy, doy)
-            # Cycle-augmented candidate — only when this series actually has a cycle.
-            if cycle_periods:
+            # Cycle-augmented candidate — multi-scale cycles chosen by the inner
+            # backtest filter (Phase 3), per horizon. Only added when a cycle survives.
+            prod_cycles = select_cycles(logy, doy, rows_per_year=rpy, horizon=h)
+            if prod_cycles:
                 gbc = walk_forward_gbm(dates, y, horizon=h, use_cycles=True)
                 candidates["gbm_cyc"] = gbc.model_mape
-                builders["gbm_cyc"] = lambda hh=h, pp=tuple(cycle_periods): GBMForecaster(
+                builders["gbm_cyc"] = lambda hh=h, pp=tuple(prod_cycles): GBMForecaster(
                     horizon=hh, cycle_periods=pp
                 ).fit(logy, doy)
 
