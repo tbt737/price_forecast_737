@@ -4,5 +4,6 @@ export { Stat } from "@/shared/ui/stat";
 export { Skeleton } from "@/shared/ui/skeleton";
 export { SectorChip } from "@/shared/ui/sector-chip";
 export { Tabs, type TabItem } from "@/shared/ui/tabs";
-export { LineChart } from "@/shared/ui/line-chart";
-export { BarChart } from "@/shared/ui/bar-chart";
+export { EChart } from "@/shared/ui/echart";
+export { PriceChart } from "@/shared/ui/price-chart";
+export { CompositionChart } from "@/shared/ui/composition-chart";

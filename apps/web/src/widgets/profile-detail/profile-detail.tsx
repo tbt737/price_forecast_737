@@ -5,7 +5,7 @@ import { api, type CommodityDetail, type ProfileDetail as Profile } from "@/shar
 import { demoSeries } from "@/shared/lib/demo";
 import { titleCase } from "@/shared/lib/format";
 import { sectorMeta } from "@/shared/lib/sectors";
-import { BarChart, Badge, LineChart, SectorChip, Skeleton, Tabs, type TabItem } from "@/shared/ui";
+import { Badge, CompositionChart, PriceChart, SectorChip, Skeleton, Tabs, type TabItem } from "@/shared/ui";
 import { RenderValue } from "@/widgets/profile-detail/render-value";
 
 function asArray(v: unknown): unknown[] {
@@ -204,14 +204,14 @@ export function ProfileDetail({ code }: { code: string }) {
             <span>Giá 32 phiên</span>
             <Badge tone="demo">DEMO · dữ liệu giả</Badge>
           </div>
-          <LineChart data={demoSeries(commodity.commodity_code)} color="var(--demo)" />
+          <PriceChart data={demoSeries(commodity.commodity_code)} />
         </div>
         <div className="rounded-card border border-border bg-surface-2 p-3">
           <div className="mb-1 flex items-center justify-between text-xs text-muted">
             <span>Cấu trúc profile</span>
             <Badge tone="brand">dữ liệu thật</Badge>
           </div>
-          <BarChart items={counts} color="var(--brand)" />
+          <CompositionChart items={counts} />
         </div>
       </div>
 
