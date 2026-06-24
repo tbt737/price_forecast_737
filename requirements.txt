@@ -12,3 +12,4 @@ python-dotenv>=1.0
 # Ingestion connectors (automated data collection)
 yfinance>=0.2
 requests>=2.31
+numpy>=1.26
