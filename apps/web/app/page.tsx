@@ -7,8 +7,9 @@ export default function HomePage() {
         <div>
           <h2 className="text-lg font-semibold">Commodity Explorer</h2>
           <p className="text-sm text-muted">
-            16 hồ sơ hàng hóa cấu hình-hoá (thật). Bảng giá/forecast chưa có dữ liệu ingest — biểu đồ
-            giá là <span className="font-medium text-demo">DEMO</span>.
+            18 hồ sơ hàng hóa cấu hình-hoá. Phần lớn đã có giá thật + dự báo (Ridge AR / XGBoost, có
+            backtest vs naive); mặt hàng chưa có nguồn dữ liệu được đánh dấu{" "}
+            <span className="font-medium text-demo">DEMO</span>.
           </p>
         </div>
       </div>
