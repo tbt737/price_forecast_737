@@ -49,10 +49,10 @@ def test_create_all_and_load_all_profiles() -> None:
     with sessionmaker(bind=eng, future=True)() as session:
         summary = load_profiles(session)
         session.commit()
-        assert summary["profile:loaded"] == 16
-        assert session.scalar(select(func.count()).select_from(DimCommodity)) == 16
-        assert session.scalar(select(func.count()).select_from(CommodityProfileRegistry)) == 16
+        assert summary["profile:loaded"] == 18
+        assert session.scalar(select(func.count()).select_from(DimCommodity)) == 18
+        assert session.scalar(select(func.count()).select_from(CommodityProfileRegistry)) == 18
         assert session.scalar(select(func.count()).select_from(CommodityRegionMap)) > 0
-        # 52 baseline + 3 IN_NATIONAL_MEDIAN (onion/chilli/garlic 23y national series)
-        assert session.scalar(select(func.count()).select_from(DimMarketInstrument)) == 55
+        # 52 baseline + 3 IN_NATIONAL_MEDIAN + 6 from 2 dehydrated profiles
+        assert session.scalar(select(func.count()).select_from(DimMarketInstrument)) == 61
     eng.dispose()

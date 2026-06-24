@@ -1,0 +1,66 @@
+commodity_code: "DEHYDRATED_GARLIC"
+commodity_name: "Dehydrated Garlic"
+commodity_group: "agriculture"
+base_unit: "tonne"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "CN_FOB_DEHY", exchange: "China FOB", symbol: "CNDEHYFOB", description: "China dehydrated garlic flakes/granules/powder FOB export price (Shandong/Jinxiang processors)", contract_unit: "tonne", currency: "USD" }
+  - { instrument_code: "IN_MAHUVA_FOB_GARLIC", exchange: "India FOB", symbol: "INGDEHYFOB", description: "Gujarat (Mahuva) dehydrated garlic FOB export price", contract_unit: "tonne", currency: "USD" }
+  - { instrument_code: "CN_DOMESTIC_DEHY", exchange: "China domestic", symbol: "CNDEHY", description: "China dehydrated garlic ex-factory price", contract_unit: "kg", currency: "CNY" }
+
+weather_regions:
+  - { region_code: "CN_SHANDONG", name: "Shandong (Jinxiang processing hub)", country: "CN" }
+  - { region_code: "IN_GUJARAT", name: "Gujarat (Mahuva belt)", country: "IN" }
+  - { region_code: "IN_MADHYA_PRADESH", name: "Madhya Pradesh (fresh-garlic feedstock)", country: "IN" }
+
+production_regions:
+  - { region_code: "CN", name: "China (dominant dehydrator/exporter)", role: "production" }
+  - { region_code: "IN", name: "India (Gujarat)", role: "production" }
+  - { region_code: "ES", name: "Spain", role: "production" }
+
+consumption_regions:
+  - { region_code: "US", name: "United States (food processing)", role: "consumption" }
+  - { region_code: "EU", name: "European Union", role: "consumption" }
+  - { region_code: "BR", name: "Brazil", role: "consumption" }
+
+export_regions:
+  - { region_code: "CN", name: "China", role: "export" }
+  - { region_code: "IN", name: "India", role: "export" }
+
+import_regions:
+  - { region_code: "US", name: "United States", role: "import" }
+  - { region_code: "EU", name: "European Union", role: "import" }
+  - { region_code: "BR", name: "Brazil", role: "import" }
+
+physical_drivers:
+  - { metric_code: "fresh_garlic_price", description: "Fresh garlic feedstock price (~3-3.5kg fresh per 1kg dehydrated; dominant input cost)" }
+  - { metric_code: "cold_storage_inventory", description: "Jinxiang cold-storage stock (feedstock availability)" }
+  - { metric_code: "drying_yield", description: "Fresh-to-dehydrated conversion yield" }
+  - { metric_code: "processing_capacity", description: "Shandong/Gujarat dehydration plant utilisation" }
+
+macro_drivers:
+  - { metric_code: "usd_cny", description: "USD/CNY exchange rate" }
+  - { metric_code: "usd_inr", description: "USD/INR exchange rate" }
+  - { metric_code: "energy_cost", description: "Drying energy / fuel cost" }
+
+logistics_drivers:
+  - { metric_code: "reefer_freight", description: "Container freight to US/EU" }
+  - { metric_code: "physical_basis", description: "FOB vs ex-factory spread" }
+
+event_risk_drivers:
+  - { metric_code: "us_antidumping_duty", description: "US anti-dumping duty on Chinese garlic products" }
+  - { metric_code: "sps_import_ban", description: "Phytosanitary / food-safety import restrictions" }
+  - { metric_code: "eto_pesticide_reject", description: "EtO/pesticide residue rejection at import" }
+
+data_sources:
+  - { source_code: "TRIDGE", name: "Tridge / Selina Wamucii market intelligence", access: "subscription", url: "https://www.tridge.com" }
+  - { source_code: "APEDA", name: "APEDA (India agri-export) price/quote data", access: "public", url: "https://apeda.gov.in" }
+  - { source_code: "UN_COMTRADE", name: "UN Comtrade (HS 071290 dried vegetables) trade flows", access: "public", url: "https://comtrade.un.org" }
+
+models:
+  - { model_code: "fresh_passthrough", family: "statsmodels", horizon: "monthly", description: "Fresh-garlic price pass-through + processing margin" }
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "monthly", description: "Seasonal (post fresh-garlic harvest processing)" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "monthly", description: "Gradient boosting on fresh price + storage + FX" }
+
+notes: "Dehydrated garlic (flakes/granules/powder). China (Shandong/Jinxiang) is the dominant dehydrator/exporter; India's Gujarat belt is the #2. NO futures and NO free daily price feed — price discovery is via exporter FOB quotes (Tridge/APEDA) and UN Comtrade trade flows. Price is largely a pass-through of the fresh-garlic feedstock cost (~3:1 fresh:dehydrated) plus drying energy and FX. A data source must be supplied (CSV/quotes) before this commodity can be forecast; profile is config-only for now."

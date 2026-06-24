@@ -1,0 +1,68 @@
+commodity_code: "DEHYDRATED_ONION"
+commodity_name: "Dehydrated Onion"
+commodity_group: "agriculture"
+base_unit: "tonne"
+default_currency: "USD"
+
+market_instruments:
+  - { instrument_code: "IN_MAHUVA_FOB", exchange: "India FOB", symbol: "MAHUVAFOB", description: "Mahuva (Gujarat) dehydrated white onion flakes/kibbled FOB export price", contract_unit: "tonne", currency: "USD" }
+  - { instrument_code: "IN_MAHUVA_DOMESTIC", exchange: "Gujarat processing hub", symbol: "MAHUVA", description: "Mahuva/Bhavnagar dehydrated onion ex-factory price", contract_unit: "kg", currency: "INR" }
+  - { instrument_code: "EG_FOB", exchange: "Egypt FOB", symbol: "EGFOB", description: "Egypt dehydrated onion FOB (lower-cost competitor)", contract_unit: "tonne", currency: "USD" }
+
+weather_regions:
+  - { region_code: "IN_GUJARAT", name: "Gujarat (Mahuva/Bhavnagar belt)", country: "IN" }
+  - { region_code: "IN_MAHARASHTRA", name: "Maharashtra (fresh-onion feedstock)", country: "IN" }
+  - { region_code: "EG", name: "Egypt", country: "EG" }
+
+production_regions:
+  - { region_code: "IN", name: "India (Gujarat ~world's largest dehydrator)", role: "production" }
+  - { region_code: "EG", name: "Egypt", role: "production" }
+  - { region_code: "CN", name: "China", role: "production" }
+  - { region_code: "US", name: "United States (California)", role: "production" }
+
+consumption_regions:
+  - { region_code: "US", name: "United States (food processing)", role: "consumption" }
+  - { region_code: "EU", name: "European Union", role: "consumption" }
+  - { region_code: "RU", name: "Russia", role: "consumption" }
+
+export_regions:
+  - { region_code: "IN", name: "India", role: "export" }
+  - { region_code: "EG", name: "Egypt", role: "export" }
+  - { region_code: "CN", name: "China", role: "export" }
+
+import_regions:
+  - { region_code: "US", name: "United States", role: "import" }
+  - { region_code: "EU", name: "European Union", role: "import" }
+  - { region_code: "BR", name: "Brazil", role: "import" }
+  - { region_code: "RU", name: "Russia", role: "import" }
+
+physical_drivers:
+  - { metric_code: "fresh_onion_price", description: "Fresh onion feedstock price (~7-8kg fresh per 1kg dehydrated; dominant input cost)" }
+  - { metric_code: "drying_yield", description: "Fresh-to-dehydrated conversion yield (variety/dry-matter dependent)" }
+  - { metric_code: "monsoon_supply", description: "Monsoon impact on fresh-onion availability/quality" }
+  - { metric_code: "processing_capacity", description: "Gujarat dehydration plant utilisation" }
+
+macro_drivers:
+  - { metric_code: "usd_inr", description: "USD/INR exchange rate (export competitiveness)" }
+  - { metric_code: "energy_cost", description: "Drying energy / fuel cost" }
+
+logistics_drivers:
+  - { metric_code: "reefer_freight", description: "Container freight to US/EU" }
+  - { metric_code: "physical_basis", description: "FOB vs ex-factory spread" }
+
+event_risk_drivers:
+  - { metric_code: "fresh_onion_export_ban", description: "India fresh-onion export bans (raise feedstock availability)" }
+  - { metric_code: "sps_import_ban", description: "Phytosanitary / food-safety import restrictions" }
+  - { metric_code: "salmonella_recall", description: "Microbial recall / quality-rejection events" }
+
+data_sources:
+  - { source_code: "APEDA", name: "APEDA (India agri-export) price/quote data", access: "public", url: "https://apeda.gov.in" }
+  - { source_code: "TRIDGE", name: "Tridge / Selina Wamucii market intelligence", access: "subscription", url: "https://www.tridge.com" }
+  - { source_code: "UN_COMTRADE", name: "UN Comtrade (HS 071220 dried onions) trade flows", access: "public", url: "https://comtrade.un.org" }
+
+models:
+  - { model_code: "fresh_passthrough", family: "statsmodels", horizon: "monthly", description: "Fresh-onion price pass-through + processing margin" }
+  - { model_code: "fourier_seasonal", family: "fourier", horizon: "monthly", description: "Seasonal (Gujarat processing season post fresh-onion harvest)" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "monthly", description: "Gradient boosting on fresh price + FX + freight" }
+
+notes: "Dehydrated (kibbled/flakes/powder) white onion. India's Gujarat belt (Mahuva, Bhavnagar) is the world's largest dehydrator/exporter; Egypt and China compete on cost. NO futures and NO free daily price feed — price discovery is via exporter FOB quotes (APEDA/Tridge) and UN Comtrade trade flows. Price is largely a pass-through of the fresh-onion feedstock cost (~7-8:1 fresh:dehydrated) plus drying energy and FX. A data source must be supplied (CSV/quotes) before this commodity can be forecast; profile is config-only for now."

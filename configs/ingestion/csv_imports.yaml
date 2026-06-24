@@ -94,7 +94,7 @@ imports:
     date_format: "%d %b %Y"
     aggregate: median
   onion_national_fresh:
-    path: "data/hist/202[45].csv"
+    path: "data/hist/202[456].csv"
     commodity_code: RED_ONION_INDIA
     instrument_code: IN_NATIONAL_MEDIAN
     currency: INR
@@ -117,7 +117,7 @@ imports:
     date_format: "%d %b %Y"
     aggregate: median
   chilli_national_fresh:
-    path: "data/hist/202[45].csv"
+    path: "data/hist/202[456].csv"
     commodity_code: INDIAN_CHILIES
     instrument_code: IN_NATIONAL_MEDIAN
     currency: INR
@@ -140,7 +140,7 @@ imports:
     date_format: "%d %b %Y"
     aggregate: median
   garlic_national_fresh:
-    path: "data/hist/202[45].csv"
+    path: "data/hist/202[456].csv"
     commodity_code: CHINESE_GARLIC
     instrument_code: IN_NATIONAL_MEDIAN
     currency: INR

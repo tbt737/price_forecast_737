@@ -40,7 +40,7 @@ PROFILE_FILES = sorted(PROFILES_DIR.glob("*.yaml"))
 
 
 def test_sixteen_profiles_present() -> None:
-    assert len(PROFILE_FILES) == 16
+    assert len(PROFILE_FILES) == 18
 
 
 @pytest.mark.parametrize("path", PROFILE_FILES, ids=lambda p: p.stem)
