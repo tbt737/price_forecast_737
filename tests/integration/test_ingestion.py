@@ -8,6 +8,7 @@ from app.models import FactPriceDaily, FactWeatherDaily
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from etl.backfill import backfill
 from etl.ingestion.config import PriceSpec, WeatherSpec, load_ingestion_config
 from etl.provenance import gate_record
 from etl.sources.market.yahoo import YahooPriceSource
@@ -71,6 +72,21 @@ def test_yahoo_ingest_writes_then_replays_idempotent(seeded_session: Session) ->
     replay = write_batch(seeded_session, replay_records, dry_run=False)
     assert replay.idempotent == 2 and replay.inserted == 0
     assert _count(seeded_session, FactPriceDaily) == 2  # no duplicates
+
+
+def test_backfill_bulk_insert_is_idempotent(seeded_session: Session) -> None:
+    spec = PriceSpec("ALPHA", "INST1", "ZC=F", "USD", "manual", release_lag_days=1)
+
+    def many_fetch(ticker: str, period: str):
+        return [{"date": date(2024, 1, d), "close": 100.0 + d} for d in range(1, 11)]  # 10 distinct days
+
+    backfill(seeded_session, connectors=[YahooPriceSource([spec], fetch=many_fetch)])
+    assert _count(seeded_session, FactPriceDaily) == 10
+
+    # re-run: ON CONFLICT DO NOTHING → no duplicates
+    report = backfill(seeded_session, connectors=[YahooPriceSource([spec], fetch=many_fetch)])
+    assert report["inserted_total"] == 0
+    assert _count(seeded_session, FactPriceDaily) == 10
 
 
 def test_nasa_ingest_writes_weather(seeded_session: Session) -> None:
