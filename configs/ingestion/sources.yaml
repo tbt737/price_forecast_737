@@ -34,3 +34,14 @@ weather:
     - { commodity_code: INDIAN_CHILIES, region_code: IN_GUNTUR, latitude: 16.31, longitude: 80.44 }
     # Indian garlic belt (Mandsaur, Madhya Pradesh) — proxy origin for the garlic series:
     - { commodity_code: CHINESE_GARLIC, region_code: IN_MADHYA_PRADESH, latitude: 24.07, longitude: 75.07 }
+
+macro:
+  source_code: yahoo # Yahoo FX series; written to fact_macro_daily (shared, no commodity)
+  release_lag_days: 1
+  # indicator_code is free-text on fact_macro_daily. FX/dollar drivers referenced by
+  # profiles' macro_drivers (usd_inr, usd_cny). Collected for the Drivers view; NOT a
+  # forecast feature — backtests show FX gives no robust accuracy gain on these series.
+  indicators:
+    - { indicator_code: usd_inr, ticker: "INR=X", unit: "INR per USD" }
+    - { indicator_code: usd_cny, ticker: "CNY=X", unit: "CNY per USD" }
+    - { indicator_code: dollar_index, ticker: "DX-Y.NYB", unit: "DXY index" }

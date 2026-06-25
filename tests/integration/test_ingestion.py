@@ -9,9 +9,10 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from etl.backfill import backfill
-from etl.ingestion.config import CsvImportSpec, PriceSpec, WeatherSpec, load_ingestion_config
+from etl.ingestion.config import CsvImportSpec, MacroSpec, PriceSpec, WeatherSpec, load_ingestion_config
 from etl.provenance import gate_record
 from etl.sources.csv_file import CsvPriceSource
+from etl.sources.macro.yahoo_fx import MacroFxSource
 from etl.sources.market.yahoo import YahooPriceSource
 from etl.sources.weather.nasa_power import NasaPowerSource
 from etl.writer import write_batch
@@ -131,6 +132,21 @@ def test_csv_price_source_single_commodity_file(tmp_path) -> None:
     )
     by_day = {r.observation_date.isoformat(): float(r.value) for r in CsvPriceSource(spec).collect()}
     assert by_day == {"2025-01-02": 1100.0, "2025-01-03": 2000.0}
+
+
+def test_macro_fx_connector_builds_shared_records() -> None:
+    spec = MacroSpec("usd_inr", "INR=X", "manual", release_lag_days=1, unit="INR per USD")
+
+    def fetch(ticker: str, period: str):
+        return [{"date": date(2025, 1, 2), "close": 83.5}, {"date": date(2025, 1, 3), "close": 83.7}]
+
+    records = list(MacroFxSource([spec], fetch=fetch).collect())
+    assert len(records) == 2
+    r = records[0]
+    assert r.indicator_code == "usd_inr" and r.commodity_code is None  # macro is shared, no commodity
+    assert r.observation_date == date(2025, 1, 2) and r.release_date == date(2025, 1, 3)
+    assert r.value == 83.5 and r.source_record_id == "manual:INR=X:2025-01-02"
+    assert gate_record(r) == []  # passes the connector provenance gate
 
 
 def test_nasa_ingest_writes_weather(seeded_session: Session) -> None:

@@ -34,13 +34,27 @@ class WeatherSpec:
 
 
 @dataclass(frozen=True)
+class MacroSpec:
+    indicator_code: str  # free-text on fact_macro_daily (e.g. "usd_inr")
+    ticker: str
+    source_code: str
+    release_lag_days: int
+    unit: str | None = None
+
+
+@dataclass(frozen=True)
 class IngestionConfig:
     prices: list[PriceSpec]
     weather: list[WeatherSpec]
+    macro: list[MacroSpec]
 
     @property
     def source_codes(self) -> set[str]:
-        return {s.source_code for s in self.prices} | {s.source_code for s in self.weather}
+        return (
+            {s.source_code for s in self.prices}
+            | {s.source_code for s in self.weather}
+            | {s.source_code for s in self.macro}
+        )
 
 
 @dataclass(frozen=True)
@@ -120,4 +134,18 @@ def load_ingestion_config(path: Path = CONFIG_PATH) -> IngestionConfig:
         for loc in w.get("locations", [])
     ]
 
-    return IngestionConfig(prices=prices, weather=weather)
+    mc = data.get("macro", {}) or {}
+    mc_source = mc.get("source_code", "yahoo")
+    mc_lag = int(mc.get("release_lag_days", 1))
+    macro = [
+        MacroSpec(
+            indicator_code=ind["indicator_code"],
+            ticker=ind["ticker"],
+            source_code=mc_source,
+            release_lag_days=mc_lag,
+            unit=ind.get("unit"),
+        )
+        for ind in mc.get("indicators", [])
+    ]
+
+    return IngestionConfig(prices=prices, weather=weather, macro=macro)
