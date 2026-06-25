@@ -6,6 +6,7 @@ their phases). Fully generic — nothing is special-cased per commodity.
 
 from __future__ import annotations
 
+import time
 from datetime import date, timedelta
 from typing import Any
 
@@ -149,9 +150,12 @@ def get_commodity_prices(
 
 
 # In-process forecast cache. Forecasting is a multi-second walk-forward; the price
-# data only changes on (infrequent) ingest, so cache the result keyed by a cheap
-# data fingerprint (row count + latest date) that auto-invalidates on new data.
-_FORECAST_CACHE: dict[str, tuple[tuple[int, str | None], dict[str, Any]]] = {}
+# data only changes on (infrequent) ingest. Cache the result keyed by a cheap data
+# fingerprint (row count + latest date) that auto-invalidates on new data. Within
+# FINGERPRINT_TTL we serve the cached result without even re-running the fingerprint
+# query, so warm repeat calls are instant.
+_FORECAST_CACHE: dict[str, tuple[float, tuple[int, str | None], dict[str, Any]]] = {}
+FINGERPRINT_TTL = 300.0  # seconds before re-checking whether the data changed
 
 
 @router.get("/commodities/{commodity_code}/forecast", response_model=None)
@@ -161,6 +165,10 @@ def get_commodity_forecast(commodity_code: str, db: Session = Depends(get_db)) -
     flat naive line per-horizon where no model beats naive out-of-sample. Cached per
     commodity until its price data changes. ``available: false`` with too little history."""
     code = commodity_code.upper()
+    cached = _FORECAST_CACHE.get(code)
+    if cached is not None and time.monotonic() - cached[0] < FINGERPRINT_TTL:
+        return cached[2]  # warm: skip even the fingerprint query
+
     commodity = db.execute(select(DimCommodity).filter_by(commodity_code=code)).scalar_one_or_none()
     if commodity is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Unknown commodity '{commodity_code}'")
@@ -171,14 +179,14 @@ def get_commodity_forecast(commodity_code: str, db: Session = Depends(get_db)) -
         )
     ).one()
     fingerprint = (int(row[0]), row[1].isoformat() if row[1] else None)
-    cached = _FORECAST_CACHE.get(code)
-    if cached is not None and cached[0] == fingerprint:
-        return cached[1]
+    if cached is not None and cached[1] == fingerprint:
+        _FORECAST_CACHE[code] = (time.monotonic(), fingerprint, cached[2])  # data unchanged; refresh TTL
+        return cached[2]
 
     from ml.forecast import forecast_commodity
 
     result = forecast_commodity(db, code)
-    _FORECAST_CACHE[code] = (fingerprint, result)
+    _FORECAST_CACHE[code] = (time.monotonic(), fingerprint, result)
     return result
 
 
