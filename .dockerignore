@@ -1,0 +1,13 @@
+# Keep the API image build context lean (build context is the repo root).
+.git/
+data/
+.env
+*.db
+**/__pycache__/
+**/*.pyc
+# Frontend is deployed separately (Vercel); not needed in the API image.
+apps/web/node_modules/
+apps/web/.next/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/

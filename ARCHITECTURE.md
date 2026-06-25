@@ -1,8 +1,15 @@
 # ARCHITECTURE — Multi-Commodity Quant Forecasting Platform
 
-> **Status:** Phase 1 (Foundation Initialization) complete. No business logic, API
-> endpoints, ML training code, or frontend UI is implemented yet — only the
-> configuration-driven skeleton and contracts described here.
+> **Status:** Phases 1–9 implemented. 18 commodity profiles; star schema + loaders;
+> ETL connectors (Yahoo prices, NASA POWER weather, config-driven CSV/Agmarknet
+> imports) with a fail-closed provenance gate; ML forecasting (Ridge AR + XGBoost,
+> multi-scale Cobweb cycle harmonics with wavelet stability, anchored damped-trend
+> Fourier baseline) chosen per-commodity by walk-forward backtest with an honest
+> naive fallback; FastAPI service (cached forecasts) + Next.js dashboard with a
+> forecast-compare view; daily GitHub Actions ingest. Outstanding: macro/logistics/
+> S&D/event-driver connectors (Phase 3B), materialized views (Phase 5), model
+> registry (Phase 7), and productionization (Phase 10 — Dockerfile + DEPLOY.md
+> exist; cloud hosting pending). See `DEPLOY.md` to go live.
 
 ---
 
