@@ -10,9 +10,8 @@
   "containers": [
     {
       "class_name": "ApiContainer",
-      // Dockerfile is under apps/api, but it COPYs sibling dirs (ml/, etl/, configs/),
-      // so the build context MUST be the repo root:
-      "image": "./apps/api/Dockerfile",
+      // Root Dockerfile; build context is the repo root (COPYs ml/, etl/, configs/).
+      "image": "./Dockerfile",
       "image_build_context": ".",
       // 1/2 vCPU, 4 GiB — comfortable for xgboost/pandas/PyWavelets + a forecast.
       // 'basic' (1 GiB) also works but is tighter/slower.

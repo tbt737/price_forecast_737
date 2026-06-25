@@ -1,25 +1,20 @@
 # DEPLOY — going live
 
-Recommended stack — **Supabase + Cloudflare** (one ecosystem, scale-to-zero):
+Recommended stack:
 
 | Layer | Host | Notes |
 | ----- | ---- | ----- |
-| Database | **Supabase** (already used) | Nothing to do — it already holds the data. Supabase can ONLY be the DB: its Edge Functions run Deno/TS, not this Python service. |
-| Backend (FastAPI + ML) | **Cloudflare Containers** | Runs `apps/api/Dockerfile` (Python/Docker, up to 4 GiB RAM / 0.5 vCPU, scale-to-zero). Available since June 2025. |
-| Frontend (Next.js) | **Cloudflare Pages** | Native Next.js hosting. |
+| Database | **Supabase** (already used) | Already holds the data. Supabase can ONLY be the DB — its Edge Functions run Deno/TS, not this Python service. |
+| Backend (FastAPI + ML) | **Google Cloud Run** | Runs the root `Dockerfile`. Configurable CPU (1–2 vCPU → faster forecasts than the alternatives), generous always-free tier, GA/stable, scale-to-zero. |
+| Frontend (Next.js) | **Cloudflare Pages** | Native Next.js hosting (free). |
 
-> Render / Railway / Fly.io also run the same Dockerfile if you ever want a
-> dedicated always-on backend — but Cloudflare Containers covers it now, so the
-> whole app is Supabase (DB) + Cloudflare (frontend + backend).
+> Alternatives for the backend (same `Dockerfile`, unchanged): **Cloudflare
+> Containers** (all-Cloudflare, but Workers Paid $5/mo + 0.5 vCPU + open beta) or
+> **Render / Railway / Fly.io**. Cloud Run is recommended: more CPU for the
+> CPU-heavy XGBoost forecast, likely $0 on the free tier, and battle-tested.
 
-The API image is verified: `docker build -f apps/api/Dockerfile -t cqp-api .` builds,
-and the container serves real forecasts against Supabase. It is `linux/amd64`
-(Cloudflare Containers' required arch).
-
-**Cloudflare Containers caveats:** 0.5 vCPU makes a cold forecast (~6–9s) a little
-slower, but the response cache makes repeat calls instant; scale-to-zero adds a
-~15–20s cold start on the first request after idle; disks are ephemeral (fine — all
-state is in Supabase).
+The image is verified: `docker build -t cqp-api .` builds and the container serves
+real forecasts against Supabase (`$PORT`-aware, so it drops into Cloud Run as-is).
 
 ---
 
@@ -40,11 +35,41 @@ postgresql+psycopg://postgres.<ref>:<PASSWORD>@aws-1-<region>.pooler.supabase.co
 
 ---
 
-## 1. Backend → Cloudflare Containers
+## 1. Backend → Google Cloud Run (recommended)
+
+Easiest with **Cloud Shell** (browser — `gcloud`, `docker`, `git` pre-installed, no
+local install). Open <https://shell.cloud.google.com>, then:
+
+```bash
+git clone https://github.com/tbt737/price_forecast_737.git
+cd price_forecast_737
+
+gcloud config set project <YOUR_PROJECT_ID>
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com
+
+gcloud run deploy cqp-api \
+  --source . \
+  --region asia-northeast1 \            # Tokyo = same region as Supabase
+  --memory 2Gi --cpu 2 \
+  --timeout 120 \
+  --allow-unauthenticated \
+  --set-env-vars "DATABASE_URL=<SUPABASE_SESSION_POOLER_URL>"   # the pooler URL, step 0
+```
+
+`--source .` makes Cloud Build build the root `Dockerfile` (the first deploy takes a
+few minutes). Cloud Run injects `PORT=8080`, which the Dockerfile honours. The
+command prints the service URL, e.g. `https://cqp-api-xxxx.asia-northeast1.run.app`.
+
+- To kill cold starts, add `--min-instances 1` (small always-on cost).
+- Prefer not to put the secret on the command line? Omit `--set-env-vars`, then set
+  `DATABASE_URL` in the Cloud Run console (Edit & deploy → Variables & Secrets) or
+  via Secret Manager.
+
+## 1-ALT. Backend → Cloudflare Containers ($5/mo, all-Cloudflare)
 
 The Worker that fronts the container is already in the repo: `wrangler.jsonc`,
 `worker/index.js` (the `ApiContainer` class + request forwarder) and `package.json`.
-The container uses `apps/api/Dockerfile` with the **repo root as build context**
+The container uses `Dockerfile` with the **repo root as build context**
 (`image_build_context: "."`) and the **`standard-1`** instance (1/2 vCPU, 4 GiB).
 
 From the repo root:
@@ -57,7 +82,7 @@ From the repo root:
    deploys the Worker. Note the URL, e.g. `https://cqp-api.<account>.workers.dev`.
    Health check: `/health`.
 
-> Prefer always-on / no cold start? The same `apps/api/Dockerfile` runs unchanged on
+> Prefer always-on / no cold start? The same `Dockerfile` runs unchanged on
 > Render / Railway / Fly.io — set `DATABASE_URL` (pooler) and deploy.
 
 ## 2. Frontend → Cloudflare Pages
@@ -89,4 +114,4 @@ the "⚖ So sánh hàng hóa" compare view should work.
 
 - Never commit `.env` (gitignored). Set `DATABASE_URL` only in the host's env / secrets.
 - The Supabase DB password appeared in chat during setup — rotate it (alphanumeric) and
-  update the Render env var + the GitHub Actions secret.
+  update the backend's env var (Cloud Run) + the GitHub Actions secret.
