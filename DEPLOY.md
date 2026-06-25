@@ -42,17 +42,20 @@ postgresql+psycopg://postgres.<ref>:<PASSWORD>@aws-1-<region>.pooler.supabase.co
 
 ## 1. Backend → Cloudflare Containers
 
-Containers are driven by a Worker that fronts the image. Easiest path with Wrangler:
+The Worker that fronts the container is already in the repo: `wrangler.jsonc`,
+`worker/index.js` (the `ApiContainer` class + request forwarder) and `package.json`.
+The container uses `apps/api/Dockerfile` with the **repo root as build context**
+(`image_build_context: "."`) and the **`standard-1`** instance (1/2 vCPU, 4 GiB).
 
-1. Push this repo to GitHub (already done: `master`).
-2. `npm i -g wrangler && wrangler login`.
-3. Add a `wrangler.toml` Worker with a `[[containers]]` binding pointing at
-   `apps/api/Dockerfile` (image build context = repo root), instance type with
-   **≥ 512 MB** (4 GiB is available; the forecast peaks ~0.5 GB).
-4. Set the secret: `wrangler secret put DATABASE_URL` → paste the **Session pooler**
-   URL (step 0). The container reads `$PORT` (the Dockerfile honours it).
-5. `wrangler deploy`. Health check path: `/health`. Note the Worker URL, e.g.
-   `https://cqp-api.<account>.workers.dev`.
+From the repo root:
+
+1. `npm install` — pulls `wrangler` + `@cloudflare/containers`.
+2. `npx wrangler login` — log into your Cloudflare account.
+3. `npx wrangler secret put DATABASE_URL` — paste the **Session pooler** URL (step 0).
+   `worker/index.js` injects it into the container's environment.
+4. `npx wrangler deploy` — Wrangler builds the Dockerfile, pushes the image, and
+   deploys the Worker. Note the URL, e.g. `https://cqp-api.<account>.workers.dev`.
+   Health check: `/health`.
 
 > Prefer always-on / no cold start? The same `apps/api/Dockerfile` runs unchanged on
 > Render / Railway / Fly.io — set `DATABASE_URL` (pooler) and deploy.

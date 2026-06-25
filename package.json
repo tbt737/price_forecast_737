@@ -1,0 +1,16 @@
+{
+  "name": "cqp-api-worker",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker + Container wrapper for the FastAPI forecast service.",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "latest"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

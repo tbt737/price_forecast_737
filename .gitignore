@@ -61,3 +61,5 @@ Thumbs.db
 
 # Raw downloaded datasets (not committed)
 /data/
+/node_modules
+.wrangler/

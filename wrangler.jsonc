@@ -1,0 +1,28 @@
+{
+  // Cloudflare Worker that fronts the FastAPI forecast service running as a
+  // Cloudflare Container. Deploy:  npx wrangler deploy   (after `wrangler login`
+  // and `wrangler secret put DATABASE_URL`).
+  "name": "cqp-api",
+  "main": "worker/index.js",
+  "compatibility_date": "2025-06-01",
+  "observability": { "enabled": true },
+
+  "containers": [
+    {
+      "class_name": "ApiContainer",
+      // Dockerfile is under apps/api, but it COPYs sibling dirs (ml/, etl/, configs/),
+      // so the build context MUST be the repo root:
+      "image": "./apps/api/Dockerfile",
+      "image_build_context": ".",
+      // 1/2 vCPU, 4 GiB — comfortable for xgboost/pandas/PyWavelets + a forecast.
+      // 'basic' (1 GiB) also works but is tighter/slower.
+      "instance_type": "standard-1",
+      "max_instances": 3
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [{ "name": "API_CONTAINER", "class_name": "ApiContainer" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ApiContainer"] }]
+}
