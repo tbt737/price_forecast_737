@@ -1,15 +1,25 @@
 # DEPLOY — going live
 
-Recommended stack (each has a free/low-cost tier):
+Recommended stack — **Supabase + Cloudflare** (one ecosystem, scale-to-zero):
 
 | Layer | Host | Notes |
 | ----- | ---- | ----- |
-| Database | **Supabase** (already used) | Nothing to do — it already holds the data. |
-| Backend (FastAPI) | **Render** (or Railway / Fly.io) | Builds `apps/api/Dockerfile`. |
-| Frontend (Next.js) | **Vercel** | Native Next.js; just point it at the backend URL. |
+| Database | **Supabase** (already used) | Nothing to do — it already holds the data. Supabase can ONLY be the DB: its Edge Functions run Deno/TS, not this Python service. |
+| Backend (FastAPI + ML) | **Cloudflare Containers** | Runs `apps/api/Dockerfile` (Python/Docker, up to 4 GiB RAM / 0.5 vCPU, scale-to-zero). Available since June 2025. |
+| Frontend (Next.js) | **Cloudflare Pages** | Native Next.js hosting. |
+
+> Render / Railway / Fly.io also run the same Dockerfile if you ever want a
+> dedicated always-on backend — but Cloudflare Containers covers it now, so the
+> whole app is Supabase (DB) + Cloudflare (frontend + backend).
 
 The API image is verified: `docker build -f apps/api/Dockerfile -t cqp-api .` builds,
-and the container serves real forecasts against Supabase.
+and the container serves real forecasts against Supabase. It is `linux/amd64`
+(Cloudflare Containers' required arch).
+
+**Cloudflare Containers caveats:** 0.5 vCPU makes a cold forecast (~6–9s) a little
+slower, but the response cache makes repeat calls instant; scale-to-zero adds a
+~15–20s cold start on the first request after idle; disks are ephemeral (fine — all
+state is in Supabase).
 
 ---
 
@@ -30,27 +40,30 @@ postgresql+psycopg://postgres.<ref>:<PASSWORD>@aws-1-<region>.pooler.supabase.co
 
 ---
 
-## 1. Backend → Render
+## 1. Backend → Cloudflare Containers
+
+Containers are driven by a Worker that fronts the image. Easiest path with Wrangler:
 
 1. Push this repo to GitHub (already done: `master`).
-2. Render → **New → Web Service** → connect the repo.
-3. **Runtime: Docker**, Dockerfile path `apps/api/Dockerfile`, build context = repo root.
-4. **Environment variable** `DATABASE_URL` = the **Session pooler** URL (step 0).
-5. Instance: the image loads xgboost + pandas + PyWavelets and a forecast peaks ~0.5 GB
-   RAM — pick at least a **512 MB** instance (Render free is borderline; the Starter
-   plan is safer). Forecasts are cached, so steady-state RAM is low.
-6. Deploy. Health check path: `/health`. Note the public URL, e.g.
-   `https://cqp-api.onrender.com`.
+2. `npm i -g wrangler && wrangler login`.
+3. Add a `wrangler.toml` Worker with a `[[containers]]` binding pointing at
+   `apps/api/Dockerfile` (image build context = repo root), instance type with
+   **≥ 512 MB** (4 GiB is available; the forecast peaks ~0.5 GB).
+4. Set the secret: `wrangler secret put DATABASE_URL` → paste the **Session pooler**
+   URL (step 0). The container reads `$PORT` (the Dockerfile honours it).
+5. `wrangler deploy`. Health check path: `/health`. Note the Worker URL, e.g.
+   `https://cqp-api.<account>.workers.dev`.
 
-> Railway/Fly.io work the same way — they all consume `apps/api/Dockerfile` and the
-> `DATABASE_URL` env var; Fly's default 256 MB VM should be bumped to 512 MB.
+> Prefer always-on / no cold start? The same `apps/api/Dockerfile` runs unchanged on
+> Render / Railway / Fly.io — set `DATABASE_URL` (pooler) and deploy.
 
-## 2. Frontend → Vercel
+## 2. Frontend → Cloudflare Pages
 
-1. Vercel → **New Project** → import the repo → **Root Directory: `apps/web`**.
-2. Environment variable `API_PROXY_TARGET` = the backend URL from step 1
-   (e.g. `https://cqp-api.onrender.com`). `next.config` rewrites `/api/*` to it.
-3. Deploy. Vercel gives you the public site URL.
+1. Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to Git** → this
+   repo → **Root directory: `apps/web`**, framework preset **Next.js**.
+2. Environment variable `API_PROXY_TARGET` = the backend URL from step 1.
+   `next.config` rewrites `/api/*` to it.
+3. Deploy. Pages gives you the public site URL (`*.pages.dev`).
 
 ## 3. Keep data fresh
 
@@ -66,7 +79,7 @@ curl https://<backend>/health
 curl https://<backend>/stats                      # 18 commodities / 63 instruments
 curl https://<backend>/commodities/GOLD/forecast  # first call ~5–9s, then cached
 ```
-Then open the Vercel URL → Commodity Explorer should show real prices + forecasts, and
+Then open the Pages URL → Commodity Explorer should show real prices + forecasts, and
 the "⚖ So sánh hàng hóa" compare view should work.
 
 ## Security
