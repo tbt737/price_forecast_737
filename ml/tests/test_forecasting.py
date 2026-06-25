@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from ml.backtests.walk_forward import walk_forward_ar
-from ml.features.cycles import propose_cycles, select_cycles
+from ml.features.cycles import _stable_subset, propose_cycles, select_cycles
 from ml.features.tabular import LOOKBACK, feature_row, training_matrix
 from ml.models.baseline import FourierTrendForecaster
 from ml.models.gbm_forecaster import GBMForecaster, is_available
@@ -117,6 +117,22 @@ def test_propose_cycles_finds_short_and_long() -> None:
 
 def test_propose_cycles_empty_on_short_history() -> None:
     assert propose_cycles(np.log(np.linspace(100.0, 110.0, 80)), rows_per_year=300.0) == []
+
+
+def test_stable_subset_drops_faded_cycle() -> None:
+    # Phase 4: a cycle present throughout survives; one that died out early is dropped.
+    rpy = 250.0
+    n = int(rpy * 12)
+    t = np.arange(n, dtype=float)
+    rng = np.random.default_rng(2)
+    persistent_p = rpy * 3.0
+    faded_p = rpy * 2.0
+    persistent = 0.25 * np.sin(2 * np.pi * t / persistent_p)
+    faded = 0.25 * np.sin(2 * np.pi * t / faded_p) * (t < n / 2)  # only in the first half
+    logy = np.log(100.0) + 0.0005 * t + persistent + faded + rng.normal(0, 0.015, n)
+    kept = _stable_subset(logy, [persistent_p, faded_p])
+    assert persistent_p in kept  # recurring + still active
+    assert faded_p not in kept  # faded out -> rejected by recency
 
 
 @pytest.mark.skipif(not is_available(), reason="xgboost not installed")

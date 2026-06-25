@@ -78,13 +78,53 @@ def propose_cycles(
 MIN_R2 = 0.006  # a cycle must explain >=0.6% of the h-ahead return variance to be kept
 
 
-def _is_stable(logy: np.ndarray, period: float, *, frac: float = 0.5) -> bool:
-    """Phase 4 (light) — is ``period`` a recurring peak, not a one-off?
+def _stable_subset(
+    logy: np.ndarray, periods: list[float], *, frac: float = 0.4, recent_frac: float = 0.25
+) -> list[float]:
+    """Phase 4 (full) — keep only recurring, still-active cycles via a Morlet
+    continuous-wavelet scalogram.
 
-    Rolling-window spectrogram: split the history into windows ~3 cycles long and
-    require the period to stand out (power in the top third of its window's band)
-    in at least ``frac`` of them. Too few windows to judge ⇒ not rejected ("no
-    spring is identical" — we only drop cycles that clearly appear once)."""
+    A cycle is kept only if its scale stands out (top third of the scalogram column)
+    in >= ``frac`` of the timeline AND in >= ``frac`` of the most recent
+    ``recent_frac`` — a cycle that faded long ago must not drive a near-term forecast
+    ("no spring is identical"). One scalogram is built per call (covering every
+    candidate) on a decimated signal, so it stays cheap. Falls back to a per-window
+    STFT check if pywt is unavailable."""
+    if not periods:
+        return []
+    try:
+        import pywt
+    except Exception:
+        return [p for p in periods if _rolling_window_stable(logy, p)]
+
+    m = len(logy)
+    step = max(1, m // 1500)  # decimate long series; multi-row cycles survive
+    sig0 = logy[::step]
+    n = len(sig0)
+    if n < 64:
+        return periods
+    t = np.arange(n, dtype=float)
+    sig = sig0 - np.polyval(np.polyfit(t, sig0, 1), t)
+    dperiods = [p / step for p in periods]
+    lo, hi = max(6.0, 0.4 * min(dperiods)), min(n / 2.0, 2.5 * max(dperiods))
+    if hi <= lo:
+        return periods
+    scales = np.geomspace(lo, hi, 18)  # central_freq(cmor1.5-1.0)=1.0 ⇒ scale≈period
+    coef, _ = pywt.cwt(sig, scales, "cmor1.5-1.0", sampling_period=1.0)
+    power = np.abs(coef) ** 2  # [n_scales, n]
+    col_thresh = np.quantile(power, 0.67, axis=0)
+    cut = int(n * (1.0 - recent_frac))
+    kept: list[float] = []
+    for period, dp in zip(periods, dperiods, strict=True):
+        present = power[int(np.argmin(np.abs(scales - dp)))] >= col_thresh
+        if present.mean() >= frac and present[cut:].mean() >= frac:
+            kept.append(period)
+    return kept
+
+
+def _rolling_window_stable(logy: np.ndarray, period: float, *, frac: float = 0.5) -> bool:
+    """STFT fallback (pywt absent): the period must stand out in >= ``frac`` of
+    windows ~3 cycles long AND in the most recent window. Too few windows ⇒ kept."""
     m = len(logy)
     wlen = int(3.0 * period)
     if wlen < 48 or m < 2 * wlen:
@@ -93,19 +133,16 @@ def _is_stable(logy: np.ndarray, period: float, *, frac: float = 0.5) -> bool:
     if nwin < 2:
         return True
     target_f = 1.0 / period
-    hits = 0
+    win_hit: list[bool] = []
     for w in range(nwin):
         seg = logy[w * wlen : (w + 1) * wlen]
         tt = np.arange(len(seg), dtype=float)
         seg = seg - np.polyval(np.polyfit(tt, seg, 1), tt)
         power = np.abs(np.fft.rfft(seg * np.hanning(len(seg)))) ** 2
         freq = np.fft.rfftfreq(len(seg), d=1.0)
-        band = (freq > 0.5 * target_f) & (freq < 1.5 * target_f)  # near the candidate period
-        if not band.any():
-            continue
-        if power[band].max() >= np.quantile(power[1:], 0.67):  # stands out vs the window's spectrum
-            hits += 1
-    return hits >= max(1, int(round(frac * nwin)))
+        band = (freq > 0.5 * target_f) & (freq < 1.5 * target_f)
+        win_hit.append(bool(band.any() and power[band].max() >= np.quantile(power[1:], 0.67)))
+    return sum(win_hit) >= max(1, int(round(frac * nwin))) and win_hit[-1]
 
 
 def select_cycles(
@@ -141,12 +178,15 @@ def select_cycles(
         return []
     ones = np.ones_like(fut)
     scored: list[tuple[float, float]] = []
-    for period in candidates:
+    for period in candidates:  # Phase 3: predictive (linear R^2 of the harmonic)
         a = 2.0 * np.pi * idx / period
         x = np.column_stack([ones, np.sin(a), np.cos(a)])
         beta, *_ = np.linalg.lstsq(x, fut, rcond=None)
         r2 = 1.0 - float(np.sum((fut - x @ beta) ** 2)) / ss_tot
-        if r2 >= MIN_R2 and _is_stable(logy[:m], period):  # predictive AND recurring
+        if r2 >= MIN_R2:
             scored.append((period, r2))
+    # Phase 4: keep only recurring + still-active cycles (one wavelet scalogram).
+    stable = set(_stable_subset(logy[:m], [p for p, _ in scored]))
+    scored = [(p, r2) for p, r2 in scored if p in stable]
     scored.sort(key=lambda s: s[1], reverse=True)
     return [p for p, _ in scored[:max_keep]]
