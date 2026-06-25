@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { api, type Commodity, type Stats } from "@/shared/api";
 import { cn } from "@/shared/lib/cn";
@@ -22,6 +22,8 @@ export function CommodityExplorer() {
   const [compareMode, setCompareMode] = useState(false);
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
 
+  const detailRef = useRef<HTMLDivElement>(null);
+
   const toggleCompare = (code: string) =>
     setCompareSet((prev) => {
       const next = new Set(prev);
@@ -29,6 +31,14 @@ export function CommodityExplorer() {
       else next.add(code);
       return next;
     });
+
+  // On phones the detail sits below the (stacked) list — scroll it into view on pick.
+  const selectCommodity = (code: string) => {
+    setSelected(code);
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -121,7 +131,7 @@ export function CommodityExplorer() {
         </div>
         {compareMode ? (
           <span className="text-xs text-muted">
-            Tích vào các hàng bên trái (2 trở lên) để so sánh dự báo · đang chọn{" "}
+            Tích chọn ít nhất 2 mặt hàng để so sánh dự báo · đang chọn{" "}
             <b className="text-text">{compareSet.size}</b>
           </span>
         ) : null}
@@ -142,7 +152,7 @@ export function CommodityExplorer() {
               />
             }
           />
-          <div className="max-h-[68vh] overflow-y-auto">
+          <div className="max-h-[48vh] overflow-y-auto lg:max-h-[68vh]">
             {filtered.map((c) => {
               const on = compareMode ? compareSet.has(c.commodity_code) : c.commodity_code === selected;
               const s = sectorMeta(c.commodity_group);
@@ -150,7 +160,7 @@ export function CommodityExplorer() {
                 <button
                   key={c.commodity_code}
                   onClick={() =>
-                    compareMode ? toggleCompare(c.commodity_code) : setSelected(c.commodity_code)
+                    compareMode ? toggleCompare(c.commodity_code) : selectCommodity(c.commodity_code)
                   }
                   className={cn(
                     "flex w-full items-center gap-2 border-b border-border/60 px-4 py-2.5 text-left transition-colors last:border-0 hover:bg-surface-2",
@@ -183,7 +193,8 @@ export function CommodityExplorer() {
           </div>
         </Card>
 
-        <Card>
+        <div ref={detailRef} className="scroll-mt-16">
+          <Card>
           <CardHeader
             title={compareMode ? "So sánh dự báo" : "Chi tiết profile"}
             right={
@@ -210,10 +221,11 @@ export function CommodityExplorer() {
             ) : selected ? (
               <ProfileDetail code={selected} />
             ) : (
-              <EmptyState title="Chọn một commodity" hint="Bấm vào một hàng ở danh sách bên trái để xem hồ sơ chi tiết." />
+              <EmptyState title="Chọn một mặt hàng" hint="Bấm vào một mặt hàng trong danh sách để xem hồ sơ chi tiết." />
             )}
           </CardBody>
-        </Card>
+          </Card>
+        </div>
       </div>
     </div>
   );

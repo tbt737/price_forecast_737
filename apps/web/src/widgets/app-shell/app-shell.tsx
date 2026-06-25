@@ -10,19 +10,22 @@ export function AppShell({ children }: { children: ReactNode }) {
         className="sticky top-0 z-20 border-b border-border backdrop-blur"
         style={{ background: "color-mix(in srgb, var(--surface) 88%, transparent)" }}
       >
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-6 py-3">
+        <div className="mx-auto flex max-w-7xl items-center gap-2.5 px-4 py-3 sm:gap-3 sm:px-6">
           <span
-            className="grid h-9 w-9 place-items-center rounded-xl text-lg"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-lg"
             style={{ background: "var(--brand-soft)" }}
             aria-hidden
           >
             🌾
           </span>
-          <div className="leading-tight">
-            <h1 className="text-sm font-semibold tracking-tight">Multi-Commodity Quant Forecasting</h1>
-            <p className="text-xs text-muted">Configuration-driven platform</p>
+          <div className="min-w-0 leading-tight">
+            <h1 className="truncate text-sm font-semibold tracking-tight">
+              <span className="sm:hidden">Quant Forecasting</span>
+              <span className="hidden sm:inline">Multi-Commodity Quant Forecasting</span>
+            </h1>
+            <p className="hidden text-xs text-muted sm:block">Configuration-driven platform</p>
           </div>
-          <nav className="ml-auto flex items-center gap-4">
+          <nav className="ml-auto flex shrink-0 items-center gap-3 sm:gap-4">
             <a
               href="/api/docs"
               className="text-xs font-medium text-info hover:underline"
@@ -35,8 +38,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-6 py-6">{children}</main>
-      <footer className="mx-auto max-w-7xl px-6 pb-10 pt-4 text-xs text-subtle">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">{children}</main>
+      <footer className="mx-auto max-w-7xl px-4 pb-10 pt-4 text-xs text-subtle sm:px-6">
         Read-only data layer · charts marked DEMO are synthetic · API at{" "}
         <a href="/api/docs" className="text-info hover:underline" target="_blank" rel="noopener noreferrer">
           /api/docs
