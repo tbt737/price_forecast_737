@@ -45,3 +45,17 @@ macro:
     - { indicator_code: usd_inr, ticker: "INR=X", unit: "INR per USD" }
     - { indicator_code: usd_cny, ticker: "CNY=X", unit: "CNY per USD" }
     - { indicator_code: dollar_index, ticker: "DX-Y.NYB", unit: "DXY index" }
+
+events:
+  source_code: NOAA
+  release_lag_days: 10
+  metrics:
+    - { metric_code: el_nino_la_nina, category: "climate", description: "NOAA Oceanic Nino Index" }
+
+supply_demand:
+  source_code: USDA_FAS
+  release_lag_days: 0
+  series:
+    # PSD parameters are identified by their 'attributeId'. We map them to our metric_code.
+    # Coffee PSD commodity code is '0711100'
+    - { commodity_code: ROBUSTA, usda_commodity_id: "0711100", metrics: { "production_estimate": 28, "exportable_surplus": 88, "certified_stocks": 178 } }

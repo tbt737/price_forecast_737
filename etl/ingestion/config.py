@@ -43,10 +43,28 @@ class MacroSpec:
 
 
 @dataclass(frozen=True)
+class EventRiskSpec:
+    metric_code: str
+    category: str
+    source_code: str
+    release_lag_days: int
+    description: str | None = None
+
+@dataclass(frozen=True)
+class SupplyDemandSpec:
+    commodity_code: str
+    usda_commodity_id: str
+    source_code: str
+    release_lag_days: int
+    metrics: dict[str, int] # metric_code -> usda attribute ID
+
+@dataclass(frozen=True)
 class IngestionConfig:
     prices: list[PriceSpec]
     weather: list[WeatherSpec]
     macro: list[MacroSpec]
+    events: list[EventRiskSpec]
+    supply_demand: list[SupplyDemandSpec]
 
     @property
     def source_codes(self) -> set[str]:
@@ -54,6 +72,8 @@ class IngestionConfig:
             {s.source_code for s in self.prices}
             | {s.source_code for s in self.weather}
             | {s.source_code for s in self.macro}
+            | {s.source_code for s in self.events}
+            | {s.source_code for s in self.supply_demand}
         )
 
 
@@ -148,4 +168,32 @@ def load_ingestion_config(path: Path = CONFIG_PATH) -> IngestionConfig:
         for ind in mc.get("indicators", [])
     ]
 
-    return IngestionConfig(prices=prices, weather=weather, macro=macro)
+    ev = data.get("events", {}) or {}
+    ev_source = ev.get("source_code", "NOAA")
+    ev_lag = int(ev.get("release_lag_days", 10))
+    events = [
+        EventRiskSpec(
+            metric_code=m["metric_code"],
+            category=m.get("category", "climate"),
+            source_code=ev_source,
+            release_lag_days=ev_lag,
+            description=m.get("description"),
+        )
+        for m in ev.get("metrics", [])
+    ]
+
+    sd = data.get("supply_demand", {}) or {}
+    sd_source = sd.get("source_code", "USDA_FAS")
+    sd_lag = int(sd.get("release_lag_days", 0))
+    supply_demand = [
+        SupplyDemandSpec(
+            commodity_code=s["commodity_code"],
+            usda_commodity_id=s["usda_commodity_id"],
+            source_code=sd_source,
+            release_lag_days=sd_lag,
+            metrics=s.get("metrics", {}),
+        )
+        for s in sd.get("series", [])
+    ]
+
+    return IngestionConfig(prices=prices, weather=weather, macro=macro, events=events, supply_demand=supply_demand)

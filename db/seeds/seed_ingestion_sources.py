@@ -21,6 +21,8 @@ INGESTION_SOURCES: dict[str, tuple[str, str]] = {
     "yahoo": ("Yahoo Finance (daily futures prices via yfinance)", "public"),
     "NASA_POWER": ("NASA POWER agroclimatology (daily weather)", "public"),
     "csv_import": ("Imported from a local CSV dataset (e.g. Kaggle/Agmarknet)", "public"),
+    "NOAA": ("NOAA Climate Prediction Center", "public"),
+    "USDA_FAS": ("USDA Foreign Agricultural Service (PSD)", "public"),
 }
 
 
