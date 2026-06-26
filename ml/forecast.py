@@ -114,6 +114,47 @@ def forecast_commodity(
     y = np.array(values, dtype=float)
     logy = np.log(y)
     doy = np.array([d.timetuple().tm_yday for d in dates], dtype=float)
+
+    import pandas as pd
+    from sqlalchemy import text
+
+    view_query = text("SELECT * FROM mv_ml_daily_features_wide WHERE commodity_key = :key ORDER BY as_of_date")
+    res = session.execute(view_query, {"key": commodity.commodity_key})
+    data = res.fetchall()
+    if data:
+        cols = list(res.keys())
+        df_view = pd.DataFrame(data, columns=cols)
+        df_view['as_of_date'] = pd.to_datetime(df_view['as_of_date']).dt.date
+        df_view = df_view.set_index('as_of_date')
+        drop_cols = [c for c in ["commodity_key", "price_close"] if c in df_view.columns]
+        df_view = df_view.drop(columns=drop_cols)
+
+        import logging
+        logger = logging.getLogger(__name__)
+
+        for c in df_view.columns:
+            # apply numeric coercion only to feature columns
+            df_view[c] = pd.to_numeric(df_view[c], errors="coerce")
+
+        # Drop columns that are completely NaN after coercion
+        nan_cols = df_view.columns[df_view.isna().all()].tolist()
+        if nan_cols:
+            logger.warning(f"Dropping columns due to non-numeric garbage: {nan_cols}")
+            df_view = df_view.drop(columns=nan_cols)
+
+        # time-safe imputation
+        df_view = df_view.sort_index()
+        df_view = df_view.ffill()
+        df_view = df_view.reindex(dates, method="ffill")
+
+        # train-only median/imputer substitute (using past available data)
+        df_view = df_view.fillna(df_view.median()).fillna(0.0)
+
+        exog_feature_names = df_view.columns.tolist()
+        logger.info(f"Final exog_feature_names passed to model: {exog_feature_names}")
+        exog_features = df_view.values
+    else:
+        exog_features = np.empty((len(dates), 0))
     ret_sigma = float(np.std(np.diff(logy), ddof=1)) if len(logy) > 1 else 0.0
     anchor_idx = len(values) - 1
     y_anchor = float(values[-1])
@@ -125,23 +166,23 @@ def forecast_commodity(
         future_dates = _next_business_days(dates[-1], h)
 
         # Backtest every candidate out-of-sample; the naive MAPE is the bar to beat.
-        ar = walk_forward_ar(dates, y, horizon=h, l2=l2)
+        ar = walk_forward_ar(dates, y, horizon=h, l2=l2, exog_features=exog_features)
         naive_mape = ar.naive_mape
         candidates: dict[str, float] = {"ridge_ar": ar.model_mape}
-        builders: dict[str, Any] = {"ridge_ar": lambda hh=h: RidgeARForecaster(horizon=hh, l2=l2).fit(logy, doy)}
+        builders: dict[str, Any] = {"ridge_ar": lambda hh=h: RidgeARForecaster(horizon=hh, l2=l2).fit(logy, doy, exog_features=exog_features)}
         if gbm_available():
-            gb = walk_forward_gbm(dates, y, horizon=h)
+            gb = walk_forward_gbm(dates, y, horizon=h, exog_features=exog_features)
             candidates["gbm"] = gb.model_mape
-            builders["gbm"] = lambda hh=h: GBMForecaster(horizon=hh).fit(logy, doy)
+            builders["gbm"] = lambda hh=h: GBMForecaster(horizon=hh).fit(logy, doy, exog_features=exog_features)
             # Cycle-augmented candidate — multi-scale cycles chosen by the inner
             # backtest filter (Phase 3), per horizon. Only added when a cycle survives.
             prod_cycles = select_cycles(logy, doy, rows_per_year=rpy, horizon=h)
             if prod_cycles:
-                gbc = walk_forward_gbm(dates, y, horizon=h, use_cycles=True)
+                gbc = walk_forward_gbm(dates, y, horizon=h, use_cycles=True, exog_features=exog_features)
                 candidates["gbm_cyc"] = gbc.model_mape
                 builders["gbm_cyc"] = lambda hh=h, pp=tuple(prod_cycles): GBMForecaster(
                     horizon=hh, cycle_periods=pp
-                ).fit(logy, doy)
+                ).fit(logy, doy, exog_features=exog_features)
 
         finite = {k: v for k, v in candidates.items() if np.isfinite(v)}
         best = min(finite, key=lambda k: finite[k]) if finite else None
@@ -149,7 +190,7 @@ def forecast_commodity(
         # against picking a noise-level "winner" out of several candidates).
         if best is not None and np.isfinite(naive_mape) and finite[best] < naive_mape * (1.0 - SWITCH_MARGIN):
             model = builders[best]()
-            point, lower, upper = model.forecast_interval(logy, doy, anchor_idx, y_anchor, h)
+            point, lower, upper = model.forecast_interval(logy, doy, anchor_idx, y_anchor, h, exog_features=exog_features)
             model_used, chosen_mape = best, finite[best]
         else:
             point, lower, upper = _naive_interval(y_anchor, ret_sigma, h)

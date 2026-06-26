@@ -21,6 +21,9 @@ NETWORK_EXEMPT = {
     ETL_DIR / "sources" / "market" / "yahoo.py",
     ETL_DIR / "sources" / "weather" / "nasa_power.py",
     ETL_DIR / "sources" / "macro" / "yahoo_fx.py",
+    ETL_DIR / "sources" / "events" / "noaa_oni.py",
+    ETL_DIR / "sources" / "supply_demand" / "usda_psd.py",
+    ETL_DIR / "sources" / "supply_demand" / "usda_psd_bulk.py",
 }
 
 
