@@ -57,10 +57,14 @@ class GBMForecaster:
     booster_: Any = None  # None ⇒ predicts zero return ⇒ falls back to naive
     ret_sigma_: float = 0.0
 
-    def fit(self, logy: np.ndarray, doy: np.ndarray, *, end: int | None = None) -> GBMForecaster:
+    def fit(
+        self, logy: np.ndarray, doy: np.ndarray, *, exog_features: np.ndarray | None = None, end: int | None = None
+    ) -> GBMForecaster:
         import xgboost as xgb
 
-        x, y = training_matrix(logy, doy, horizon=self.horizon, end=end, cycle_periods=self.cycle_periods)
+        x, y = training_matrix(
+            logy, doy, horizon=self.horizon, end=end, cycle_periods=self.cycle_periods, exog_features=exog_features
+        )
         if x.shape[0] >= MIN_ROWS:
             dtrain = xgb.DMatrix(x[:, 1:], label=y)  # drop the intercept column for trees
             self.booster_ = xgb.train(self.params, dtrain, num_boost_round=self.num_round)
@@ -70,23 +74,44 @@ class GBMForecaster:
         self.ret_sigma_ = float(np.std(np.diff(window), ddof=1)) if len(window) > 1 else 0.0
         return self
 
-    def predict_return(self, logy: np.ndarray, doy: np.ndarray, i: int) -> float:
+    def predict_return(
+        self, logy: np.ndarray, doy: np.ndarray, i: int, *, exog_features: np.ndarray | None = None
+    ) -> float:
         if self.booster_ is None:
             return 0.0
         import xgboost as xgb
 
-        feat = feature_row(logy, doy, i, cycle_periods=self.cycle_periods)[1:].reshape(1, -1)
+        feat = feature_row(logy, doy, i, cycle_periods=self.cycle_periods, exog_features=exog_features)[1:].reshape(
+            1, -1
+        )
         return float(self.booster_.predict(xgb.DMatrix(feat))[0])
 
-    def forecast(self, logy: np.ndarray, doy: np.ndarray, anchor_idx: int, y_anchor: float, steps: int) -> np.ndarray:
-        total = self.predict_return(logy, doy, anchor_idx)
+    def forecast(
+        self,
+        logy: np.ndarray,
+        doy: np.ndarray,
+        anchor_idx: int,
+        y_anchor: float,
+        steps: int,
+        *,
+        exog_features: np.ndarray | None = None,
+    ) -> np.ndarray:
+        total = self.predict_return(logy, doy, anchor_idx, exog_features=exog_features)
         k = np.arange(1, steps + 1, dtype=float)
         return float(y_anchor) * np.exp(total * k / float(self.horizon))
 
     def forecast_interval(
-        self, logy: np.ndarray, doy: np.ndarray, anchor_idx: int, y_anchor: float, steps: int, *, z: float = 1.2816
+        self,
+        logy: np.ndarray,
+        doy: np.ndarray,
+        anchor_idx: int,
+        y_anchor: float,
+        steps: int,
+        *,
+        exog_features: np.ndarray | None = None,
+        z: float = 1.2816,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        point = self.forecast(logy, doy, anchor_idx, y_anchor, steps)
+        point = self.forecast(logy, doy, anchor_idx, y_anchor, steps, exog_features=exog_features)
         s = np.arange(1, steps + 1)
         band = z * self.ret_sigma_ * np.sqrt(s)
         return point, point * np.exp(-band), point * np.exp(band)

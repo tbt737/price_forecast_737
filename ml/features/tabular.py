@@ -36,7 +36,12 @@ FEATURE_NAMES = (
 
 
 def feature_row(
-    logy: np.ndarray, doy: np.ndarray, i: int, *, cycle_periods: Sequence[float] = ()
+    logy: np.ndarray,
+    doy: np.ndarray,
+    i: int,
+    *,
+    cycle_periods: Sequence[float] = (),
+    exog_features: np.ndarray | None = None,
 ) -> np.ndarray:
     """Features at index ``i`` using only data up to and including ``i``.
 
@@ -65,11 +70,20 @@ def feature_row(
         a = 2.0 * np.pi * float(i) / float(period)
         feats.append(float(np.sin(a)))
         feats.append(float(np.cos(a)))
-    return np.array(feats, dtype=float)
+    row_features = np.array(feats, dtype=float)
+    if exog_features is not None:
+        row_features = np.concatenate((row_features, exog_features[i]))
+    return row_features
 
 
 def training_matrix(
-    logy: np.ndarray, doy: np.ndarray, *, horizon: int, end: int | None = None, cycle_periods: Sequence[float] = ()
+    logy: np.ndarray,
+    doy: np.ndarray,
+    *,
+    horizon: int,
+    end: int | None = None,
+    cycle_periods: Sequence[float] = (),
+    exog_features: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Build (X, y) where y is the ``horizon``-day-ahead log-return.
 
@@ -83,8 +97,9 @@ def training_matrix(
     rows: list[np.ndarray] = []
     targets: list[float] = []
     for i in range(LOOKBACK, stop):
-        rows.append(feature_row(logy, doy, i, cycle_periods=cycle_periods))
+        rows.append(feature_row(logy, doy, i, cycle_periods=cycle_periods, exog_features=exog_features))
         targets.append(float(logy[i + horizon] - logy[i]))
     if not rows:
-        return np.empty((0, width)), np.empty(0)
+        exog_width = exog_features.shape[1] if exog_features is not None else 0
+        return np.empty((0, width + exog_width)), np.empty(0)
     return np.vstack(rows), np.array(targets, dtype=float)

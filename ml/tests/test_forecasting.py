@@ -182,3 +182,54 @@ def test_walk_forward_ar_produces_finite_folds() -> None:
     bt = walk_forward_ar(dates, values, horizon=20, min_train=200)
     assert bt.folds > 0
     assert np.isfinite(bt.model_mape) and np.isfinite(bt.naive_mape)
+
+
+# ── exogenous features (Phase 6) ─────────────────────────────────────────────
+def test_feature_row_exog_uses_only_index_i() -> None:
+    logy = np.log(np.linspace(100.0, 130.0, 120))
+    doy = _doy(120)
+    exog = np.column_stack([np.arange(120, dtype=float), np.arange(120, dtype=float) * 2.0])
+    before = feature_row(logy, doy, 80, exog_features=exog)
+    corrupted = exog.copy()
+    corrupted[81:] = -999.0
+    after = feature_row(logy, doy, 80, exog_features=corrupted)
+    assert np.allclose(before, after)
+
+
+def test_training_matrix_exog_does_not_peek_past_end() -> None:
+    n = 400
+    logy = np.log(np.linspace(100.0, 200.0, n))
+    doy = _doy(n)
+    exog = np.column_stack([np.sin(np.arange(n) / 10.0), np.cos(np.arange(n) / 10.0)])
+    end, horizon = 200, 30
+    x, y = training_matrix(logy, doy, horizon=horizon, end=end, exog_features=exog)
+    assert x.shape[1] == len(feature_row(logy, doy, LOOKBACK, exog_features=exog))
+    assert x.shape[0] == (end - horizon) - LOOKBACK
+    corrupt = exog.copy()
+    corrupt[end:] = 0.0
+    x2, y2 = training_matrix(logy, doy, horizon=horizon, end=end, exog_features=corrupt)
+    assert np.allclose(x, x2) and np.allclose(y, y2)
+
+
+def test_ridge_with_exog_features_is_deterministic() -> None:
+    rng = np.random.default_rng(9)
+    n = 400
+    logy = np.cumsum(rng.normal(0, 0.01, n)) + np.log(100.0)
+    doy = _doy(n)
+    exog = rng.normal(0, 1, (n, 2))
+    a = RidgeARForecaster(horizon=30).fit(logy, doy, exog_features=exog).coef_
+    b = RidgeARForecaster(horizon=30).fit(logy, doy, exog_features=exog).coef_
+    assert a.shape[0] == len(feature_row(logy, doy, LOOKBACK, exog_features=exog))
+    assert np.allclose(a, b)
+
+
+def test_walk_forward_ar_with_exog_produces_finite_folds() -> None:
+    n = 500
+    rng = np.random.default_rng(11)
+    values = np.exp(np.cumsum(rng.normal(0, 0.01, n)) + np.log(100.0))
+    exog = rng.normal(0, 1, (n, 3))
+    start = date(2020, 1, 1)
+    dates = [start + timedelta(days=i) for i in range(n)]
+    bt = walk_forward_ar(dates, values, horizon=20, min_train=200, exog_features=exog)
+    assert bt.folds > 0
+    assert np.isfinite(bt.model_mape) and np.isfinite(bt.naive_mape)

@@ -28,7 +28,14 @@ def _rows_per_year(dates: list[date], n: int) -> float:
 class _AnchoredModel(Protocol):
     def fit(self, logy: np.ndarray, doy: np.ndarray, *, end: int | None = ...) -> Any: ...
     def forecast(
-        self, logy: np.ndarray, doy: np.ndarray, anchor_idx: int, y_anchor: float, steps: int
+        self,
+        logy: np.ndarray,
+        doy: np.ndarray,
+        anchor_idx: int,
+        y_anchor: float,
+        steps: int,
+        *,
+        exog_features: np.ndarray | None = None,
     ) -> np.ndarray: ...
 
 
@@ -106,6 +113,7 @@ def _walk_forward_anchored(
     make_model: Callable[[int], _AnchoredModel],
     folds: int = 5,
     min_train: int = 252,
+    exog_features: np.ndarray | None = None,
 ) -> BacktestResult:
     """Rolling-origin backtest for any anchored feature model. ``make_model(cut)``
     must return a model already fit ONLY on data before ``cut`` (``end=cut``) — the
@@ -126,7 +134,7 @@ def _walk_forward_anchored(
                 continue
             model = make_model(int(cut))
             actual = yv[cut : cut + horizon]
-            pred = model.forecast(logy, doy, int(cut) - 1, float(yv[cut - 1]), horizon)
+            pred = model.forecast(logy, doy, int(cut) - 1, float(yv[cut - 1]), horizon, exog_features=exog_features)
             model_mapes.append(_mape(actual, pred))
             model_rmses.append(_rmse(actual, pred))
             naive_mapes.append(_mape(actual, naive_last(yv[:cut], horizon)))
@@ -141,7 +149,14 @@ def _walk_forward_anchored(
 
 
 def walk_forward_ar(
-    dates: list[date], values: np.ndarray, *, horizon: int, folds: int = 5, min_train: int = 252, l2: float = 5.0
+    dates: list[date],
+    values: np.ndarray,
+    *,
+    horizon: int,
+    folds: int = 5,
+    min_train: int = 252,
+    l2: float = 5.0,
+    exog_features: np.ndarray | None = None,
 ) -> BacktestResult:
     """Walk-forward backtest for the Ridge AR forecaster."""
     logy = np.log(np.asarray(values, dtype=float))
@@ -152,7 +167,10 @@ def walk_forward_ar(
         horizon=horizon,
         folds=folds,
         min_train=min_train,
-        make_model=lambda cut: RidgeARForecaster(horizon=horizon, l2=l2).fit(logy, doy, end=cut),
+        make_model=lambda cut: RidgeARForecaster(horizon=horizon, l2=l2).fit(
+            logy, doy, exog_features=exog_features, end=cut
+        ),
+        exog_features=exog_features,
     )
 
 
@@ -164,6 +182,7 @@ def walk_forward_gbm(
     folds: int = 5,
     min_train: int = 252,
     use_cycles: bool = False,
+    exog_features: np.ndarray | None = None,
 ) -> BacktestResult:
     """Walk-forward backtest for the gradient-boosted (XGBoost) forecaster.
 
@@ -175,11 +194,11 @@ def walk_forward_gbm(
     rpy = _rows_per_year(dates, len(values))
 
     def make(cut: int) -> GBMForecaster:
-        periods = (
-            select_cycles(logy, doy, rows_per_year=rpy, horizon=horizon, end=cut) if use_cycles else []
+        periods = select_cycles(logy, doy, rows_per_year=rpy, horizon=horizon, end=cut) if use_cycles else []
+        return GBMForecaster(horizon=horizon, cycle_periods=periods).fit(
+            logy, doy, exog_features=exog_features, end=cut
         )
-        return GBMForecaster(horizon=horizon, cycle_periods=periods).fit(logy, doy, end=cut)
 
     return _walk_forward_anchored(
-        dates, values, horizon=horizon, folds=folds, min_train=min_train, make_model=make
+        dates, values, horizon=horizon, folds=folds, min_train=min_train, make_model=make, exog_features=exog_features
     )
