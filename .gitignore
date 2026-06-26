@@ -41,6 +41,9 @@ pgdata/
 
 # ── Local tooling config (machine-specific; never commit) ────────────────────────
 .claude/settings.local.json
+.agents/
+mcps/
+check_data.py
 
 # ── Data artifacts (keep dirs via .gitkeep, ignore contents) ─────────────────────
 data/raw/*
