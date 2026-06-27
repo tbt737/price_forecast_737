@@ -21,7 +21,8 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 
 from app import __version__  # noqa: E402
-from app.routers import commodities, health  # noqa: E402
+from app.core.config import get_settings  # noqa: E402
+from app.routers import commodities, health, models  # noqa: E402
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -34,6 +35,11 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(commodities.router)
+    # Phase 7B: experimental ML model-registry API — mounted only behind the
+    # ENABLE_ML_MODELS_API flag (OFF by default), so it is inert in production
+    # until explicitly enabled.
+    if get_settings().enable_ml_models_api:
+        app.include_router(models.router)
 
     @app.get("/", include_in_schema=False, response_model=None)
     def dashboard() -> FileResponse | JSONResponse:

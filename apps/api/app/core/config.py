@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     api_env: str = Field(default="development", alias="API_ENV")
     log_level: str = Field(default="info", alias="LOG_LEVEL")
 
+    # Feature flags. The experimental ML model-registry API (Phase 7B) is OFF by
+    # default — its /models endpoints are only mounted when this is true.
+    enable_ml_models_api: bool = Field(default=False, alias="ENABLE_ML_MODELS_API")
+
     profiles_dir: Path = DEFAULT_PROFILES_DIR
 
     def resolved_database_url(self, default: str | None = None) -> str:
