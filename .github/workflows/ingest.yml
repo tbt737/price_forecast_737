@@ -27,7 +27,38 @@ jobs:
           python-version: "3.13"
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Run ingestion (write)
+      # Critical path: append today's market prices via the robust backfill path
+      # (ON CONFLICT DO NOTHING) so recent-date provenance conflicts cannot roll back
+      # the batch and freeze the data. A failure here fails the job.
+      - name: Ingest daily prices
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python -m etl.ingest --write
+        run: python -m etl.ingest --backfill --sources prices --period 1mo
+
+      # Non-critical exogenous sources must never block the price feed. NOAA is
+      # fail-soft in code; these steps are also continue-on-error so a flaky upstream
+      # cannot turn CI red on its own.
+      - name: Ingest macro FX (non-blocking)
+        if: always()
+        continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m etl.ingest --backfill --sources macro --period 1mo
+
+      - name: Ingest weather + events (non-blocking)
+        if: always()
+        continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python -m etl.ingest --backfill --sources weather
+          python -m etl.ingest --backfill --sources events
+
+      # Freshness gate (read-only): the run is green ONLY if futures prices actually
+      # advanced to the previous business day or later — a green run can no longer mean
+      # "didn't crash while data is stale".
+      - name: Freshness gate
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/check_freshness.py

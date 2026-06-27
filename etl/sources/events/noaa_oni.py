@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from datetime import date, timedelta
+import logging
 import urllib.request
 from typing import Any
 
@@ -15,6 +16,8 @@ from etl.contracts import FactFamily, NormalizedRecord
 from etl.ingestion.config import EventRiskSpec
 from etl.provenance import attach_provenance
 from etl.sources.base import BaseSource
+
+logger = logging.getLogger(__name__)
 
 #: fetch() -> [{"date": date, "value": float}, ...]
 OniFetch = Callable[[], list[dict[str, Any]]]
@@ -77,7 +80,17 @@ class NoaaOniSource(BaseSource):
         if not spec:
             return records
 
-        for row in self._fetch():
+        # Fail soft: NOAA is a flaky, non-critical exogenous source. If the fetch is
+        # unavailable / empty / unparseable, skip the event_risk family for this run
+        # rather than raising and killing the whole (price-critical) ingest. Only the
+        # expected network/HTTP/empty/parse cases are caught — programmer errors propagate.
+        try:
+            rows = list(self._fetch())
+        except (OSError, RuntimeError, ValueError) as exc:
+            logger.warning("NOAA ONI fetch unavailable (%s) — skipping event_risk this run", exc)
+            return records
+
+        for row in rows:
             obs: date = row["date"]
             payload = {
                 "metric_code": spec.metric_code,

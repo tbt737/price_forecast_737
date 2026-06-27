@@ -67,6 +67,38 @@ def test_noaa_connector_ignores_unconfigured_metrics() -> None:
     assert records == []
 
 
+def test_noaa_connector_fails_soft_on_empty_or_parse_error() -> None:
+    """A flaky/empty NOAA response must NOT raise (it would kill the whole ingest)."""
+    spec = EventRiskSpec("el_nino_la_nina", "climate", "manual", release_lag_days=10)
+
+    def boom() -> list[dict]:
+        raise RuntimeError("NOAA ONI response contained no parseable rows")
+
+    assert list(NoaaOniSource([spec], fetch=boom).collect()) == []  # fail soft → empty
+
+
+def test_noaa_connector_fails_soft_on_network_error() -> None:
+    spec = EventRiskSpec("el_nino_la_nina", "climate", "manual", release_lag_days=10)
+
+    def neterr() -> list[dict]:
+        raise OSError("connection refused")  # URLError/socket errors subclass OSError
+
+    assert list(NoaaOniSource([spec], fetch=neterr).collect()) == []
+
+
+def test_daily_prices_path_excludes_noaa() -> None:
+    """The critical daily prices path must not include the flaky NOAA connector."""
+    from etl.ingest import build_connectors
+
+    cfg = load_ingestion_config()
+    names = {
+        type(c).__name__
+        for c in build_connectors(cfg, which="prices", period="5d", weather_days=10, today=date(2026, 6, 26))
+    }
+    assert "YahooPriceSource" in names
+    assert "NoaaOniSource" not in names
+
+
 def test_usda_bulk_connector_filters_and_attaches_provenance() -> None:
     spec = SupplyDemandSpec(
         "ROBUSTA",
