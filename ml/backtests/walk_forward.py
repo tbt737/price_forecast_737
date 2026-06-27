@@ -17,6 +17,7 @@ import numpy as np
 from ml.features.cycles import select_cycles
 from ml.models.baseline import FourierTrendForecaster, naive_last
 from ml.models.gbm_forecaster import GBMForecaster
+from ml.models.ou_forecaster import OUForecaster
 from ml.models.ridge_forecaster import RidgeARForecaster
 
 
@@ -201,4 +202,36 @@ def walk_forward_gbm(
 
     return _walk_forward_anchored(
         dates, values, horizon=horizon, folds=folds, min_train=min_train, make_model=make, exog_features=exog_features
+    )
+
+
+def walk_forward_ou(
+    dates: list[date],
+    values: np.ndarray,
+    *,
+    horizon: int,
+    folds: int = 5,
+    min_train: int = 252,
+    trend_span: int = 90,
+    trend_damping: float = 0.97,
+    drift_lookback: int = 60,
+) -> BacktestResult:
+    """Walk-forward backtest for the OU / damped mean-reversion forecaster (Phase 8A).
+
+    Research-only candidate. Each fold fits ``phi`` (reversion persistence) and the
+    slow-trend drift from the training slice only (``end=cut``); the deviation is
+    measured from a causal trailing mean, so there is no look-ahead. OU is
+    univariate, so ``exog_features`` is intentionally not threaded in."""
+    return _walk_forward_anchored(
+        dates,
+        values,
+        horizon=horizon,
+        folds=folds,
+        min_train=min_train,
+        make_model=lambda cut: OUForecaster(
+            horizon=horizon,
+            trend_span=trend_span,
+            trend_damping=trend_damping,
+            drift_lookback=drift_lookback,
+        ).fit(np.log(np.asarray(values, dtype=float)), None, end=cut),
     )
