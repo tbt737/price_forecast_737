@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   }
 
   const provider = body.provider;
-  if (!isProvider(provider)) return bad("Provider không hợp lệ (chỉ gemini / claude / deepseek)");
+  if (!isProvider(provider)) return bad("Provider không hợp lệ");
 
   const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
   if (!apiKey) return bad("Chưa cắm API key");

@@ -31,9 +31,20 @@ describe("ai-chat providers", () => {
     expect(b.messages[0]).toEqual({ role: "system", content: "sys" });
   });
 
+  it("openai-compatible family (openai/grok/groq/openrouter) → bearer + right host + system prepended", () => {
+    expect(buildProviderRequest("openai", "m", "", msgs, "K").url).toContain("api.openai.com");
+    expect(buildProviderRequest("grok", "m", "", msgs, "K").url).toContain("api.x.ai");
+    expect(buildProviderRequest("groq", "m", "", msgs, "K").url).toContain("api.groq.com");
+    expect(buildProviderRequest("openrouter", "m", "", msgs, "K").url).toContain("openrouter.ai");
+    const { init } = buildProviderRequest("openai", "m", "sys", msgs, "K");
+    expect(headers(init).authorization).toBe("Bearer K");
+    expect(JSON.parse(init.body as string).messages[0]).toEqual({ role: "system", content: "sys" });
+  });
+
   it("extractReply / extractError per provider shape", () => {
     expect(extractReply("claude", { content: [{ text: "x" }] })).toBe("x");
     expect(extractReply("deepseek", { choices: [{ message: { content: "y" } }] })).toBe("y");
+    expect(extractReply("openai", { choices: [{ message: { content: "o" } }] })).toBe("o");
     expect(extractReply("gemini", { candidates: [{ content: { parts: [{ text: "z" }] } }] })).toBe("z");
     expect(extractError({ error: { message: "bad" } })).toBe("bad");
     expect(extractError({ error: "oops" })).toBe("oops");

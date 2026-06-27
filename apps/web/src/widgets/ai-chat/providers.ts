@@ -1,36 +1,91 @@
 /**
- * Multi-provider chat adapters (BYOK — bring your own key). Normalises a simple
- * {role, content} thread + system prompt into each provider's request shape and
- * pulls the reply/error back out. Pure (no Next/DOM imports) so it is unit-tested
- * and shared by the server route handler.
+ * Multi-provider chat adapters (BYOK — bring your own key). Most providers speak
+ * the OpenAI /chat/completions shape (only the base URL differs); Claude and
+ * Gemini have their own. Pure (no Next/DOM imports) so it is unit-tested and
+ * shared by the server route handler.
  */
 
-export type Provider = "claude" | "gemini" | "deepseek";
+export type Provider =
+  | "gemini"
+  | "groq"
+  | "openrouter"
+  | "openai"
+  | "claude"
+  | "grok"
+  | "deepseek";
 
-export interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
+type Kind = "gemini" | "claude" | "openai";
 
 export interface ProviderInfo {
   id: Provider;
   label: string;
+  kind: Kind;
+  baseUrl?: string; // OpenAI-compatible endpoint (kind === "openai")
   defaultModel: string;
   keyHint: string;
+  free?: boolean; // has a usable free tier
 }
 
 export const PROVIDERS: ProviderInfo[] = [
-  { id: "gemini", label: "Gemini (Google)", defaultModel: "gemini-2.0-flash", keyHint: "AIza…" },
-  { id: "claude", label: "Claude (Anthropic)", defaultModel: "claude-3-5-sonnet-latest", keyHint: "sk-ant-…" },
-  { id: "deepseek", label: "DeepSeek", defaultModel: "deepseek-chat", keyHint: "sk-…" },
+  { id: "gemini", label: "Gemini (Google) · free", kind: "gemini", defaultModel: "gemini-2.0-flash", keyHint: "AIza…", free: true },
+  {
+    id: "groq",
+    label: "Groq · free (Llama/Mixtral)",
+    kind: "openai",
+    baseUrl: "https://api.groq.com/openai/v1/chat/completions",
+    defaultModel: "llama-3.3-70b-versatile",
+    keyHint: "gsk_…",
+    free: true,
+  },
+  {
+    id: "openrouter",
+    label: "OpenRouter · model free",
+    kind: "openai",
+    baseUrl: "https://openrouter.ai/api/v1/chat/completions",
+    defaultModel: "meta-llama/llama-3.3-70b-instruct:free",
+    keyHint: "sk-or-…",
+    free: true,
+  },
+  {
+    id: "openai",
+    label: "OpenAI (GPT)",
+    kind: "openai",
+    baseUrl: "https://api.openai.com/v1/chat/completions",
+    defaultModel: "gpt-4o-mini",
+    keyHint: "sk-…",
+  },
+  { id: "claude", label: "Claude (Anthropic)", kind: "claude", defaultModel: "claude-3-5-sonnet-latest", keyHint: "sk-ant-…" },
+  {
+    id: "grok",
+    label: "Grok (xAI)",
+    kind: "openai",
+    baseUrl: "https://api.x.ai/v1/chat/completions",
+    defaultModel: "grok-2-latest",
+    keyHint: "xai-…",
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    kind: "openai",
+    baseUrl: "https://api.deepseek.com/chat/completions",
+    defaultModel: "deepseek-chat",
+    keyHint: "sk-…",
+  },
 ];
 
+const BY_ID = new Map(PROVIDERS.map((p) => [p.id, p]));
+
 export function defaultModel(provider: Provider): string {
-  return PROVIDERS.find((p) => p.id === provider)?.defaultModel ?? "";
+  return BY_ID.get(provider)?.defaultModel ?? "";
 }
 
 export function isProvider(value: unknown): value is Provider {
-  return value === "claude" || value === "gemini" || value === "deepseek";
+  return typeof value === "string" && BY_ID.has(value as Provider);
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 export interface ProviderRequest {
@@ -48,7 +103,10 @@ export function buildProviderRequest(
   messages: ChatMessage[],
   apiKey: string,
 ): ProviderRequest {
-  if (provider === "claude") {
+  const info = BY_ID.get(provider);
+  if (!info) throw new Error(`Unknown provider: ${provider}`);
+
+  if (info.kind === "claude") {
     return {
       url: "https://api.anthropic.com/v1/messages",
       init: {
@@ -58,30 +116,32 @@ export function buildProviderRequest(
       },
     };
   }
-  if (provider === "deepseek") {
-    const msgs = system ? [{ role: "system", content: system }, ...messages] : messages;
+
+  if (info.kind === "gemini") {
+    const contents = messages.map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
     return {
-      url: "https://api.deepseek.com/chat/completions",
+      url:
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}` +
+        `:generateContent?key=${encodeURIComponent(apiKey)}`,
       init: {
         method: "POST",
-        headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-        body: JSON.stringify({ model, messages: msgs, max_tokens: MAX_TOKENS }),
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents }),
       },
     };
   }
-  // gemini — roles are user/model; key goes in the query string
-  const contents = messages.map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }],
-  }));
+
+  // OpenAI-compatible (OpenAI, Grok, Groq, OpenRouter, DeepSeek)
+  const msgs = system ? [{ role: "system", content: system }, ...messages] : messages;
   return {
-    url:
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}` +
-      `:generateContent?key=${encodeURIComponent(apiKey)}`,
+    url: info.baseUrl as string,
     init: {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents }),
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ model, messages: msgs, max_tokens: MAX_TOKENS }),
     },
   };
 }
@@ -89,7 +149,7 @@ export function buildProviderRequest(
 interface ClaudeResp {
   content?: { text?: string }[];
 }
-interface DeepseekResp {
+interface OpenAIResp {
   choices?: { message?: { content?: string } }[];
 }
 interface GeminiResp {
@@ -101,9 +161,10 @@ interface ErrResp {
 }
 
 export function extractReply(provider: Provider, data: unknown): string | null {
-  if (provider === "claude") return (data as ClaudeResp).content?.[0]?.text ?? null;
-  if (provider === "deepseek") return (data as DeepseekResp).choices?.[0]?.message?.content ?? null;
-  return (data as GeminiResp).candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+  const kind = BY_ID.get(provider)?.kind;
+  if (kind === "claude") return (data as ClaudeResp).content?.[0]?.text ?? null;
+  if (kind === "gemini") return (data as GeminiResp).candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+  return (data as OpenAIResp).choices?.[0]?.message?.content ?? null;
 }
 
 export function extractError(data: unknown): string | null {
