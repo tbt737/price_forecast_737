@@ -20,15 +20,32 @@ from app.models import DimCommodity, DimMarketInstrument, FactPriceDaily  # noqa
 from sqlalchemy import func, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from ml.backtests.walk_forward import walk_forward_ar, walk_forward_gbm  # noqa: E402
+from ml.backtests.walk_forward import walk_forward_ar, walk_forward_gbm, walk_forward_ou  # noqa: E402
 from ml.features.cycles import select_cycles  # noqa: E402
 from ml.models.gbm_forecaster import GBMForecaster  # noqa: E402
 from ml.models.gbm_forecaster import is_available as gbm_available  # noqa: E402
+from ml.models.ou_forecaster import OUForecaster  # noqa: E402
 from ml.models.ridge_forecaster import RidgeARForecaster  # noqa: E402
 
 MIN_HISTORY = 252  # ~1 trading year required to fit the model
 Z_80 = 1.2816  # ~80% normal band half-width
 SWITCH_MARGIN = 0.02  # require >=2% relative MAPE improvement to leave the naive benchmark
+OU_ENABLED = True  # Phase 8B: include the OU mean-reversion candidate in the pool (still gated by the margin rule)
+
+
+def select_candidate(
+    candidates: dict[str, float], naive_mape: float, *, margin: float = SWITCH_MARGIN
+) -> tuple[str, float]:
+    """Best-of selection (Phase 7A rule, unchanged): the lowest finite-MAPE candidate
+    wins, but only displaces the naive benchmark when it beats it by ``margin``. This
+    guards against crowning a noise-level "winner" out of several candidates — and is
+    exactly what keeps a weak OU from ever being chosen. Returns ``(model_used,
+    chosen_mape)``; ``model_used == "naive"`` means the benchmark held."""
+    finite = {k: v for k, v in candidates.items() if np.isfinite(v)}
+    best = min(finite, key=lambda k: finite[k]) if finite else None
+    if best is not None and np.isfinite(naive_mape) and finite[best] < naive_mape * (1.0 - margin):
+        return best, finite[best]
+    return "naive", (finite[best] if best is not None else float("nan"))
 
 
 def _next_business_days(last: date, count: int) -> list[date]:
@@ -89,6 +106,7 @@ def forecast_commodity(
     *,
     horizons: tuple[int, ...] = (30, 90),
     l2: float = 5.0,
+    enable_ou: bool = OU_ENABLED,
 ) -> dict[str, Any]:
     loaded = load_price_series(session, commodity_code)
     if loaded is None:
@@ -184,18 +202,22 @@ def forecast_commodity(
                     horizon=hh, cycle_periods=pp
                 ).fit(logy, doy, exog_features=exog_features)
 
-        finite = {k: v for k, v in candidates.items() if np.isfinite(v)}
-        best = min(finite, key=lambda k: finite[k]) if finite else None
-        # Switch off naive only when the best model clears it by a margin (guards
-        # against picking a noise-level "winner" out of several candidates).
-        if best is not None and np.isfinite(naive_mape) and finite[best] < naive_mape * (1.0 - SWITCH_MARGIN):
-            model = builders[best]()
+        # Phase 8B: OU / damped mean-reversion candidate (univariate — no exog). It is
+        # just one more entry in the pool; ``select_candidate`` (the unchanged naive +
+        # margin rule) still decides whether it is ever chosen. Independent of xgboost,
+        # so it is available even when gbm is not.
+        if enable_ou:
+            ou = walk_forward_ou(dates, y, horizon=h)
+            candidates["ou"] = ou.model_mape
+            builders["ou"] = lambda hh=h: OUForecaster(horizon=hh).fit(logy, doy)
+
+        # Naive benchmark + margin rule (unchanged) decide the winner from the pool.
+        model_used, chosen_mape = select_candidate(candidates, naive_mape)
+        if model_used != "naive":
+            model = builders[model_used]()
             point, lower, upper = model.forecast_interval(logy, doy, anchor_idx, y_anchor, h, exog_features=exog_features)
-            model_used, chosen_mape = best, finite[best]
         else:
             point, lower, upper = _naive_interval(y_anchor, ret_sigma, h)
-            model_used = "naive"
-            chosen_mape = finite[best] if best is not None else float("nan")
 
         horizon_out[str(h)] = {
             "model_used": model_used,
@@ -214,6 +236,7 @@ def forecast_commodity(
                 "naive_mape_pct": round(naive_mape, 2) if np.isfinite(naive_mape) else None,
                 "beats_naive": model_used != "naive",
                 "candidates": {k: round(v, 2) for k, v in candidates.items() if np.isfinite(v)},
+                "ou_considered": bool(enable_ou),
             },
         }
 
