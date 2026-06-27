@@ -5,29 +5,7 @@ import { api, type Commodity } from "@/shared/api";
 import { cn } from "@/shared/lib/cn";
 import { Card, CardBody, CardHeader } from "@/shared/ui";
 import { defaultModel, PROVIDERS, type ChatMessage, type Provider } from "@/widgets/ai-chat/providers";
-
-const LS = {
-  provider: "cqp.ai.provider",
-  model: (p: Provider) => `cqp.ai.model.${p}`,
-  key: (p: Provider) => `cqp.ai.key.${p}`,
-};
-
-function load(k: string): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage.getItem(k);
-  } catch {
-    return null;
-  }
-}
-function save(k: string, v: string) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(k, v);
-  } catch {
-    /* ignore quota/availability */
-  }
-}
+import { LS, loadLS as load, saveLS as save } from "@/widgets/ai-chat/storage";
 
 const BASE_SYSTEM =
   "Bạn là trợ lý phân tích giá hàng hóa (nông sản/kim loại/năng lượng) cho một app dự báo định lượng. " +
