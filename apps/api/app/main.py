@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 
 from app import __version__  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
-from app.routers import commodities, health, models  # noqa: E402
+from app.routers import commodities, forecast, health, models  # noqa: E402
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -40,6 +40,9 @@ def create_app() -> FastAPI:
     # until explicitly enabled.
     if get_settings().enable_ml_models_api:
         app.include_router(models.router)
+    # Phase 7C: guarded forecast-execution endpoint — likewise OFF by default.
+    if get_settings().enable_ml_forecast_api:
+        app.include_router(forecast.router)
 
     @app.get("/", include_in_schema=False, response_model=None)
     def dashboard() -> FileResponse | JSONResponse:

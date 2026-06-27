@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # Feature flags. The experimental ML model-registry API (Phase 7B) is OFF by
     # default — its /models endpoints are only mounted when this is true.
     enable_ml_models_api: bool = Field(default=False, alias="ENABLE_ML_MODELS_API")
+    # The guarded forecast-execution endpoint (Phase 7C) is likewise OFF by default —
+    # POST /forecast is only mounted when this is true.
+    enable_ml_forecast_api: bool = Field(default=False, alias="ENABLE_ML_FORECAST_API")
 
     profiles_dir: Path = DEFAULT_PROFILES_DIR
 
