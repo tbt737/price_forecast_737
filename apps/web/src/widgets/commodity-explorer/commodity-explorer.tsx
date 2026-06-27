@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { api, type Commodity, type Stats } from "@/shared/api";
 import { cn } from "@/shared/lib/cn";
@@ -21,6 +21,8 @@ export function CommodityExplorer() {
   const [query, setQuery] = useState("");
   const [compareMode, setCompareMode] = useState(false);
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
 
   const detailRef = useRef<HTMLDivElement>(null);
 
@@ -40,22 +42,27 @@ export function CommodityExplorer() {
     }
   };
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const [stats, commodities] = await Promise.all([api.stats(), api.listCommodities()]);
-        if (!active) return;
-        setState({ s: "ready", d: { stats, commodities } });
-        setSelected(commodities[0]?.commodity_code ?? null);
-      } catch (e) {
-        if (active) setState({ s: "error", m: e instanceof Error ? e.message : "unknown" });
-      }
-    })();
-    return () => {
-      active = false;
-    };
+  // Pull the latest stats + commodities from the API (which reads the database
+  // live, cache:"no-store"). Used on mount and by the manual "Đồng bộ" button —
+  // a manual sync keeps the current view (no skeleton) and only toggles a spinner.
+  const loadData = useCallback(async (opts?: { manual?: boolean }) => {
+    if (opts?.manual) setSyncing(true);
+    try {
+      const [stats, commodities] = await Promise.all([api.stats(), api.listCommodities()]);
+      setState({ s: "ready", d: { stats, commodities } });
+      setSelected((prev) => prev ?? commodities[0]?.commodity_code ?? null);
+      setLastSync(new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
+    } catch (e) {
+      // On a manual re-sync, keep the data already on screen rather than blanking it.
+      setState((prev) => (prev.s === "ready" ? prev : { s: "error", m: e instanceof Error ? e.message : "unknown" }));
+    } finally {
+      if (opts?.manual) setSyncing(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const filtered = useMemo(() => {
     const all = state.s === "ready" ? state.d.commodities : [];
@@ -135,6 +142,23 @@ export function CommodityExplorer() {
             <b className="text-text">{compareSet.size}</b>
           </span>
         ) : null}
+        <div className="ml-auto flex items-center gap-2">
+          {lastSync ? (
+            <span className="hidden text-xs text-subtle sm:inline">Đồng bộ lúc {lastSync}</span>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void loadData({ manual: true })}
+            disabled={syncing}
+            title="Kéo lại dữ liệu mới nhất từ database"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-3 py-1.5 text-sm font-medium text-text transition-colors hover:border-brand disabled:opacity-60"
+          >
+            <span className={cn("text-base leading-none", syncing && "animate-spin")} aria-hidden>
+              🔄
+            </span>
+            {syncing ? "Đang đồng bộ…" : "Đồng bộ dữ liệu"}
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
