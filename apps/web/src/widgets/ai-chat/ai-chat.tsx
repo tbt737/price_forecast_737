@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { api, type Commodity } from "@/shared/api";
 import { cn } from "@/shared/lib/cn";
 import { Card, CardBody, CardHeader } from "@/shared/ui";
 import { defaultModel, PROVIDERS, type ChatMessage, type Provider } from "@/widgets/ai-chat/providers";
@@ -59,7 +60,7 @@ async function buildContext(code: string | null, name: string | null): Promise<s
   }
 }
 
-export function AiChat({ commodityCode, commodityName }: { commodityCode?: string | null; commodityName?: string | null }) {
+export function AiChat() {
   const [provider, setProvider] = useState<Provider>("gemini");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -68,7 +69,14 @@ export function AiChat({ commodityCode, commodityName }: { commodityCode?: strin
   const [thread, setThread] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [commodities, setCommodities] = useState<Commodity[]>([]);
+  const [ctxCode, setCtxCode] = useState("");
   const threadRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    api.listCommodities().then(setCommodities).catch(() => {});
+  }, []);
+  const ctxName = commodities.find((c) => c.commodity_code === ctxCode)?.commodity_name ?? null;
 
   // hydrate provider + per-provider model/key from localStorage
   useEffect(() => {
@@ -110,7 +118,7 @@ export function AiChat({ commodityCode, commodityName }: { commodityCode?: strin
     setInput("");
     setBusy(true);
     try {
-      const ctx = withContext ? await buildContext(commodityCode ?? null, commodityName ?? null) : "";
+      const ctx = withContext && ctxCode ? await buildContext(ctxCode, ctxName) : "";
       const system = ctx ? `${BASE_SYSTEM}\n\n${ctx}` : BASE_SYSTEM;
       const res = await fetch("/ai/chat", {
         method: "POST",
@@ -179,18 +187,35 @@ export function AiChat({ commodityCode, commodityName }: { commodityCode?: strin
             />
           </label>
         </div>
-        {commodityCode ? (
-          <label className="mt-2 flex items-center gap-1.5 text-xs text-muted">
-            <input type="checkbox" checked={withContext} onChange={(e) => setWithContext(e.target.checked)} />
-            Kèm số liệu dự báo của <b className="text-text">{commodityName || commodityCode}</b> làm ngữ cảnh
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+          <label className="flex items-center gap-1.5">
+            Ngữ cảnh:
+            <select
+              value={ctxCode}
+              onChange={(e) => setCtxCode(e.target.value)}
+              className="rounded-md border border-border bg-surface-2 px-2 py-1 text-xs text-text outline-none focus:border-brand"
+            >
+              <option value="">không gắn hàng hóa</option>
+              {commodities.map((c) => (
+                <option key={c.commodity_code} value={c.commodity_code}>
+                  {c.commodity_name}
+                </option>
+              ))}
+            </select>
           </label>
-        ) : null}
+          {ctxCode ? (
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={withContext} onChange={(e) => setWithContext(e.target.checked)} />
+              kèm số liệu dự báo định lượng
+            </label>
+          ) : null}
+        </div>
 
         {/* thread */}
         <div ref={threadRef} className="mt-3 max-h-80 space-y-2 overflow-y-auto rounded-lg border border-border bg-surface-2 p-3">
           {thread.length === 0 ? (
             <p className="py-6 text-center text-sm text-subtle">
-              Cắm API key, chọn model, rồi hỏi — ví dụ: “Phân tích xu hướng giá {commodityName || "mặt hàng này"} 30 ngày tới?”
+              Cắm API key, chọn model, rồi hỏi — ví dụ: “Phân tích xu hướng giá {ctxName || "mặt hàng"} 30 ngày tới?”
             </p>
           ) : (
             thread.map((m, i) => (
