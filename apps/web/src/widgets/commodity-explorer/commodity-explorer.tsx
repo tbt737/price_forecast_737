@@ -7,6 +7,7 @@ import { cn } from "@/shared/lib/cn";
 import { sectorMeta } from "@/shared/lib/sectors";
 import { Card, CardBody, CardHeader, EmptyState, SectorChip, Skeleton, Stat } from "@/shared/ui";
 import { ForecastCompare } from "@/widgets/commodity-explorer/forecast-compare";
+import { IchingOracle } from "@/widgets/iching";
 import { ProfileDetail } from "@/widgets/profile-detail";
 
 interface Loaded {
@@ -100,6 +101,8 @@ export function CommodityExplorer() {
   }
 
   const { stats } = state.d;
+  const selectedName =
+    state.d.commodities.find((c) => c.commodity_code === selected)?.commodity_name ?? null;
 
   return (
     <div className="space-y-6">
@@ -251,6 +254,8 @@ export function CommodityExplorer() {
           </Card>
         </div>
       </div>
+
+      <IchingOracle commodityName={selectedName} />
     </div>
   );
 }
