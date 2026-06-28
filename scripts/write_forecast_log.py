@@ -27,10 +27,13 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-# The forecaster + session live in the FastAPI app / repo-root ml package.
-_API_DIR = Path(__file__).resolve().parent.parent / "apps" / "api"
-if str(_API_DIR) not in sys.path:
-    sys.path.insert(0, str(_API_DIR))
+# The forecaster lives in the repo-root ``ml`` package; the session factory in the
+# FastAPI app package. Add BOTH to sys.path so this runs as a standalone script
+# (python scripts/write_forecast_log.py), where sys.path[0] is scripts/, not the root.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+for _p in (_REPO_ROOT, _REPO_ROOT / "apps" / "api"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 WRITER_VERSION = "acc-1c-a"
 ALLOWED_HORIZONS = (30, 90)
