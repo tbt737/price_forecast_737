@@ -15,9 +15,10 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Callable, Iterable
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 for _p in (_REPO_ROOT, _REPO_ROOT / "apps" / "api"):
@@ -90,17 +91,30 @@ def nearest_actual(rows: Iterable[tuple[date, float]], target: date, grace_days:
     return best
 
 
-def decide(predicted: float, target_date: date, actual: float | None, as_of: date, expire_after_days: int) -> dict[str, Any]:
+def decide(
+    predicted: float, target_date: date, actual: float | None, as_of: date, expire_after_days: int
+) -> dict[str, Any]:
     """Decide the action for one pending row. Never fabricates an actual."""
     if actual is not None and actual > 0:
         ae, ape = compute_errors(predicted, actual)  # type: ignore[misc]
-        return {"status": "evaluated", "actual_price": actual, "absolute_error": ae, "absolute_percentage_error": ape}
+        return {
+            "status": "evaluated",
+            "actual_price": actual,
+            "absolute_error": ae,
+            "absolute_percentage_error": ape,
+        }
     if (as_of - target_date).days > expire_after_days:
         return {"status": "expired"}
     return {"status": "pending"}
 
 
-def _select_pending(session: Any, as_of: date, commodities: list[str] | None, horizons: list[int] | None, limit: int | None) -> list[dict[str, Any]]:
+def _select_pending(
+    session: Any,
+    as_of: date,
+    commodities: list[str] | None,
+    horizons: list[int] | None,
+    limit: int | None,
+) -> list[dict[str, Any]]:
     from sqlalchemy import text
 
     filters, params = "", {"as_of": as_of}
@@ -160,7 +174,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--commodities", nargs="*", default=None)
     p.add_argument("--horizons", nargs="*", type=int, default=None)
     p.add_argument("--limit", type=int, default=None)
-    p.add_argument("--grace-days", type=int, default=DEFAULT_GRACE_DAYS, help="accept nearest next actual within N days")
+    p.add_argument(
+        "--grace-days", type=int, default=DEFAULT_GRACE_DAYS, help="accept nearest next actual within N days"
+    )
     p.add_argument("--expire-after-days", dest="expire_after_days", type=int, default=DEFAULT_EXPIRE_DAYS)
     return p
 
@@ -197,11 +213,21 @@ def main(argv: list[str] | None = None) -> int:
         keep = [a for a in actions if a["decision"]["status"] == "pending"]
 
         if not args.write:
-            print(f"[dry-run] as_of={as_of}: {len(actions)} due — would evaluate {len(ev)}, expire {len(ex)}, keep pending {len(keep)}.")
+            print(
+                f"[dry-run] as_of={as_of}: {len(actions)} due — would evaluate {len(ev)}, "
+                f"expire {len(ex)}, keep pending {len(keep)}."
+            )
             for a in (ev + ex)[:30]:
                 r, d = a["row"], a["decision"]
-                extra = f"actual={d.get('actual_price')} ape={d.get('absolute_percentage_error'):.2f}%" if d["status"] == "evaluated" else ""
-                print(f"  {d['status']:9} {r['commodity_code']:16} target={r['target_date']} h={r['horizon_days']} {extra}")
+                extra = (
+                    f"actual={d.get('actual_price')} ape={d.get('absolute_percentage_error'):.2f}%"
+                    if d["status"] == "evaluated"
+                    else ""
+                )
+                print(
+                    f"  {d['status']:9} {r['commodity_code']:16} "
+                    f"target={r['target_date']} h={r['horizon_days']} {extra}"
+                )
             print("[dry-run] no rows updated — pass --write to apply.")
             return 0
 

@@ -8,9 +8,9 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import numpy as np
-import pytest
-from ml.forecast import forecast_commodity
 from sqlalchemy import text
+
+from ml.forecast import forecast_commodity
 
 
 def _seed_long_series(session, code: str, key: int, n: int = 420) -> None:
@@ -22,7 +22,10 @@ def _seed_long_series(session, code: str, key: int, n: int = 420) -> None:
         {"k": key, "c": code},
     )
     session.execute(
-        text("INSERT INTO dim_data_source (data_source_key, source_code, name) VALUES (:k, :s, :s) ON CONFLICT DO NOTHING"),
+        text(
+            "INSERT INTO dim_data_source (data_source_key, source_code, name) "
+            "VALUES (:k, :s, :s) ON CONFLICT DO NOTHING"
+        ),
         {"k": key, "s": f"SRC_{code}"},
     )
     session.execute(

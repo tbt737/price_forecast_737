@@ -12,12 +12,12 @@ import urllib.request
 import zipfile
 from collections.abc import Callable, Iterable
 from datetime import date, timedelta
-from typing import Any
 
 from etl.contracts import FactFamily, NormalizedRecord
 from etl.ingestion.config import SupplyDemandSpec
 from etl.provenance import attach_provenance
 from etl.sources.base import BaseSource
+
 
 def _download_and_extract_csv() -> str:
     url = "https://apps.fas.usda.gov/psdonline/downloads/psd_alldata_csv.zip"

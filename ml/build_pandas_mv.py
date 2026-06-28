@@ -1,13 +1,15 @@
 import sys
-import pandas as pd
-from pathlib import Path
-from sqlalchemy import text
 import time
+from pathlib import Path
+
+import pandas as pd
+from sqlalchemy import text
 
 sys.path.insert(0, str(Path(r"d:\AI Project\DỰ BÁO GIÁ CẢ HÀNG NÔNG SẢN\apps\api")))
 sys.path.insert(0, str(Path(r"d:\AI Project\DỰ BÁO GIÁ CẢ HÀNG NÔNG SẢN")))
 
 from app.db.session import get_session_factory
+
 
 def build_wide_table_pandas(session=None):
     db = session if session else get_session_factory()()
@@ -24,7 +26,11 @@ def build_wide_table_pandas(session=None):
         else:
             query_starts = """
             SELECT c.commodity_key,
-                   COALESCE((r.profile -> 'features' ->> 'min_train_start_date')::date, MIN(p.price_date), '2000-01-01'::date) as start_date
+                   COALESCE(
+                       (r.profile -> 'features' ->> 'min_train_start_date')::date,
+                       MIN(p.price_date),
+                       '2000-01-01'::date
+                   ) as start_date
             FROM dim_commodity c
             LEFT JOIN commodity_profile_registry r ON c.commodity_key = r.commodity_key
             LEFT JOIN fact_price_daily p ON c.commodity_key = p.commodity_key
@@ -43,12 +49,30 @@ def build_wide_table_pandas(session=None):
         grid_df = pd.concat(grid_dfs, ignore_index=True)
 
         print("2. Fetching metrics...")
-        q_price = "SELECT commodity_key, price_date as as_of_date, 'price_close' as metric_code, COALESCE(close, settle, value) as val FROM fact_price_daily"
-        q_weather = "SELECT commodity_key, release_date as as_of_date, metric_code, value as val FROM fact_weather_daily"
-        q_macro = "SELECT commodity_key, release_date as as_of_date, indicator_code as metric_code, value as val FROM fact_macro_daily"
-        q_logistics = "SELECT commodity_key, release_date as as_of_date, indicator_code as metric_code, value as val FROM fact_logistics_periodic"
-        q_sd = "SELECT commodity_key, release_date as as_of_date, metric_code, value as val FROM fact_supply_demand_periodic"
-        q_er = "SELECT commodity_key, release_date as as_of_date, metric_code, value as val FROM fact_event_risk"
+        q_price = (
+            "SELECT commodity_key, price_date as as_of_date, 'price_close' as metric_code, "
+            "COALESCE(close, settle, value) as val FROM fact_price_daily"
+        )
+        q_weather = (
+            "SELECT commodity_key, release_date as as_of_date, metric_code, value as val "
+            "FROM fact_weather_daily"
+        )
+        q_macro = (
+            "SELECT commodity_key, release_date as as_of_date, indicator_code as metric_code, "
+            "value as val FROM fact_macro_daily"
+        )
+        q_logistics = (
+            "SELECT commodity_key, release_date as as_of_date, indicator_code as metric_code, "
+            "value as val FROM fact_logistics_periodic"
+        )
+        q_sd = (
+            "SELECT commodity_key, release_date as as_of_date, metric_code, value as val "
+            "FROM fact_supply_demand_periodic"
+        )
+        q_er = (
+            "SELECT commodity_key, release_date as as_of_date, metric_code, value as val "
+            "FROM fact_event_risk"
+        )
 
         dfs = []
         for q in [q_price, q_weather, q_macro, q_logistics, q_sd, q_er]:
@@ -78,7 +102,9 @@ def build_wide_table_pandas(session=None):
             print("WARNING: all_events is empty!")
         else:
             print("ALL EVENTS SAMPLE:", all_events.head())
-        pivot_df = all_events.pivot(index=['commodity_key', 'as_of_date'], columns='metric_code', values='val').reset_index()
+        pivot_df = all_events.pivot(
+            index=['commodity_key', 'as_of_date'], columns='metric_code', values='val'
+        ).reset_index()
 
         print("4. Merging with grid and Forward Filling...")
         grid_df['as_of_date'] = pd.to_datetime(grid_df['as_of_date']).astype('datetime64[ns]')
@@ -119,7 +145,12 @@ def build_wide_table_pandas(session=None):
                 if db.bind.dialect.name == 'postgresql':
                     exists = conn.execute(text("SELECT to_regclass('mv_ml_daily_features_wide');")).scalar()
                 else:
-                    exists = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='mv_ml_daily_features_wide';")).scalar()
+                    exists = conn.execute(
+                        text(
+                            "SELECT name FROM sqlite_master "
+                            "WHERE type='table' AND name='mv_ml_daily_features_wide';"
+                        )
+                    ).scalar()
 
                 if exists:
                     conn.execute(text(f"ALTER TABLE mv_ml_daily_features_wide RENAME TO {backup_table};"))
@@ -134,7 +165,7 @@ def build_wide_table_pandas(session=None):
 
         print("Done!")
 
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
     finally:

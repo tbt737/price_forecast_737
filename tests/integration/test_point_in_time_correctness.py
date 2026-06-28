@@ -1,6 +1,8 @@
 import pytest
 from sqlalchemy import text
+
 from ml.build_pandas_mv import build_wide_table_pandas
+
 
 @pytest.mark.integration
 def test_pandas_wide_view_point_in_time(seeded_session):
@@ -11,9 +13,19 @@ def test_pandas_wide_view_point_in_time(seeded_session):
     """
     db_session = seeded_session
     # 1. Insert a test commodity and data source
-    db_session.execute(text("INSERT INTO dim_commodity (commodity_key, commodity_code, commodity_name, commodity_group, base_unit, default_currency) VALUES (-999, 'TEST_PIT', 'Test PIT', 'agriculture', 'kg', 'USD') ON CONFLICT DO NOTHING"))
-    db_session.execute(text("INSERT INTO dim_data_source (data_source_key, source_code, name) VALUES (-999, 'TEST_SRC', 'Test Src') ON CONFLICT DO NOTHING"))
-    db_session.execute(text("INSERT INTO dim_region (region_key, region_code, region_name) VALUES (-999, 'TEST_REG', 'Test Reg') ON CONFLICT DO NOTHING"))
+    db_session.execute(text(
+        "INSERT INTO dim_commodity (commodity_key, commodity_code, commodity_name, "
+        "commodity_group, base_unit, default_currency) "
+        "VALUES (-999, 'TEST_PIT', 'Test PIT', 'agriculture', 'kg', 'USD') ON CONFLICT DO NOTHING"
+    ))
+    db_session.execute(text(
+        "INSERT INTO dim_data_source (data_source_key, source_code, name) "
+        "VALUES (-999, 'TEST_SRC', 'Test Src') ON CONFLICT DO NOTHING"
+    ))
+    db_session.execute(text(
+        "INSERT INTO dim_region (region_key, region_code, region_name) "
+        "VALUES (-999, 'TEST_REG', 'Test Reg') ON CONFLICT DO NOTHING"
+    ))
     db_session.commit()
 
     # 2. Insert fact_price_daily data (our anchor dates)
@@ -30,7 +42,8 @@ def test_pandas_wide_view_point_in_time(seeded_session):
     # 3. Insert weather feature
     # Observation is 2024-01-01, but it was NOT released until 2024-01-02.
     db_session.execute(text("""
-        INSERT INTO fact_weather_daily (weather_id, commodity_key, region_key, data_source_key, weather_date, metric_code, value, release_date, revision)
+        INSERT INTO fact_weather_daily (weather_id, commodity_key, region_key, data_source_key,
+                                        weather_date, metric_code, value, release_date, revision)
         VALUES
         (-999, -999, -999, -999, '2024-01-01', 'rainfall_mm', 15.5, '2024-01-02', 0)
         ON CONFLICT DO NOTHING
@@ -49,7 +62,9 @@ def test_pandas_wide_view_point_in_time(seeded_session):
     """)).fetchone()
 
     assert result_day1 is not None, "Day 1 row should exist"
-    assert result_day1.rainfall_mm is None or str(result_day1.rainfall_mm) == 'nan', "Leakage detected: Future data was accessible on Day 1"
+    assert result_day1.rainfall_mm is None or str(result_day1.rainfall_mm) == 'nan', (
+        "Leakage detected: Future data was accessible on Day 1"
+    )
 
     # 6. Query the view as of 2024-01-02
     # The weather feature is now released, so it should be visible!

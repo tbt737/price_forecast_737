@@ -29,11 +29,11 @@ from sqlalchemy.orm import Session  # noqa: E402
 
 from etl.ingestion.config import IngestionConfig, load_ingestion_config  # noqa: E402
 from etl.sources.base import BaseSource  # noqa: E402
+from etl.sources.events.noaa_oni import NoaaOniSource  # noqa: E402
 from etl.sources.macro.yahoo_fx import MacroFxSource  # noqa: E402
 from etl.sources.market.yahoo import YahooPriceSource  # noqa: E402
+from etl.sources.supply_demand.usda_psd_bulk import UsdaPsdBulkSource  # noqa: E402
 from etl.sources.weather.nasa_power import NasaPowerSource  # noqa: E402
-from etl.sources.events.noaa_oni import NoaaOniSource # noqa: E402
-from etl.sources.supply_demand.usda_psd_bulk import UsdaPsdBulkSource # noqa: E402
 from etl.writer import write_batch  # noqa: E402
 
 
@@ -100,7 +100,11 @@ def main() -> int:
     parser.add_argument(
         "--csv-import", dest="csv_import", help="run a named import from configs/ingestion/csv_imports.yaml"
     )
-    parser.add_argument("--sources", choices=["prices", "weather", "macro", "events", "supply_demand", "all"], default="all")
+    parser.add_argument(
+        "--sources",
+        choices=["prices", "weather", "macro", "events", "supply_demand", "all"],
+        default="all",
+    )
     parser.add_argument("--period", default="5d", help="yfinance history period (e.g. 5d, 1mo, 1y, 10y, max)")
     parser.add_argument("--weather-days", type=int, default=10, help="weather lookback window (days)")
     args = parser.parse_args()

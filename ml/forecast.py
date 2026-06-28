@@ -187,7 +187,11 @@ def forecast_commodity(
         ar = walk_forward_ar(dates, y, horizon=h, l2=l2, exog_features=exog_features)
         naive_mape = ar.naive_mape
         candidates: dict[str, float] = {"ridge_ar": ar.model_mape}
-        builders: dict[str, Any] = {"ridge_ar": lambda hh=h: RidgeARForecaster(horizon=hh, l2=l2).fit(logy, doy, exog_features=exog_features)}
+        builders: dict[str, Any] = {
+            "ridge_ar": lambda hh=h: RidgeARForecaster(horizon=hh, l2=l2).fit(
+                logy, doy, exog_features=exog_features
+            )
+        }
         if gbm_available():
             gb = walk_forward_gbm(dates, y, horizon=h, exog_features=exog_features)
             candidates["gbm"] = gb.model_mape
@@ -215,7 +219,9 @@ def forecast_commodity(
         model_used, chosen_mape = select_candidate(candidates, naive_mape)
         if model_used != "naive":
             model = builders[model_used]()
-            point, lower, upper = model.forecast_interval(logy, doy, anchor_idx, y_anchor, h, exog_features=exog_features)
+            point, lower, upper = model.forecast_interval(
+                logy, doy, anchor_idx, y_anchor, h, exog_features=exog_features
+            )
         else:
             point, lower, upper = _naive_interval(y_anchor, ret_sigma, h)
 

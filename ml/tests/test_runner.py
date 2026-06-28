@@ -72,7 +72,6 @@ def test_runner_dry_run_default_does_not_write_registry(tmp_path: Path) -> None:
 
 
 def test_runner_registry_write_requires_explicit_flag(tmp_path: Path) -> None:
-    data = _synthetic_series()
     backtest = BacktestResult(horizon=5, folds=3, model_mape=1.0, model_rmse=1.0, naive_mape=5.0)
     metadata = register_model(
         commodity_code="TEST",
