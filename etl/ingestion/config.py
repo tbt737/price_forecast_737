@@ -23,6 +23,21 @@ class PriceSpec:
 
 
 @dataclass(frozen=True)
+class VnPriceSpec:
+    """One Vietnam domestic spot-price endpoint. ``parser`` names a FORMAT in
+    ``etl.sources.market.vn_domestic.PARSERS`` (pnj_json / phuquy_silver_html)."""
+
+    commodity_code: str
+    instrument_code: str
+    source_code: str
+    parser: str
+    url: str
+    product_key: str
+    currency: str
+    release_lag_days: int
+
+
+@dataclass(frozen=True)
 class WeatherSpec:
     commodity_code: str
     region_code: str
@@ -65,11 +80,13 @@ class IngestionConfig:
     macro: list[MacroSpec]
     events: list[EventRiskSpec]
     supply_demand: list[SupplyDemandSpec]
+    vn_prices: list[VnPriceSpec]
 
     @property
     def source_codes(self) -> set[str]:
         return (
             {s.source_code for s in self.prices}
+            | {s.source_code for s in self.vn_prices}
             | {s.source_code for s in self.weather}
             | {s.source_code for s in self.macro}
             | {s.source_code for s in self.events}
@@ -196,4 +213,23 @@ def load_ingestion_config(path: Path = CONFIG_PATH) -> IngestionConfig:
         for s in sd.get("series", [])
     ]
 
-    return IngestionConfig(prices=prices, weather=weather, macro=macro, events=events, supply_demand=supply_demand)
+    vp = data.get("vn_prices", {}) or {}
+    vp_lag = int(vp.get("release_lag_days", 0))
+    vn_prices = [
+        VnPriceSpec(
+            commodity_code=e["commodity_code"],
+            instrument_code=e["instrument_code"],
+            source_code=e["source_code"],
+            parser=e["parser"],
+            url=e["url"],
+            product_key=e["product_key"],
+            currency=e.get("currency", "VND"),
+            release_lag_days=vp_lag,
+        )
+        for e in vp.get("endpoints", [])
+    ]
+
+    return IngestionConfig(
+        prices=prices, weather=weather, macro=macro, events=events,
+        supply_demand=supply_demand, vn_prices=vn_prices,
+    )

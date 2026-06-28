@@ -1,0 +1,53 @@
+commodity_code: "SILVER_VN"
+commodity_name: "Silver (Vietnam domestic)"
+commodity_group: "metal"
+base_unit: "luong"
+default_currency: "VND"
+
+market_instruments:
+  - { instrument_code: "PQ_BAC_MIENG999", exchange: "Phú Quý (domestic retail)", symbol: "PQ_AG999", description: "Bạc miếng Phú Quý 999 1 lượng — sell price (giá bán ra)", contract_unit: "lượng", currency: "VND" }
+
+weather_regions:
+  - { region_code: "GLOBAL_NA", name: "Not a price driver — silver is a monetary/industrial metal; weather has negligible impact", country: "" }
+
+production_regions:
+  - { region_code: "GLOBAL", name: "World mine + recycling supply (sets the underlying USD price)", role: "production" }
+  - { region_code: "VN", name: "Vietnam (domestic refining/retail of imported silver)", role: "production" }
+
+consumption_regions:
+  - { region_code: "VN", name: "Vietnam (investment bars + jewelry)", role: "consumption" }
+
+export_regions:
+  - { region_code: "GLOBAL", name: "World market (Vietnam imports refined silver)", role: "export" }
+
+import_regions:
+  - { region_code: "VN", name: "Vietnam (refined silver import)", role: "import" }
+
+physical_drivers:
+  - { metric_code: "world_silver_usd", description: "International silver price (COMEX SI) — the dominant input" }
+  - { metric_code: "gold_silver_ratio", description: "Gold/silver ratio (relative-value flows)" }
+  - { metric_code: "industrial_demand", description: "Solar/electronics industrial silver demand" }
+
+macro_drivers:
+  - { metric_code: "usd_vnd", description: "USD/VND exchange rate (translates world price to VND)" }
+  - { metric_code: "world_silver_usd", description: "World silver in USD (real yields, dollar, risk appetite)" }
+  - { metric_code: "vn_cpi", description: "Vietnam inflation / real deposit rates (investment substitution)" }
+
+logistics_drivers:
+  - { metric_code: "retail_spread", description: "Phú Quý buy/sell spread (giá mua/bán)" }
+  - { metric_code: "import_premium", description: "Domestic premium over world price after import + VAT" }
+
+event_risk_drivers:
+  - { metric_code: "global_risk", description: "Global risk-off / monetary-debasement episodes" }
+  - { metric_code: "solar_policy", description: "Solar / green-energy demand shifts in industrial silver" }
+  - { metric_code: "vat_policy", description: "VAT / import-duty changes on precious metals" }
+
+data_sources:
+  - { source_code: "PHU_QUY", name: "Phú Quý Group public silver-price partial", access: "public", url: "https://giabac.phuquygroup.vn/PhuQuyPrice/SilverPricePartial" }
+
+models:
+  - { model_code: "naive_rw", family: "baseline", horizon: "daily", description: "Random-walk baseline (best-of pool)" }
+  - { model_code: "ridge_ar", family: "scikit-learn", horizon: "daily", description: "Ridge autoregression on lagged domestic price" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting once history accumulates" }
+
+notes: "Vietnam DOMESTIC silver (Phú Quý bạc miếng 999), in VND/lượng — distinct from international COMEX silver. Price = world silver × USD/VND + domestic premium (import + 10% VAT + retailer spread). Spot-scraped daily (today's giá bán ra only, the GIÁ BÁN RA column of the Phú Quý partial); forecasting becomes meaningful once enough daily history accumulates. Recorded value is the source-published sell price as-is."

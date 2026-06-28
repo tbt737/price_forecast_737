@@ -59,3 +59,16 @@ supply_demand:
     # PSD parameters are identified by their 'attributeId'. We map them to our metric_code.
     # Coffee PSD commodity code is '0711100'
     - { commodity_code: ROBUSTA, usda_commodity_id: "0711100", metrics: { "production_estimate": 28, "exportable_surplus": 88, "certified_stocks": 178 } }
+
+vn_prices:
+  # Vietnam DOMESTIC spot prices (VND). Each endpoint names a parser FORMAT handled by
+  # etl.sources.market.vn_domestic.PARSERS — never a per-commodity code path. These
+  # sources publish only today's price, so each run writes one row per instrument.
+  release_lag_days: 0 # domestic spot — available same day
+  endpoints:
+    - { commodity_code: GOLD_VN, instrument_code: PNJ_SJC, source_code: PNJ, parser: pnj_json,
+        url: "https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price", product_key: "SJC", currency: VND }
+    - { commodity_code: GOLD_VN, instrument_code: PNJ_NHAN9999, source_code: PNJ, parser: pnj_json,
+        url: "https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price", product_key: "N24K", currency: VND }
+    - { commodity_code: SILVER_VN, instrument_code: PQ_BAC_MIENG999, source_code: PHU_QUY, parser: phuquy_silver_html,
+        url: "https://giabac.phuquygroup.vn/PhuQuyPrice/SilverPricePartial", product_key: "BẠC MIẾNG PHÚ QUÝ 999 1 LƯỢNG", currency: VND }

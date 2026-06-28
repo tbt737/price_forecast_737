@@ -23,6 +23,8 @@ INGESTION_SOURCES: dict[str, tuple[str, str]] = {
     "csv_import": ("Imported from a local CSV dataset (e.g. Kaggle/Agmarknet)", "public"),
     "NOAA": ("NOAA Climate Prediction Center", "public"),
     "USDA_FAS": ("USDA Foreign Agricultural Service (PSD)", "public"),
+    "PNJ": ("PNJ public gold-price endpoint (Vietnam domestic)", "public"),
+    "PHU_QUY": ("Phú Quý Group silver-price partial (Vietnam domestic)", "public"),
 }
 
 

@@ -1,0 +1,55 @@
+commodity_code: "GOLD_VN"
+commodity_name: "Gold (Vietnam domestic)"
+commodity_group: "metal"
+base_unit: "luong"
+default_currency: "VND"
+
+market_instruments:
+  - { instrument_code: "PNJ_SJC", exchange: "PNJ (domestic retail)", symbol: "SJC", description: "Vàng miếng SJC 999.9 — PNJ-quoted sell price (giá bán ra)", contract_unit: "lượng", currency: "VND" }
+  - { instrument_code: "PNJ_NHAN9999", exchange: "PNJ (domestic retail)", symbol: "N24K", description: "Nhẫn trơn PNJ 999.9 — PNJ-quoted sell price (giá bán ra)", contract_unit: "lượng", currency: "VND" }
+
+weather_regions:
+  - { region_code: "GLOBAL_NA", name: "Not a price driver — gold is a monetary asset; weather has negligible price impact", country: "" }
+
+production_regions:
+  - { region_code: "VN", name: "Vietnam (domestic refining/retail)", role: "production" }
+  - { region_code: "GLOBAL", name: "World mine supply (sets the underlying USD price)", role: "production" }
+
+consumption_regions:
+  - { region_code: "VN", name: "Vietnam (jewelry + household investment)", role: "consumption" }
+
+export_regions:
+  - { region_code: "GLOBAL", name: "World market (Vietnam is a net importer of bullion)", role: "export" }
+
+import_regions:
+  - { region_code: "VN", name: "Vietnam (bullion import is state-controlled under Nghị định 24)", role: "import" }
+
+physical_drivers:
+  - { metric_code: "world_gold_usd", description: "International gold price (COMEX/LBMA) — the dominant input" }
+  - { metric_code: "sjc_premium", description: "Domestic SJC premium over world price (NĐ24 supply monopoly)" }
+  - { metric_code: "domestic_demand", description: "Tet / wedding-season household gold demand" }
+
+macro_drivers:
+  - { metric_code: "usd_vnd", description: "USD/VND exchange rate (translates world price to VND)" }
+  - { metric_code: "world_gold_usd", description: "World gold in USD (real yields, DXY, safe-haven flows)" }
+  - { metric_code: "vn_cpi", description: "Vietnam inflation / real deposit rates (investment substitution)" }
+
+logistics_drivers:
+  - { metric_code: "import_quota", description: "State bullion import licensing / quota timing" }
+  - { metric_code: "retail_spread", description: "Retailer buy/sell spread (giá mua/bán)" }
+
+event_risk_drivers:
+  - { metric_code: "nd24_policy", description: "Changes to Nghị định 24 (SJC monopoly reform)" }
+  - { metric_code: "smuggling_crackdown", description: "Anti-smuggling enforcement affecting domestic supply" }
+  - { metric_code: "global_risk", description: "Global safe-haven episodes spilling into VND gold" }
+
+data_sources:
+  - { source_code: "PNJ", name: "PNJ public gold-price endpoint", access: "public", url: "https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price" }
+  - { source_code: "SJC", name: "SJC (reference; Cloudflare-protected)", access: "public", url: "https://sjc.com.vn" }
+
+models:
+  - { model_code: "naive_rw", family: "baseline", horizon: "daily", description: "Random-walk baseline (best-of pool)" }
+  - { model_code: "ridge_ar", family: "scikit-learn", horizon: "daily", description: "Ridge autoregression on lagged domestic price" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting once history accumulates" }
+
+notes: "Vietnam DOMESTIC gold (PNJ-quoted SJC bar + PNJ 999.9 ring), in VND — distinct from the international GOLD (COMEX) profile. Price = world gold × USD/VND + domestic SJC premium (driven by the Nghị định 24 supply monopoly). Spot-scraped daily (today's giá bán ra only); forecasting becomes meaningful once enough daily history accumulates. Recorded value is the source-published sell price as-is (no unit rescaling)."
