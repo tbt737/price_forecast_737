@@ -224,11 +224,15 @@ def main(argv: list[str] | None = None) -> int:
 
         from sqlalchemy import text
 
+        # End the implicit read-only transaction opened while forecasting, then insert
+        # in a fresh transaction (forecast_commodity issues SELECTs, so the Session is
+        # already mid-transaction — an explicit begin() here would raise).
+        session.rollback()
         inserted = 0
-        with session.begin():
-            for r in rows:
-                params = {**r, "metadata_json": json.dumps(r["metadata_json"])}
-                inserted += session.execute(text(INSERT_SQL), params).rowcount or 0
+        for r in rows:
+            params = {**r, "metadata_json": json.dumps(r["metadata_json"])}
+            inserted += session.execute(text(INSERT_SQL), params).rowcount or 0
+        session.commit()
         print(
             f"[write] run_id={run_id}: inserted={inserted}/{len(rows)} "
             f"({len(rows) - inserted} already present, {len(skipped)} commodity-skipped)."

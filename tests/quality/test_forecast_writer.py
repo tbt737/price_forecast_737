@@ -53,17 +53,11 @@ class FakeSession:
         self.executed.append((str(stmt), params))
         return _Res()
 
-    def begin(self):
-        outer = self
+    def commit(self) -> None:
+        pass
 
-        class _Ctx:
-            def __enter__(self):
-                return outer
-
-            def __exit__(self, *a):
-                return False
-
-        return _Ctx()
+    def rollback(self) -> None:
+        pass
 
     def close(self) -> None:
         pass
