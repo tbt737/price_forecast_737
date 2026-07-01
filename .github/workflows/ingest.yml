@@ -35,6 +35,18 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m etl.ingest --backfill --sources prices --period 1mo
 
+      # Vietnam DOMESTIC spot prices (PNJ gold + Phú Quý silver). These endpoints are
+      # scraped/live and only publish today's price, so this uses the write path
+      # (ON CONFLICT DO NOTHING), NOT backfill. Non-blocking: a Cloudflare/format change
+      # on PNJ/Phú Quý must never fail the futures feed, and VN prices are intentionally
+      # NOT part of the freshness gate yet — a missing VN day is monitored separately.
+      - name: Ingest VN domestic prices (non-blocking)
+        if: always()
+        continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m etl.ingest --sources vn_prices --write
+
       # Non-critical exogenous sources must never block the price feed. NOAA is
       # fail-soft in code; these steps are also continue-on-error so a flaky upstream
       # cannot turn CI red on its own.
