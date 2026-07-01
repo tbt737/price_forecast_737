@@ -12,19 +12,22 @@ const MODEL_LABEL: Record<string, string> = {
   naive: "naive",
 };
 
+// A commodity may have a real price but too little history to forecast — the backend
+// reports that as "need >= N positive prices, have M". We surface the real price + how
+// far it is from the threshold, instead of mislabelling it as "no data source".
+function parseHistory(reason?: string): { have: number; need: number } | null {
+  const m = reason?.match(/need >= (\d+) positive prices, have (\d+)/);
+  return m ? { need: Number(m[1]), have: Number(m[2]) } : null;
+}
+
+type Row = { fc: Forecast; lastValue: number | null; currency: string | null; hist: { have: number; need: number } | null };
+
 function horizonChange(fc: Forecast, h: "30" | "90"): number | null {
   const ho = fc.horizons?.[h];
   const last = fc.last_price;
   const end = ho?.points?.[ho.points.length - 1]?.value;
   if (!ho || last == null || end == null || last === 0) return null;
   return ((end - last) / last) * 100;
-}
-
-function friendlyReason(reason?: string): string {
-  if (!reason) return "không khả dụng";
-  if (reason.includes("positive prices")) return "Chưa có nguồn dữ liệu giá";
-  if (reason.toLowerCase().includes("unknown commodity")) return "Không rõ mặt hàng";
-  return reason;
 }
 
 function Trend({ pct }: { pct: number | null }) {
@@ -63,7 +66,7 @@ function HorizonCell({ fc, h }: { fc: Forecast; h: "30" | "90" }) {
 
 export function ForecastCompare({ codes }: { codes: string[] }) {
   const key = codes.join(",");
-  const [rows, setRows] = useState<Forecast[] | null>(null);
+  const [rows, setRows] = useState<Row[] | null>(null);
   const [done, setDone] = useState(0);
 
   useEffect(() => {
@@ -75,11 +78,25 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
     setRows(null);
     setDone(0);
     (async () => {
-      const out: Forecast[] = [];
+      const out: Row[] = [];
       for (const c of codes) {
         const fc = await api.getForecast(c).catch(() => null);
         if (!active) return;
-        if (fc) out.push(fc);
+        if (fc) {
+          let lastValue = fc.last_price ?? null;
+          let currency = fc.currency ?? null;
+          const hist = fc.available ? null : parseHistory(fc.reason);
+          // Has a real price but not enough history to forecast ⇒ fetch the true last price.
+          if (!fc.available && hist && hist.have > 0 && lastValue == null) {
+            const ps = await api.getPrices(c, 400).catch(() => null);
+            const last = ps?.points?.[ps.points.length - 1];
+            if (last) {
+              lastValue = last.value;
+              currency = ps?.currency ?? currency;
+            }
+          }
+          out.push({ fc, lastValue, currency, hist });
+        }
         setDone((n) => n + 1);
       }
       if (active) setRows(out);
@@ -121,15 +138,15 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((fc) => (
+          {rows.map(({ fc, lastValue, currency, hist }) => (
             <tr key={fc.commodity_code} className="border-b border-border/60 last:border-0">
               <td className="px-3 py-2">
                 <span className="font-mono text-xs font-semibold">{fc.commodity_code}</span>
               </td>
               <td className="px-3 py-2 font-mono text-xs">
-                {fc.available && fc.last_price != null ? (
+                {lastValue != null ? (
                   <>
-                    {fc.last_price.toLocaleString()} <span className="text-subtle">{fc.currency}</span>
+                    {lastValue.toLocaleString()} <span className="text-subtle">{currency}</span>
                   </>
                 ) : (
                   <span className="text-subtle">chưa có dữ liệu</span>
@@ -140,9 +157,16 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
                   <HorizonCell fc={fc} h="30" />
                   <HorizonCell fc={fc} h="90" />
                 </>
+              ) : hist && hist.have > 0 ? (
+                <td className="px-3 py-2 text-subtle" colSpan={2}>
+                  Chưa đủ lịch sử để dự báo{" "}
+                  <span className="font-mono text-[11px]">
+                    ({hist.have}/{hist.need} phiên)
+                  </span>
+                </td>
               ) : (
                 <td className="px-3 py-2 text-subtle" colSpan={2}>
-                  {friendlyReason(fc.reason)}
+                  {fc.reason?.toLowerCase().includes("unknown commodity") ? "Không rõ mặt hàng" : "Chưa có nguồn dữ liệu giá"}
                 </td>
               )}
             </tr>
