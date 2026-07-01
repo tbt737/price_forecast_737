@@ -19,6 +19,7 @@ from ml.models.baseline import FourierTrendForecaster, naive_last
 from ml.models.gbm_forecaster import GBMForecaster
 from ml.models.ou_forecaster import OUForecaster
 from ml.models.ridge_forecaster import RidgeARForecaster
+from ml.models.vdp_forecaster import VdPForecaster
 
 
 def _rows_per_year(dates: list[date], n: int) -> float:
@@ -234,4 +235,38 @@ def walk_forward_ou(
             trend_damping=trend_damping,
             drift_lookback=drift_lookback,
         ).fit(np.log(np.asarray(values, dtype=float)), None, end=cut),
+    )
+
+
+def walk_forward_vdp(
+    dates: list[date],
+    values: np.ndarray,
+    *,
+    horizon: int,
+    folds: int = 5,
+    min_train: int = 252,
+    trend_span: int = 90,
+    trend_damping: float = 0.97,
+    drift_lookback: int = 60,
+) -> BacktestResult:
+    """Walk-forward backtest for the Van der Pol nonlinear-oscillator forecaster (ECON-1A).
+
+    Research-only candidate — the nonlinear generalization of OU. Each fold fits the VdP
+    parameters (mu, w2) and slow-trend drift from the training slice only (``end=cut``);
+    deviation is measured from a causal trailing mean, so there is no look-ahead. The
+    forecaster fails closed to naive on an unstable fit or an integration blow-up, so a
+    fold never crashes."""
+    logy = np.log(np.asarray(values, dtype=float))
+    return _walk_forward_anchored(
+        dates,
+        values,
+        horizon=horizon,
+        folds=folds,
+        min_train=min_train,
+        make_model=lambda cut: VdPForecaster(
+            horizon=horizon,
+            trend_span=trend_span,
+            trend_damping=trend_damping,
+            drift_lookback=drift_lookback,
+        ).fit(logy, None, end=cut),
     )

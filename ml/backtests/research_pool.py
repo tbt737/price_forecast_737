@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 
-from ml.backtests.walk_forward import walk_forward_ar, walk_forward_gbm, walk_forward_ou
+from ml.backtests.walk_forward import walk_forward_ar, walk_forward_gbm, walk_forward_ou, walk_forward_vdp
 from ml.models.gbm_forecaster import is_available as gbm_available
 
 # Mirror the production best-of margin (ml/forecast.py SWITCH_MARGIN) so the
@@ -64,18 +64,28 @@ def evaluate_commodity(
     ou = walk_forward_ou(dates, values, horizon=horizon, folds=folds, min_train=min_train)
     ou_mape = ou.model_mape
 
+    vdp = walk_forward_vdp(dates, values, horizon=horizon, folds=folds, min_train=min_train)
+    vdp_mape = vdp.model_mape
+
     base_choice, base_mape = best_of(candidates, naive_mape)
     with_ou = {**candidates, "ou": ou_mape}
     ou_choice, ou_mape_best = best_of(with_ou, naive_mape)
+    # Current production pool = candidates + ou; test whether adding VdP moves the needle.
+    with_vdp = {**with_ou, "vdp": vdp_mape}
+    vdp_choice, vdp_mape_best = best_of(with_vdp, naive_mape)
 
     return {
         "folds": ar.folds,
         "naive_mape": naive_mape,
         "candidates": candidates,
         "ou_mape": ou_mape,
+        "vdp_mape": vdp_mape,
         "best_of": {"choice": base_choice, "mape": base_mape, "edge": _edge(naive_mape, base_mape)},
         "best_of_plus_ou": {"choice": ou_choice, "mape": ou_mape_best, "edge": _edge(naive_mape, ou_mape_best)},
+        # Full current pool (best_of + OU) vs. that same pool + VdP — the promotion question.
+        "pool_plus_vdp": {"choice": vdp_choice, "mape": vdp_mape_best, "edge": _edge(naive_mape, vdp_mape_best)},
         "ou_alone_edge": _edge(naive_mape, ou_mape),
+        "vdp_alone_edge": _edge(naive_mape, vdp_mape),
     }
 
 
