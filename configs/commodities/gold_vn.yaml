@@ -7,6 +7,7 @@ default_currency: "VND"
 market_instruments:
   - { instrument_code: "PNJ_SJC", exchange: "PNJ (domestic retail)", symbol: "SJC", description: "Vàng miếng SJC 999.9 — PNJ-quoted sell price (giá bán ra)", contract_unit: "lượng", currency: "VND" }
   - { instrument_code: "PNJ_NHAN9999", exchange: "PNJ (domestic retail)", symbol: "N24K", description: "Nhẫn trơn PNJ 999.9 — PNJ-quoted sell price (giá bán ra)", contract_unit: "lượng", currency: "VND" }
+  - { instrument_code: "VNAPPMOB_SJC_1L", exchange: "VNAppMob (aggregated SJC)", symbol: "SJC_1L", description: "Vàng miếng SJC 1 lượng — VNAppMob sell_1l (full VND); has multi-month history for forecasting", contract_unit: "lượng", currency: "VND" }
 
 weather_regions:
   - { region_code: "GLOBAL_NA", name: "Not a price driver — gold is a monetary asset; weather has negligible price impact", country: "" }
@@ -46,6 +47,7 @@ event_risk_drivers:
 data_sources:
   - { source_code: "PNJ", name: "PNJ public gold-price endpoint", access: "public", url: "https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price" }
   - { source_code: "SJC", name: "SJC (reference; Cloudflare-protected)", access: "public", url: "https://sjc.com.vn" }
+  - { source_code: "VNAPPMOB", name: "VNAppMob Gold API v2 (historical SJC)", access: "public", url: "https://vapi.vnappmob.com/gold.v2.html" }
 
 models:
   - { model_code: "naive_rw", family: "baseline", horizon: "daily", description: "Random-walk baseline (best-of pool)" }

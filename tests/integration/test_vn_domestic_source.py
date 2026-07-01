@@ -98,3 +98,85 @@ def test_collect_is_fail_soft_on_fetch_error() -> None:
 def test_collect_skips_unknown_parser_format() -> None:
     bad = [VnPriceSpec("X_VN", "X", "PNJ", "no_such_format", GOLD_URL, "SJC", "VND", 0)]
     assert list(VnDomesticPriceSource(bad, today=TODAY, fetch=_fetch).collect()) == []
+
+
+# ── VNAppMob historical SJC source (VN-PRICE-2A) ─────────────────────────────
+import json as _json  # noqa: E402
+
+from etl.ingestion.config import VnHistorySpec  # noqa: E402
+from etl.sources.market.vn_domestic import (  # noqa: E402
+    VnAppMobGoldSource,
+    _day_chunks,
+    parse_vnappmob_gold,
+)
+
+VNAPPMOB_JSON = (_FIX / "vnappmob_sjc.json").read_text(encoding="utf-8")
+KEY_URL = "https://vapi.vnappmob.com/api/request_api_key?scope=gold"
+DATA_URL = "https://vapi.vnappmob.com/api/v2/gold/sjc"
+_TOKEN = "eyJSECRET.jwt.TOKEN_must_not_leak"  # sentinel; must never appear in output
+
+
+def _vnappmob_spec() -> VnHistorySpec:
+    return VnHistorySpec("GOLD_VN", "VNAPPMOB_SJC_1L", "VNAPPMOB", "vnappmob_gold",
+                         KEY_URL, DATA_URL, "sell_1l", "buy_1l", "VND", 1, 300)
+
+
+def test_vnappmob_parse_sell_buy_and_date() -> None:
+    rows = parse_vnappmob_gold(VNAPPMOB_JSON, "sell_1l", "buy_1l")
+    assert len(rows) >= 10
+    for r in rows:
+        assert isinstance(r["date"], date) and r["sell"] > 0 and (r["buy"] is None or r["buy"] > 0)
+    # exact-value pin on a tiny synthetic row (unix 1781143207 → 2026-06-11 UTC)
+    syn = '{"results":[{"datetime":"1781143207","sell_1l":"136000000.0","buy_1l":"131000000.0"}]}'
+    got = parse_vnappmob_gold(syn, "sell_1l", "buy_1l")
+    assert got == [{"date": date(2026, 6, 11), "sell": 136000000.0, "buy": 131000000.0}]
+
+
+def test_vnappmob_parse_fail_soft_empty_and_malformed() -> None:
+    assert parse_vnappmob_gold('{"results":[]}', "sell_1l", "buy_1l") == []
+    assert parse_vnappmob_gold('{"results":[{"sell_1l":"1"}]}', "sell_1l", "buy_1l") == []  # no datetime → skip
+    assert parse_vnappmob_gold('{"results":[{"datetime":"1781143207","sell_1l":"-5"}]}', "sell_1l", "buy_1l") == []
+
+
+def test_day_chunks_builds_bounded_windows() -> None:
+    lo, hi = 1_000_000, 1_000_000 + 500 * 86400
+    chunks = _day_chunks(lo, hi, 300)
+    assert len(chunks) == 2 and chunks[0][0] == lo and chunks[-1][1] == hi
+    assert all((b - a) <= 300 * 86400 for a, b in chunks)
+
+
+def test_vnappmob_collect_maps_records_and_uses_key() -> None:
+    seen_key = {}
+
+    def fetch(data_url: str, key: str, ts_from: int, ts_to: int) -> str:
+        seen_key["key"] = key  # the key IS used as the header arg…
+        return VNAPPMOB_JSON
+
+    recs = list(
+        VnAppMobGoldSource([_vnappmob_spec()], date_from=1_000_000, date_to=1_000_000 + 30 * 86400,
+                           fetch=fetch, mint_key=lambda url: _TOKEN).collect()
+    )
+    assert len(recs) >= 10
+    r = recs[0]
+    assert r.commodity_code == "GOLD_VN" and r.instrument_code == "VNAPPMOB_SJC_1L"
+    assert r.data_source_code == "VNAPPMOB" and r.currency == "VND" and r.value > 0
+    assert r.family == FactFamily.price_daily and isinstance(r.observation_date, date)
+    assert seen_key["key"] == _TOKEN  # key was passed to the fetch header
+
+
+def test_vnappmob_token_never_leaks_into_records() -> None:
+    recs = list(
+        VnAppMobGoldSource([_vnappmob_spec()], date_from=1_000_000, date_to=1_000_000 + 30 * 86400,
+                           fetch=lambda du, k, a, b: VNAPPMOB_JSON, mint_key=lambda url: _TOKEN).collect()
+    )
+    blob = "".join(str(vars(r)) for r in recs)  # every field of every record
+    assert _TOKEN not in blob and "eyJSECRET" not in blob
+
+
+def test_vnappmob_fail_closed_on_bad_key() -> None:
+    def boom_key(url: str) -> str:
+        raise OSError("key endpoint down")
+
+    recs = list(VnAppMobGoldSource([_vnappmob_spec()], date_from=1, date_to=2,
+                                   fetch=lambda du, k, a, b: VNAPPMOB_JSON, mint_key=boom_key).collect())
+    assert recs == []  # no key ⇒ skip, no crash

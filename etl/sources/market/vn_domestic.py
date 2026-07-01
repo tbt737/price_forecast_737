@@ -16,11 +16,11 @@ import html
 import json
 import re
 from collections.abc import Callable, Iterable
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from etl.contracts import FactFamily, NormalizedRecord
-from etl.ingestion.config import VnPriceSpec
+from etl.ingestion.config import VnHistorySpec, VnPriceSpec
 from etl.provenance import attach_provenance
 from etl.sources.base import BaseSource
 
@@ -144,4 +144,150 @@ class VnDomesticPriceSource(BaseSource):
                     origin=f"{spec.url}#{spec.product_key}", key=obs.isoformat(),
                 )
             )
+        return records
+
+
+# ── VNAppMob historical SJC source (ADDITIVE; does NOT replace the PNJ spot feed) ─────
+
+def parse_vnappmob_gold(raw: str, sell_field: str, buy_field: str) -> list[dict[str, Any]]:
+    """The VNAppMob SJC endpoint returns ``{"results": [{"datetime": <unix>,
+    "sell_1l": .., "buy_1l": ..}]}``. Return one dict per dated observation
+    ``{date, sell, buy}`` (sell = the configured model price). Malformed rows are
+    skipped; a non-JSON / resultless body yields ``[]`` — fail closed, never fabricates
+    a date. ``datetime`` is bucketed as a UTC calendar date (deterministic)."""
+    data = json.loads(raw)
+    out: list[dict[str, Any]] = []
+    for r in data.get("results") or []:
+        try:
+            d = datetime.fromtimestamp(int(r["datetime"]), timezone.utc).date()
+            sell = float(r[sell_field])
+        except (KeyError, TypeError, ValueError, OverflowError, OSError):
+            continue
+        if sell <= 0:
+            continue
+        try:
+            buy = float(r[buy_field]) if r.get(buy_field) not in (None, "") else None
+        except (TypeError, ValueError):
+            buy = None
+        out.append({"date": d, "sell": sell, "buy": buy})
+    return out
+
+
+#: parser FORMAT name -> implementation for the historical source.
+HISTORY_PARSERS: dict[str, Callable[[str, str, str], list[dict[str, Any]]]] = {
+    "vnappmob_gold": parse_vnappmob_gold,
+}
+
+#: mint_key(key_url) -> token ; fetch(data_url, key, ts_from, ts_to) -> raw json text
+VnKeyMint = Callable[[str], str]
+VnHistoryFetch = Callable[[str, str, int, int], str]
+
+
+def _mint_vnappmob_key(key_url: str) -> str:
+    """Fetch a fresh free token from the keyless request-key endpoint. The token is used
+    ONLY as a request header — never stored, logged, or attached to any record."""
+    import urllib.request
+
+    req = urllib.request.Request(key_url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=20) as resp:  # noqa: S310 - fixed https endpoint
+        return str(json.loads(resp.read().decode("utf-8", errors="replace")).get("results") or "")
+
+
+def _authed_history_fetch(data_url: str, key: str, ts_from: int, ts_to: int) -> str:
+    import urllib.request
+
+    url = f"{data_url}?date_from={ts_from}&date_to={ts_to}"
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "Mozilla/5.0", "Authorization": f"Bearer {key}"}
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - fixed https endpoint
+        return resp.read().decode("utf-8", errors="replace")
+
+
+def _day_chunks(ts_from: int, ts_to: int, chunk_days: int) -> list[tuple[int, int]]:
+    """Split [ts_from, ts_to] into ≤ chunk_days windows (the API caps very wide ranges)."""
+    if ts_to <= ts_from:
+        return [(ts_from, ts_to)]
+    step = max(1, chunk_days) * 86400
+    out, lo = [], ts_from
+    while lo < ts_to:
+        out.append((lo, min(lo + step, ts_to)))
+        lo += step
+    return out
+
+
+class VnAppMobGoldSource(BaseSource):
+    """Historical VN domestic SJC bullion source (VNAppMob). Yields one price_daily
+    record per source-observed date (value = the configured sell field). Additive — it
+    does not touch the PNJ/Phú Quý spot connectors. The API token is minted per run and
+    kept out of every record/log. Fails closed (skip) on a bad key or malformed chunk."""
+
+    family = FactFamily.price_daily
+
+    def __init__(
+        self,
+        specs: list[VnHistorySpec],
+        *,
+        date_from: int,
+        date_to: int,
+        fetch: VnHistoryFetch | None = None,
+        mint_key: VnKeyMint | None = None,
+    ) -> None:
+        self._specs = specs
+        self._from = int(date_from)
+        self._to = int(date_to)
+        self._fetch = fetch or _authed_history_fetch
+        self._mint = mint_key or _mint_vnappmob_key
+        self.source_code = specs[0].source_code if specs else "VNAPPMOB"
+
+    def collect(self) -> Iterable[NormalizedRecord]:
+        records: list[NormalizedRecord] = []
+        for spec in self._specs:
+            parser = HISTORY_PARSERS.get(spec.parser)
+            if parser is None:
+                continue
+            try:
+                key = self._mint(spec.key_url)
+            except (OSError, ValueError, KeyError, json.JSONDecodeError):
+                continue  # no key ⇒ skip this source, never crash the run
+            if not key:
+                continue
+            seen: set[date] = set()
+            for lo, hi in _day_chunks(self._from, self._to, spec.chunk_days):
+                try:
+                    rows = parser(self._fetch(spec.data_url, key, lo, hi), spec.field, spec.buy_field)
+                except (OSError, ValueError, KeyError, json.JSONDecodeError):
+                    continue  # fail soft per chunk
+                for row in rows:
+                    obs: date = row["date"]
+                    if obs in seen:
+                        continue
+                    seen.add(obs)
+                    payload = {
+                        "commodity_code": spec.commodity_code,
+                        "instrument_code": spec.instrument_code,
+                        "data_source_code": spec.source_code,
+                        "observation_date": obs.isoformat(),
+                        "value": row["sell"],
+                        "buy": row["buy"],
+                        "field": spec.field,
+                        "currency": spec.currency,
+                    }
+                    record = NormalizedRecord(
+                        family=FactFamily.price_daily,
+                        data_source_code=spec.source_code,
+                        commodity_code=spec.commodity_code,
+                        instrument_code=spec.instrument_code,
+                        observation_date=obs,
+                        release_date=obs + timedelta(days=spec.release_lag_days),
+                        value=row["sell"],
+                        currency=spec.currency,
+                        attributes={"buy": row["buy"], "field": spec.field},
+                    )
+                    records.append(
+                        attach_provenance(
+                            record, payload, source_code=spec.source_code,
+                            origin=f"{spec.data_url}#{spec.field}", key=obs.isoformat(),
+                        )
+                    )
         return records

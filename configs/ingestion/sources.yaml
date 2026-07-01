@@ -72,3 +72,16 @@ vn_prices:
         url: "https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price", product_key: "N24K", currency: VND }
     - { commodity_code: SILVER_VN, instrument_code: PQ_BAC_MIENG999, source_code: PHU_QUY, parser: phuquy_silver_html,
         url: "https://giabac.phuquygroup.vn/PhuQuyPrice/SilverPricePartial", product_key: "BẠC MIẾNG PHÚ QUÝ 999 1 LƯỢNG", currency: VND }
+
+vn_history:
+  # Vietnam domestic HISTORICAL prices via a date-range API (VNAppMob). ADDITIVE — a new
+  # instrument alongside the PNJ spot feed, giving GOLD_VN real multi-month history to
+  # forecast from. parser names a FORMAT in vn_domestic.HISTORY_PARSERS. The free token is
+  # minted per run from key_url and never stored. NOT part of the daily "all" run.
+  release_lag_days: 1
+  chunk_days: 300 # the API caps very wide windows; request in <=300-day chunks
+  endpoints:
+    - { commodity_code: GOLD_VN, instrument_code: VNAPPMOB_SJC_1L, source_code: VNAPPMOB, parser: vnappmob_gold,
+        key_url: "https://vapi.vnappmob.com/api/request_api_key?scope=gold",
+        data_url: "https://vapi.vnappmob.com/api/v2/gold/sjc",
+        field: sell_1l, buy_field: buy_1l, currency: VND }

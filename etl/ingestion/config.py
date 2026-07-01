@@ -38,6 +38,25 @@ class VnPriceSpec:
 
 
 @dataclass(frozen=True)
+class VnHistorySpec:
+    """One Vietnam domestic HISTORICAL price endpoint (date-range API). ``parser`` names a
+    FORMAT in ``etl.sources.market.vn_domestic.HISTORY_PARSERS`` (e.g. vnappmob_gold).
+    The API token is minted at run time from ``key_url`` and never stored."""
+
+    commodity_code: str
+    instrument_code: str
+    source_code: str
+    parser: str
+    key_url: str
+    data_url: str
+    field: str
+    buy_field: str
+    currency: str
+    release_lag_days: int
+    chunk_days: int
+
+
+@dataclass(frozen=True)
 class WeatherSpec:
     commodity_code: str
     region_code: str
@@ -81,12 +100,14 @@ class IngestionConfig:
     events: list[EventRiskSpec]
     supply_demand: list[SupplyDemandSpec]
     vn_prices: list[VnPriceSpec]
+    vn_history: list[VnHistorySpec]
 
     @property
     def source_codes(self) -> set[str]:
         return (
             {s.source_code for s in self.prices}
             | {s.source_code for s in self.vn_prices}
+            | {s.source_code for s in self.vn_history}
             | {s.source_code for s in self.weather}
             | {s.source_code for s in self.macro}
             | {s.source_code for s in self.events}
@@ -229,7 +250,27 @@ def load_ingestion_config(path: Path = CONFIG_PATH) -> IngestionConfig:
         for e in vp.get("endpoints", [])
     ]
 
+    vh = data.get("vn_history", {}) or {}
+    vh_lag = int(vh.get("release_lag_days", 1))
+    vh_chunk = int(vh.get("chunk_days", 300))
+    vn_history = [
+        VnHistorySpec(
+            commodity_code=e["commodity_code"],
+            instrument_code=e["instrument_code"],
+            source_code=e["source_code"],
+            parser=e["parser"],
+            key_url=e["key_url"],
+            data_url=e["data_url"],
+            field=e["field"],
+            buy_field=e.get("buy_field", ""),
+            currency=e.get("currency", "VND"),
+            release_lag_days=vh_lag,
+            chunk_days=int(e.get("chunk_days", vh_chunk)),
+        )
+        for e in vh.get("endpoints", [])
+    ]
+
     return IngestionConfig(
         prices=prices, weather=weather, macro=macro, events=events,
-        supply_demand=supply_demand, vn_prices=vn_prices,
+        supply_demand=supply_demand, vn_prices=vn_prices, vn_history=vn_history,
     )
