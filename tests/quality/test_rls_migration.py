@@ -85,12 +85,26 @@ def test_service_role_untouched() -> None:
     assert "service_role" not in _code()
 
 
-def test_exactly_two_top_level_do_blocks() -> None:
-    # Apply contract (ACC-1B lesson): the file is executed as N whole statements, never
-    # split on ';'. Exactly two DO blocks keeps the apply trivially correct.
+def test_revokes_public_pseudo_role_on_all_object_kinds() -> None:
+    """anon/authenticated INHERIT PUBLIC grants (esp. default EXECUTE on future functions,
+    the PostgREST /rpc/ surface). Revoking from anon/authenticated alone is insufficient —
+    PUBLIC must be stripped on tables/sequences/functions + default privileges."""
     code = _code()
-    assert len(re.findall(r"DO \$\$", code)) == 2
-    assert len(re.findall(r"END \$\$;", code)) == 2
+    for kind in _OBJECT_KINDS:
+        assert re.search(rf"REVOKE ALL ON ALL {kind} IN SCHEMA public FROM PUBLIC;", code), (
+            f"missing REVOKE {kind} FROM PUBLIC"
+        )
+    assert re.search(r"ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM PUBLIC;", code)
+    assert re.search(r"ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM PUBLIC;", code)
+    assert re.search(r"ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;", code)
+
+
+def test_exactly_three_top_level_do_blocks() -> None:
+    # Apply contract (ACC-1B lesson): the file is executed as N whole statements, never
+    # split on ';'. Three DO blocks (anon-guard, authenticated-guard, PUBLIC) — nothing else.
+    code = _code()
+    assert len(re.findall(r"DO \$\$", code)) == 3
+    assert len(re.findall(r"END \$\$;", code)) == 3
     outside = re.sub(r"DO \$\$.*?END \$\$;", "", code, flags=re.S).strip()
     assert outside == "", f"unexpected top-level SQL outside DO blocks: {outside[:120]!r}"
 

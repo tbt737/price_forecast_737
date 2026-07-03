@@ -21,6 +21,12 @@ khai** có thể đọc VÀ GHI `fact_price_daily` (đầu độc mọi dự bá
    tương ứng để object tạo sau này không tự mở lại quyền. Guard `pg_roles` ⇒ chạy được
    trên Postgres thường (docker-compose, nơi 2 role đó không tồn tại). `service_role`
    giữ nguyên. **File này chỉ REVOKE — không bao giờ GRANT** (test cấm token GRANT).
+3. `REVOKE ... FROM PUBLIC` (tables/sequences/functions + default privileges). **Bắt buộc:**
+   `anon`/`authenticated` KẾ THỪA quyền từ `PUBLIC`, nên revoke ở bước 2 chưa đủ — Postgres
+   mặc định `GRANT EXECUTE` mọi function mới cho `PUBLIC` (điểm hở RPC lớn nhất tương lai).
+   Owner (role DATABASE_URL) giữ nguyên toàn quyền qua ownership — revoke PUBLIC không đụng.
+
+File gồm **đúng 3 DO-block** (anon-guard, authenticated-guard, PUBLIC).
 
 Idempotent, additive, **không đổi 1 dòng dữ liệu nào**.
 
@@ -28,7 +34,7 @@ Idempotent, additive, **không đổi 1 dòng dữ liệu nào**.
 1. **Apply bằng đúng role DATABASE_URL / table-owner** (trên Supabase = `postgres`).
    `ALTER DEFAULT PRIVILEGES` chỉ sửa default ACL của role thực thi — chạy bằng role
    admin khác sẽ **âm thầm vô hiệu** phần bảo vệ object tương lai.
-2. File là **đúng 2 statement** (2 `DO $$ … END $$;`). **KHÔNG split theo `;`** (bài học
+2. File là **đúng 3 statement** (3 `DO $$ … END $$;`). **KHÔNG split theo `;`** (bài học
    ACC-1B — dấu `;` nằm BÊN TRONG block). Apply đúng:
    ```python
    blocks = re.findall(r"DO \$\$.*?END \$\$;", raw_sql, flags=re.S)

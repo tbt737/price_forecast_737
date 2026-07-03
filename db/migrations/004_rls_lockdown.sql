@@ -18,13 +18,17 @@
 --      don't silently re-open the hole. Guarded on role existence — the file still runs
 --      on plain Postgres (docker-compose) where those Supabase roles don't exist.
 --      `service_role` is intentionally untouched.
+--   3) revoke everything from the PUBLIC pseudo-role (tables/sequences/functions +
+--      default privileges), since anon/authenticated INHERIT PUBLIC grants — a
+--      REVOKE FROM anon/authenticated alone leaves PUBLIC-granted access (notably the
+--      default EXECUTE on future functions) wide open to PostgREST /rpc/.
 --
 -- APPLY PRECONDITION (SEC-1B): run this AS the DATABASE_URL / table-owner role (on
 -- Supabase that is `postgres`, the same role whose default ACLs carry the anon grants).
 -- ALTER DEFAULT PRIVILEGES only edits the executing role's default ACLs — applying as a
 -- different admin role would silently skip the future-objects protection.
 --
--- APPLY NOTE: this file is exactly TWO top-level statements (two DO blocks). Do NOT
+-- APPLY NOTE: this file is exactly THREE top-level statements (three DO blocks). Do NOT
 -- split it on ';' (the ACC-1B harness lesson — semicolons exist INSIDE the blocks);
 -- execute each DO block as one statement, or run the file via psql. Each ENABLE takes a
 -- brief ACCESS EXCLUSIVE lock per table — prefer a low-traffic moment.
@@ -64,4 +68,19 @@ BEGIN
     ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM authenticated;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM authenticated;
   END IF;
+END $$;
+
+-- Block 3: strip the PUBLIC pseudo-role. CRITICAL — `REVOKE ... FROM anon/authenticated`
+-- does NOT remove privileges those roles inherit via PUBLIC, and Postgres grants EXECUTE
+-- on every new function to PUBLIC by DEFAULT (the main future-RPC / PostgREST-rpc exposure).
+-- PUBLIC always exists (no role guard needed). The table/function OWNER keeps all access
+-- via ownership — revoking from PUBLIC never affects the DATABASE_URL owner role.
+DO $$
+BEGIN
+  REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+  REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
+  REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM PUBLIC;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM PUBLIC;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 END $$;
