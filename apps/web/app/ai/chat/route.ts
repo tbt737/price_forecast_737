@@ -6,6 +6,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { createRateLimiter } from "@/shared/lib/rate-limit";
 import {
   buildProviderRequest,
   defaultModel,
@@ -22,11 +23,22 @@ const MAX_MESSAGES = 40;
 const MAX_CHARS = 24_000;
 const TIMEOUT_MS = 60_000;
 
+// SEC-2: in-memory per-IP rate limit (Node runtime ⇒ module state persists per instance).
+// This proxy relays to LLM providers on the owner's Cloud Run bill; cap anonymous abuse.
+const limiter = createRateLimiter(15, 60_000); // 15 requests / IP / minute
+
+function clientIp(req: Request): string {
+  const fwd = req.headers.get("x-forwarded-for");
+  return (fwd ? fwd.split(",")[0] : "").trim() || "unknown";
+}
+
 function bad(detail: string, status = 400) {
   return NextResponse.json({ error: detail }, { status });
 }
 
 export async function POST(req: Request) {
+  if (limiter.isLimited(clientIp(req))) return bad("Quá nhiều yêu cầu — thử lại sau một phút", 429);
+
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;

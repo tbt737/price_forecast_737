@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.security import require_internal_key
 from app.db.session import get_db
 from app.models import (
     CommodityProfileRegistry,
@@ -158,7 +159,11 @@ _FORECAST_CACHE: dict[str, tuple[float, tuple[int, str | None], dict[str, Any]]]
 FINGERPRINT_TTL = 300.0  # seconds before re-checking whether the data changed
 
 
-@router.get("/commodities/{commodity_code}/forecast", response_model=None)
+@router.get(
+    "/commodities/{commodity_code}/forecast",
+    response_model=None,
+    dependencies=[Depends(require_internal_key)],  # SEC-2: compute-heavy, gated when key is set
+)
 def get_commodity_forecast(commodity_code: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     """Ridge/XGBoost (+cycle) price forecast for 30 & 90 trading days, each with an
     ~80% band and an honest walk-forward backtest (MAPE vs naive). Falls back to a

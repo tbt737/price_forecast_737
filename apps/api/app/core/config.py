@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     # POST /forecast is only mounted when this is true.
     enable_ml_forecast_api: bool = Field(default=False, alias="ENABLE_ML_FORECAST_API")
 
+    # Internal API key (SEC-2). Compute-heavy endpoints (the always-on GET /forecast)
+    # require an X-Internal-Key header matching this value — the only legitimate caller is
+    # cqp-web, which injects it server-side (never a NEXT_PUBLIC_*). The gate is
+    # FAIL-CLOSED: unset here ⇒ /forecast returns 503 (misconfig), never public. Provision
+    # the key on both services BEFORE deploying (SEC-2B).
+    internal_api_key: str | None = Field(default=None, alias="INTERNAL_API_KEY")
+
     profiles_dir: Path = DEFAULT_PROFILES_DIR
 
     def resolved_database_url(self, default: str | None = None) -> str:

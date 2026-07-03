@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
 from app.models import DimCommodity, DimMarketInstrument, FactPriceDaily
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -100,12 +101,19 @@ def test_commodity_prices_empty_and_unknown(client: TestClient) -> None:
     assert client.get("/commodities/NOT_A_COMMODITY/prices").status_code == 404
 
 
-def test_commodity_forecast_unavailable_without_history(client: TestClient) -> None:
-    # GOLD exists but has no price history in the test DB → available: false
-    r = client.get("/commodities/GOLD/forecast")
+def test_commodity_forecast_unavailable_without_history(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # /forecast is gated (SEC-2): provision the internal key + send the header the way
+    # cqp-web does, then GOLD (no price history in the test DB) → available: false.
+    from app.core import config
+
+    monkeypatch.setattr(config.get_settings(), "internal_api_key", "test-key")
+    hdr = {"X-Internal-Key": "test-key"}
+    r = client.get("/commodities/GOLD/forecast", headers=hdr)
     assert r.status_code == 200
     assert r.json()["available"] is False
-    assert client.get("/commodities/NOT_A_COMMODITY/forecast").status_code == 404
+    assert client.get("/commodities/NOT_A_COMMODITY/forecast", headers=hdr).status_code == 404
 
 
 def test_dashboard_root_serves_html(client: TestClient) -> None:
