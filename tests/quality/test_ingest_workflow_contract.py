@@ -27,8 +27,13 @@ def test_vn_prices_step_present_and_non_blocking() -> None:
     vn = _with_run(steps, "--sources vn_prices")
     assert len(vn) == 1, "expected exactly one vn_prices ingest step"
     step = vn[0]
-    assert "--write" in step["run"]
-    assert "--backfill" not in step["run"]  # VN is spot/today-only, not a historical backfill
+    run = step["run"]
+    # Conflict-safe: the backfill path (per-record ON CONFLICT DO NOTHING), NOT the
+    # all-or-nothing --write batch that could roll back a today-only source's rows.
+    assert "--backfill --sources vn_prices" in run
+    assert "--write" not in run
+    # Daily top-up of the forecast-primary SJC series so GOLD_VN can grow past MIN_HISTORY.
+    assert "--sources vn_history --history-days 7" in run
     assert step.get("continue-on-error") is True  # its failure must not fail the job
     assert str(step.get("if")).strip() == "always()"  # runs even if a prior step failed
     assert "${{ secrets.DATABASE_URL }}" in (step.get("env", {}) or {}).get("DATABASE_URL", "")

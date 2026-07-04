@@ -29,12 +29,12 @@ from sqlalchemy.orm import Session  # noqa: E402
 
 from etl.ingestion.config import IngestionConfig, load_ingestion_config  # noqa: E402
 from etl.sources.base import BaseSource  # noqa: E402
+from etl.sources.events.noaa_oni import NoaaOniSource  # noqa: E402
 from etl.sources.macro.yahoo_fx import MacroFxSource  # noqa: E402
-from etl.sources.market.yahoo import YahooPriceSource  # noqa: E402
 from etl.sources.market.vn_domestic import VnAppMobGoldSource, VnDomesticPriceSource  # noqa: E402
+from etl.sources.market.yahoo import YahooPriceSource  # noqa: E402
+from etl.sources.supply_demand.usda_psd_bulk import UsdaPsdBulkSource  # noqa: E402
 from etl.sources.weather.nasa_power import NasaPowerSource  # noqa: E402
-from etl.sources.events.noaa_oni import NoaaOniSource # noqa: E402
-from etl.sources.supply_demand.usda_psd_bulk import UsdaPsdBulkSource # noqa: E402
 from etl.writer import write_batch  # noqa: E402
 
 
@@ -113,10 +113,16 @@ def main() -> int:
     parser.add_argument(
         "--csv-import", dest="csv_import", help="run a named import from configs/ingestion/csv_imports.yaml"
     )
-    parser.add_argument("--sources", choices=["prices", "vn_prices", "vn_history", "weather", "macro", "events", "supply_demand", "all"], default="all")
+    parser.add_argument(
+        "--sources",
+        choices=["prices", "vn_prices", "vn_history", "weather", "macro", "events", "supply_demand", "all"],
+        default="all",
+    )
     parser.add_argument("--period", default="5d", help="yfinance history period (e.g. 5d, 1mo, 1y, 10y, max)")
     parser.add_argument("--weather-days", type=int, default=10, help="weather lookback window (days)")
-    parser.add_argument("--history-days", dest="history_days", type=int, default=400, help="vn_history lookback window (days)")
+    parser.add_argument(
+        "--history-days", dest="history_days", type=int, default=400, help="vn_history lookback window (days)"
+    )
     args = parser.parse_args()
 
     from app.db.session import get_session_factory
@@ -138,7 +144,8 @@ def main() -> int:
             from etl.backfill import backfill
 
             result = backfill(
-                session, which=args.sources, period=args.period, weather_days=args.weather_days
+                session, which=args.sources, period=args.period,
+                weather_days=args.weather_days, history_days=args.history_days,
             )
         else:
             result = run(
@@ -155,6 +162,16 @@ def main() -> int:
     import json
 
     print(json.dumps(result, indent=2, default=str))
+    return _exit_code(result)
+
+
+def _exit_code(result: dict[str, Any]) -> int:
+    """Non-zero when a WRITE was attempted but the batch did NOT commit — so CI/cron can
+    detect the silent-failure case (an all-or-nothing rollback) instead of a green exit 0.
+    Dry-runs and idempotent backfills (0 new rows is fine) exit 0."""
+    write = result.get("write") if isinstance(result, dict) else None
+    if isinstance(write, dict) and write.get("mode") == "write" and write.get("committed") is False:
+        return 1
     return 0
 
 

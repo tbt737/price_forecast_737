@@ -274,3 +274,31 @@ def load_ingestion_config(path: Path = CONFIG_PATH) -> IngestionConfig:
         prices=prices, weather=weather, macro=macro, events=events,
         supply_demand=supply_demand, vn_prices=vn_prices, vn_history=vn_history,
     )
+
+
+@dataclass(frozen=True)
+class FreshnessGroup:
+    """One coverage-gate group (scripts/check_freshness.py). ``critical`` groups fail the
+    daily gate; non-critical are warnings unless --strict. ``max_gap_days`` is the tolerated
+    calendar staleness of the group's latest price date."""
+
+    name: str
+    critical: bool
+    max_gap_days: int
+    commodities: tuple[str, ...]
+
+
+def load_freshness_groups(path: Path = CONFIG_PATH) -> list[FreshnessGroup]:
+    """Load the ``monitoring.groups`` freshness config (config-over-code — no hardcoded
+    ticker list in the gate script)."""
+    data: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    groups = ((data.get("monitoring") or {}).get("groups")) or []
+    return [
+        FreshnessGroup(
+            name=g["name"],
+            critical=bool(g.get("critical", False)),
+            max_gap_days=int(g["max_gap_days"]),
+            commodities=tuple(g.get("commodities", [])),
+        )
+        for g in groups
+    ]

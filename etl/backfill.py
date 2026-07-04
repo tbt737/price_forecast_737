@@ -59,6 +59,7 @@ def backfill(
     which: str = "all",
     period: str = "10y",
     weather_days: int = 1825,
+    history_days: int = 400,
     chunk: int = 1000,
     today: date | None = None,
 ) -> dict[str, Any]:
@@ -66,7 +67,8 @@ def backfill(
     if connectors is None:
         config = load_ingestion_config()
         connectors = build_connectors(
-            config, which=which, period=period, weather_days=weather_days, today=today or date.today()
+            config, which=which, period=period, weather_days=weather_days,
+            today=today or date.today(), history_days=history_days,
         )
 
     resolver = ReferenceResolver(session)

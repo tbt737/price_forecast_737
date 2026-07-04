@@ -85,3 +85,18 @@ vn_history:
         key_url: "https://vapi.vnappmob.com/api/request_api_key?scope=gold",
         data_url: "https://vapi.vnappmob.com/api/v2/gold/sjc",
         field: sell_1l, buy_field: buy_1l, currency: VND }
+
+monitoring:
+  # Freshness/coverage gate groups (scripts/check_freshness.py) — config-over-code, no
+  # hardcoded ticker list. max_gap_days = tolerated calendar staleness before a group is
+  # STALE. critical groups fail the daily gate (red run); non-critical (scraped VN spot
+  # sources that can die silently) are WARNINGs by default and only fail under --strict.
+  groups:
+    - name: futures
+      critical: true
+      max_gap_days: 3 # Mon expects Fri (3 calendar days); catches a frozen feed
+      commodities: [GOLD, CRUDE_OIL, CORN, WHEAT, COPPER, SUGAR, SOYBEAN, COCOA, RICE, FREIGHT_INDICES]
+    - name: vn_domestic
+      critical: false
+      max_gap_days: 4 # scraped spot; a dead PNJ/Phú Quý/VNAppMob endpoint is surfaced
+      commodities: [GOLD_VN, SILVER_VN]
