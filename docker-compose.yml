@@ -15,7 +15,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-cqp}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cqp_local_dev}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       # SQL migrations can be mounted here for init in later phases:
@@ -25,6 +25,35 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cqp_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cqp}:${POSTGRES_PASSWORD:-cqp_local_dev}@postgres:5432/${POSTGRES_DB:-commodity_quant}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        - API_PROXY_TARGET=http://api:8000
+    container_name: cqp_web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - API_PROXY_TARGET=http://api:8000
+    depends_on:
+      - api
 
 volumes:
   pgdata:

@@ -7,7 +7,7 @@
 > Fourier baseline) chosen per-commodity by walk-forward backtest with an honest
 > naive fallback; FastAPI service (cached forecasts) + Next.js dashboard with a
 > forecast-compare view; daily GitHub Actions ingest. Outstanding: macro/logistics/
-> S&D/event-driver connectors (Phase 3B), materialized views (Phase 5), model
+> S&D/event-driver connectors (Phase 3B), model
 > registry (Phase 7), and productionization (Phase 10 — Dockerfile + DEPLOY.md
 > exist; cloud hosting pending). See `DEPLOY.md` to go live.
 
@@ -184,9 +184,9 @@ against it on three fronts:
 ### 3.3 Materialized views for ML
 
 ML reads **materialized views**, never raw fact tables, so feature definitions are
-centralized, reproducible, and point-in-time safe. Planned views live in `db/views/`:
-wide per-commodity panels (one row per date, columns per `metric_code`/`indicator_code`),
-as-of join views, and resampled (daily/weekly) frames for Fourier + ML pipelines.
+centralized, reproducible, and point-in-time safe. Việc triển khai được chia làm 2 lớp:
+1. **Canonical PIT Long View (`v_ml_daily_feature_events_long`)**: Lớp chuẩn hóa kết hợp lưới thời gian (Time Grid) theo coverage window của từng commodity với các Fact tables (Price, Weather, Macro, v.v.). View này áp dụng quy tắc chống Look-ahead bias: `observation_date <= as_of_date` VÀ `release_date <= as_of_date`. Dữ liệu sau đó được gom thành mảng JSONB trong `v_ml_daily_features_jsonb`.
+2. **Wide Materialized View (`mv_ml_daily_features_wide`)**: Artifact được sinh ra bằng Python compiler (`db/views/compile_ml_feature_views.py`) từ cấu hình YAML để phục vụ trực tiếp cho ML. Script này tự động extract các cột wide format mà không cần viết tay SQL (chống hardcode). Mọi query ML sẽ query view này. Dữ liệu được làm mới qua `REFRESH MATERIALIZED VIEW CONCURRENTLY`.
 
 ### 3.4 ETL foundation (Phase 3A — dry-run skeleton)
 

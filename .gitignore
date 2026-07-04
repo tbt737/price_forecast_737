@@ -66,3 +66,10 @@ Thumbs.db
 /data/
 /node_modules
 .wrangler/
+
+# ── Local research / private notes (kept on disk, not published to this PUBLIC repo) ──
+Dữ Liệu Backtest Mô Hình Giá.md
+docs/deep-research-report-price-forecast.md
+
+# ── Local uv artifact; this repo standardizes on pip / requirements*.txt ─────────────
+uv.lock

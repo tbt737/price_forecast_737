@@ -4,10 +4,10 @@ A **generic, configuration-driven** AI platform for forecasting commodity prices
 **agriculture, energy, and metals**, plus macro/logistics indicators. New commodities
 are onboarded by adding a YAML profile — **never** by hardcoding business logic.
 
-> **Project status: Phase 1 — Foundation Initialization.** This repository currently
-> contains the monorepo skeleton, architectural docs, configuration scaffolds, and 16
-> commodity profiles. No ETL, ML, API, or UI logic is implemented yet. See
-> `ARCHITECTURE.md` for the full 10-phase roadmap.
+> **Project status: Phase 10 — Productionization & UI.** This repository now contains
+> the fully implemented ETL pipelines, zero-lookahead ML feature views, Walk-Forward
+> Backtesting registry, FastAPI caching backend, and the Next.js interactive UI.
+> It is ready for Docker / Cloud deployment.
 
 ---
 
@@ -75,14 +75,17 @@ cp .env.example .env        # then fill in values locally (never commit .env)
 # 2. Start local PostgreSQL
 docker compose up -d postgres
 
-# 3. Developer workflow (placeholders today)
+# 3. Developer workflow
 make help                   # list available targets
-make db-migrate             # apply SQL migrations            (Phase 2+)
-make etl-run                # run ETL ingestion               (Phase 3+)
-make api-dev                # run FastAPI dev server          (Phase 8+)
-make web-dev                # run Next.js dev server          (Phase 9+)
+make db-migrate             # apply SQL migrations
+make db-load                # load YAML profiles into DB
+make seed-sources           # seed DimDataSource
+make etl-run                # run ETL ingestion (prices, weather, events, etc.)
+make api-dev                # run FastAPI dev server
+make web-dev                # run Next.js dev server
 
-# 4. Quality gates
+# 4. Production via Docker
+docker compose up -d        # Starts Postgres, API, and Next.js Dashboard
 make lint                   # ruff
 make typecheck              # mypy
 make test                   # pytest

@@ -58,7 +58,7 @@ api-dev: ## Run the FastAPI dev server
 	cd apps/api && python -m uvicorn app.main:app --reload
 
 web-dev: ## Run the Next.js dev server (Phase 9+)
-	@echo "[web-dev] placeholder — wire up: (cd apps/web && npm run dev)"
+	cd apps/web && npm run dev
 
-etl-run: ## Real ETL ingestion (later phase). Phase 3A is dry-run only — see `make test`.
-	@echo "[etl-run] Phase 3A is a dry-run skeleton (no ingestion). Real connectors land in a later phase."
+etl-run: ## Real ETL ingestion (Phase 3B/4)
+	python -m etl.ingest
