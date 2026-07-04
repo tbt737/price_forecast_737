@@ -25,7 +25,9 @@ from ml.models.gbm_forecaster import is_available as gbm_available
 SWITCH_MARGIN = 0.02
 
 
-def best_of(candidate_mapes: dict[str, float], naive_mape: float, *, margin: float = SWITCH_MARGIN) -> tuple[str, float]:
+def best_of(
+    candidate_mapes: dict[str, float], naive_mape: float, *, margin: float = SWITCH_MARGIN
+) -> tuple[str, float]:
     """Production-equivalent selection: lowest finite MAPE wins, but only displaces
     naive when it beats it by ``margin``. Returns ``(chosen_name, effective_mape)``."""
     finite = {k: v for k, v in candidate_mapes.items() if np.isfinite(v)}
@@ -54,10 +56,13 @@ def evaluate_commodity(
     candidates: dict[str, float] = {"ridge_ar": ar.model_mape}
 
     if include_gbm and gbm_available():
-        gb = walk_forward_gbm(dates, values, horizon=horizon, folds=folds, min_train=min_train, exog_features=exog_features)
+        gb = walk_forward_gbm(
+            dates, values, horizon=horizon, folds=folds, min_train=min_train, exog_features=exog_features
+        )
         candidates["gbm"] = gb.model_mape
         gbc = walk_forward_gbm(
-            dates, values, horizon=horizon, folds=folds, min_train=min_train, use_cycles=True, exog_features=exog_features
+            dates, values, horizon=horizon, folds=folds,
+            min_train=min_train, use_cycles=True, exog_features=exog_features,
         )
         candidates["gbm_cyc"] = gbc.model_mape
 

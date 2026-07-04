@@ -55,6 +55,9 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "f
 "apps/api/app/migrations/env.py" = ["F401", "F403"]
 # seed script bootstraps sys.path before importing the app package.
 "db/seeds/*" = ["E402"]
+# MV builder holds long inline SQL query literals; splitting them risks altering the
+# query text and hurts readability. Narrow, file-scoped E501 exemption only.
+"ml/build_pandas_mv.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"

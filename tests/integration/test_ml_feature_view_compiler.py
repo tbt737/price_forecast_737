@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 VIEWS_DIR = PROJECT_ROOT / "db" / "views"
 GENERATED_FILE = VIEWS_DIR / "generated" / "010_mv_ml_daily_features_wide.sql"
@@ -19,7 +18,7 @@ def test_compiler_generates_valid_sql():
     """Compiler output must define the wide MV with safe metric aliases."""
     assert GENERATED_FILE.exists(), "Compiled SQL file must exist"
 
-    with open(GENERATED_FILE, "r", encoding="utf-8") as f:
+    with open(GENERATED_FILE, encoding="utf-8") as f:
         content = f.read()
 
     assert "CREATE MATERIALIZED VIEW IF NOT EXISTS mv_ml_daily_features_wide" in content

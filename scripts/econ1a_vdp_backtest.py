@@ -59,7 +59,11 @@ def _fmt(x: float) -> str:
 def main() -> int:
     horizon = 30
     print(f"ECON-1A Van der Pol backtest — horizon={horizon}, folds=5, source={CSV_PATH.name}\n")
-    header = f"{'commodity':10} {'n':>5} {'fold':>4} | {'naive':>6} {'ridge':>6} {'gbm':>6} {'gbmcyc':>6} {'ou':>6} {'vdp':>6} | {'best':>10} {'+ou':>10} {'+vdp':>10}"
+    header = (
+        f"{'commodity':10} {'n':>5} {'fold':>4} | "
+        f"{'naive':>6} {'ridge':>6} {'gbm':>6} {'gbmcyc':>6} {'ou':>6} {'vdp':>6} | "
+        f"{'best':>10} {'+ou':>10} {'+vdp':>10}"
+    )
     print(header)
     print("-" * len(header))
     vdp_beats_naive = vdp_beats_pool = catastrophic = evaluated = 0

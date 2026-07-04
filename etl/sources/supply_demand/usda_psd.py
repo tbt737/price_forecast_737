@@ -5,10 +5,10 @@ Config-driven (``configs/ingestion/sources.yaml`` ``supply_demand:``).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
-from datetime import date, timedelta
 import json
 import urllib.request
+from collections.abc import Callable, Iterable
+from datetime import date, timedelta
 from typing import Any
 
 from etl.contracts import FactFamily, NormalizedRecord

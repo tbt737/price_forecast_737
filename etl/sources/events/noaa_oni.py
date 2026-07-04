@@ -6,10 +6,10 @@ Fetches ONI values which indicate El Nino / La Nina events.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
-from datetime import date, timedelta
 import logging
 import urllib.request
+from collections.abc import Callable, Iterable
+from datetime import date, timedelta
 from typing import Any
 
 from etl.contracts import FactFamily, NormalizedRecord

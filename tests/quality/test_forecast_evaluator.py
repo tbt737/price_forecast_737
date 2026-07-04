@@ -56,7 +56,9 @@ def test_compute_errors() -> None:
 
 
 def test_nearest_actual_exact_and_weekend_grace() -> None:
-    assert E.nearest_actual([(date(2026, 6, 1), 100.0), (date(2026, 6, 2), 101.0)], date(2026, 6, 1), 4) == (date(2026, 6, 1), 100.0)
+    assert E.nearest_actual(
+        [(date(2026, 6, 1), 100.0), (date(2026, 6, 2), 101.0)], date(2026, 6, 1), 4
+    ) == (date(2026, 6, 1), 100.0)
     # target Saturday 2026-06-27, only Monday 06-29 priced → nearest next within grace
     assert E.nearest_actual([(date(2026, 6, 29), 200.0)], date(2026, 6, 27), 4) == (date(2026, 6, 29), 200.0)
 

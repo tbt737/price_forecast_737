@@ -10,8 +10,8 @@ _API_DIR = Path(__file__).resolve().parent / "apps" / "api"
 if str(_API_DIR) not in sys.path:
     sys.path.insert(0, str(_API_DIR))
 
-from sqlalchemy import text
-from app.db.session import get_session_factory
+from app.db.session import get_session_factory  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 
 VIEW_FILES = (
     "001_v_ml_daily_feature_events_long.sql",

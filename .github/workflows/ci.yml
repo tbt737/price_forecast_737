@@ -1,0 +1,60 @@
+name: CI
+
+# Real quality gate. Runs on every push to the main branch and on every pull
+# request so a red build blocks merge. No secrets, no deploy, no production DB —
+# tests use in-memory/SQLite fixtures; anything requiring a live DB is skipped.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (lint + tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install dependencies (runtime + dev)
+        run: pip install -r requirements-dev.txt
+      - name: Byte-compile (syntax gate)
+        run: python -m compileall -q etl scripts apps tests ml db apply_views.py
+      - name: Lint (ruff)
+        run: ruff check .
+      - name: Tests (pytest — quality, integration, api, ml)
+        run: python -m pytest
+      - name: Workflow YAML static check
+        run: python scripts/ci_check_workflows.py
+
+  web:
+    name: Web (lint + test + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install dependencies (npm ci)
+        run: npm ci
+      - name: Test (vitest)
+        run: npm test
+      - name: Lint (next lint)
+        run: npm run lint
+      - name: Build (next build)
+        run: npm run build

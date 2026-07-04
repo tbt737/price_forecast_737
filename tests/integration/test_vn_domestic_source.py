@@ -62,7 +62,10 @@ def _specs() -> list[VnPriceSpec]:
     return [
         VnPriceSpec("GOLD_VN", "PNJ_SJC", "PNJ", "pnj_json", GOLD_URL, "SJC", "VND", 0),
         VnPriceSpec("GOLD_VN", "PNJ_NHAN9999", "PNJ", "pnj_json", GOLD_URL, "N24K", "VND", 0),
-        VnPriceSpec("SILVER_VN", "PQ_BAC_MIENG999", "PHU_QUY", "phuquy_silver_html", SILVER_URL, "BẠC MIẾNG PHÚ QUÝ 999 1 LƯỢNG", "VND", 0),
+        VnPriceSpec(
+            "SILVER_VN", "PQ_BAC_MIENG999", "PHU_QUY", "phuquy_silver_html", SILVER_URL,
+            "BẠC MIẾNG PHÚ QUÝ 999 1 LƯỢNG", "VND", 0,
+        ),
     ]
 
 
@@ -101,7 +104,6 @@ def test_collect_skips_unknown_parser_format() -> None:
 
 
 # ── VNAppMob historical SJC source (VN-PRICE-2A) ─────────────────────────────
-import json as _json  # noqa: E402
 
 from etl.ingestion.config import VnHistorySpec  # noqa: E402
 from etl.sources.market.vn_domestic import (  # noqa: E402

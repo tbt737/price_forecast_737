@@ -55,7 +55,7 @@ def main():
     ]
 
     for yaml_file in config_dir.glob("*.yaml"):
-        with open(yaml_file, "r", encoding="utf-8") as f:
+        with open(yaml_file, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         if not data:

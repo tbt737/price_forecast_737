@@ -23,9 +23,10 @@ import json
 import re
 import sys
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from collections.abc import Callable
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 # The forecaster lives in the repo-root ``ml`` package; the session factory in the
 # FastAPI app package. Add BOTH to sys.path so this runs as a standalone script
@@ -70,10 +71,12 @@ def business_days_ahead(start: date, n: int) -> date:
 
 def new_run_id() -> str:
     """Stable id generated once per run (UTC timestamp + short uuid)."""
-    return f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:8]}"
+    return f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{uuid.uuid4().hex[:8]}"
 
 
-def forecast_to_rows(result: dict[str, Any], *, run_id: str, run_mode: str, version: str = WRITER_VERSION) -> list[dict[str, Any]]:
+def forecast_to_rows(
+    result: dict[str, Any], *, run_id: str, run_mode: str, version: str = WRITER_VERSION
+) -> list[dict[str, Any]]:
     """Map one ``forecast_commodity`` result to pending forecast-log rows (one per
     horizon). Unavailable / malformed / non-positive forecasts yield no rows."""
     if not result or not result.get("available"):

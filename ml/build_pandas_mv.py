@@ -1,13 +1,15 @@
 import sys
-import pandas as pd
-from pathlib import Path
-from sqlalchemy import text
 import time
+from pathlib import Path
+
+import pandas as pd
+from sqlalchemy import text
 
 sys.path.insert(0, str(Path(r"d:\AI Project\DỰ BÁO GIÁ CẢ HÀNG NÔNG SẢN\apps\api")))
 sys.path.insert(0, str(Path(r"d:\AI Project\DỰ BÁO GIÁ CẢ HÀNG NÔNG SẢN")))
 
 from app.db.session import get_session_factory
+
 
 def build_wide_table_pandas(session=None):
     db = session if session else get_session_factory()()
@@ -134,7 +136,7 @@ def build_wide_table_pandas(session=None):
 
         print("Done!")
 
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
     finally:

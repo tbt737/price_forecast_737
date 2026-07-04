@@ -24,7 +24,10 @@ SAMPLE = {
         "30": {
             "model_used": "ou",
             "points": [{"date": "2026-07-01", "value": 1980.0}, {"date": "2026-08-07", "value": 1950.0}],
-            "backtest": {"candidates": {"ou": 15.5}, "ou_considered": True, "mape_pct": 15.5, "naive_mape_pct": 23.0, "beats_naive": True},
+            "backtest": {
+                "candidates": {"ou": 15.5}, "ou_considered": True, "mape_pct": 15.5,
+                "naive_mape_pct": 23.0, "beats_naive": True,
+            },
         },
         "90": {
             "model_used": "naive",
@@ -119,7 +122,9 @@ def test_generate_rows_skips_failures_without_crashing() -> None:
             return {"available": False, "reason": "no data"}
         return _sample(code)
 
-    rows, skipped = W.generate_rows(None, ["ROBUSTA", "BOOM", "GONE"], [30, 90], run_id="R", run_mode="dry_run", forecast_fn=fn)
+    rows, skipped = W.generate_rows(
+        None, ["ROBUSTA", "BOOM", "GONE"], [30, 90], run_id="R", run_mode="dry_run", forecast_fn=fn
+    )
     assert len(rows) == 2  # only ROBUSTA
     assert {c for c, _ in skipped} == {"BOOM", "GONE"}
 

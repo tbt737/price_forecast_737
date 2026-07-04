@@ -16,7 +16,7 @@ import html
 import json
 import re
 from collections.abc import Callable, Iterable
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from etl.contracts import FactFamily, NormalizedRecord
@@ -159,7 +159,7 @@ def parse_vnappmob_gold(raw: str, sell_field: str, buy_field: str) -> list[dict[
     out: list[dict[str, Any]] = []
     for r in data.get("results") or []:
         try:
-            d = datetime.fromtimestamp(int(r["datetime"]), timezone.utc).date()
+            d = datetime.fromtimestamp(int(r["datetime"]), UTC).date()
             sell = float(r[sell_field])
         except (KeyError, TypeError, ValueError, OverflowError, OSError):
             continue
