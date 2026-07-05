@@ -40,12 +40,29 @@ def select_candidate(
     wins, but only displaces the naive benchmark when it beats it by ``margin``. This
     guards against crowning a noise-level "winner" out of several candidates — and is
     exactly what keeps a weak OU from ever being chosen. Returns ``(model_used,
-    chosen_mape)``; ``model_used == "naive"`` means the benchmark held."""
+    chosen_mape)`` where ``chosen_mape`` is the backtest MAPE of the model actually used:
+    when ``model_used == "naive"`` (the benchmark held) that is ``naive_mape`` itself — not
+    the losing candidate's MAPE."""
     finite = {k: v for k, v in candidates.items() if np.isfinite(v)}
     best = min(finite, key=lambda k: finite[k]) if finite else None
     if best is not None and np.isfinite(naive_mape) and finite[best] < naive_mape * (1.0 - margin):
         return best, finite[best]
-    return "naive", (finite[best] if best is not None else float("nan"))
+    return "naive", naive_mape
+
+
+def impute_exog(df_view: Any, dates: list[date]) -> Any:
+    """Causal, point-in-time imputation of the exogenous feature frame.
+
+    ``ffill`` carries the last KNOWN past value forward; the frame is reindexed onto the
+    price ``dates`` (still forward-fill). Any remaining NaN are *leading* rows — dates
+    before a feature's first observation, where no past value exists — and get a neutral
+    ``0.0``. Crucially, **no full-history statistic** (e.g. a global median) is used: every
+    imputed value at row ``t`` depends only on data at or before ``t``, so nothing leaks the
+    future into an early walk-forward backtest fold (the bug this replaces used
+    ``df.median()`` over the whole series)."""
+    df = df_view.sort_index().ffill()
+    df = df.reindex(dates, method="ffill")
+    return df.fillna(0.0)
 
 
 def _next_business_days(last: date, count: int) -> list[date]:
@@ -160,13 +177,9 @@ def forecast_commodity(
             logger.warning(f"Dropping columns due to non-numeric garbage: {nan_cols}")
             df_view = df_view.drop(columns=nan_cols)
 
-        # time-safe imputation
-        df_view = df_view.sort_index()
-        df_view = df_view.ffill()
-        df_view = df_view.reindex(dates, method="ffill")
-
-        # train-only median/imputer substitute (using past available data)
-        df_view = df_view.fillna(df_view.median()).fillna(0.0)
+        # Causal imputation only (see impute_exog): no full-history statistic may touch the
+        # exog array, or it would leak the future into early walk-forward backtest folds.
+        df_view = impute_exog(df_view, dates)
 
         exog_feature_names = df_view.columns.tolist()
         logger.info(f"Final exog_feature_names passed to model: {exog_feature_names}")

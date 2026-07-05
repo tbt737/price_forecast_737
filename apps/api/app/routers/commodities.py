@@ -6,11 +6,12 @@ their phases). Fully generic — nothing is special-cased per commodity.
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import date, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -39,6 +40,7 @@ from app.schemas.commodity import (
 )
 
 router = APIRouter(tags=["commodities"])
+logger = logging.getLogger(__name__)
 
 _FACT_MODELS = (
     FactPriceDaily, FactWeatherDaily, FactMacroDaily,
@@ -108,10 +110,14 @@ def list_profiles(db: Session = Depends(get_db)) -> list[CommodityProfileRegistr
 
 @router.get("/commodities/{commodity_code}/prices", response_model=PriceSeriesOut)
 def get_commodity_prices(
-    commodity_code: str, days: int = 365, db: Session = Depends(get_db)
+    commodity_code: str,
+    days: int = Query(365, ge=1, le=20000, description="lookback window in days (bounded to avoid date overflow)"),
+    db: Session = Depends(get_db),
 ) -> PriceSeriesOut:
     """Daily close series for the commodity's benchmark instrument (the one with the
-    most price history), over the last ``days`` days. Empty if no prices ingested."""
+    most price history), over the last ``days`` days. Empty if no prices ingested.
+    ``days`` is bounded to [1, 20000]; out-of-range values return 422 (never a 500 from
+    a ``date`` underflow)."""
     commodity = db.execute(
         select(DimCommodity).filter_by(commodity_code=commodity_code.upper())
     ).scalar_one_or_none()
@@ -190,7 +196,13 @@ def get_commodity_forecast(commodity_code: str, db: Session = Depends(get_db)) -
 
     from ml.forecast import forecast_commodity
 
-    result = forecast_commodity(db, code)
+    try:
+        result = forecast_commodity(db, code)
+    except Exception:  # noqa: BLE001 — fail closed: never surface internals (traceback, module path, DB URL)
+        logger.exception("forecast computation failed for %s", code)
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, detail="Forecast service temporarily unavailable"
+        ) from None
     _FORECAST_CACHE[code] = (time.monotonic(), fingerprint, result)
     return result
 

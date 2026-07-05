@@ -85,7 +85,7 @@ def test_commodity_prices_series(client: TestClient, seeded_session: Session) ->
     )
     seeded_session.commit()
 
-    r = client.get("/commodities/gold/prices?days=100000")
+    r = client.get("/commodities/gold/prices?days=20000")  # max allowed lookback ⇒ returns all history
     assert r.status_code == 200
     body = r.json()
     assert body["commodity_code"] == "GOLD"
