@@ -1,0 +1,39 @@
+name: VN freshness monitor
+
+# Dedicated READ-ONLY monitor for the scraped Vietnam domestic price sources
+# (GOLD_VN / SILVER_VN via PNJ / Phú Quý / VNAppMob). These are NON-critical in the
+# daily ingest gate on purpose — a dead scraper endpoint must never fail the futures
+# feed — so a stale VN series otherwise only shows as a WARNING in the daily log and
+# can rot unnoticed. This workflow runs the freshness gate in --strict mode scoped to
+# the vn_domestic group only, so VN staleness turns THIS workflow red (and notifies
+# via the normal Actions failure path). It NEVER ingests or writes: the gate is a
+# read-only SELECT max(price_date). Requires the DATABASE_URL repo secret.
+
+on:
+  schedule:
+    - cron: "30 1 * * *" # daily 01:30 UTC (~08:30 ICT), after the 22:00 UTC VN ingest lands
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+concurrency:
+  group: vn-freshness-monitor
+  cancel-in-progress: false
+
+jobs:
+  vn-freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      # Read-only: scoped to the vn_domestic group, --strict so a stale scraped series
+      # (latest price_date older than its max_gap_days) fails the job. No ingest, no write.
+      - name: VN freshness (strict, read-only)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/check_freshness.py --group vn_domestic --strict

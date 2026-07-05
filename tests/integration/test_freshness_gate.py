@@ -9,9 +9,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-from check_freshness import is_within_gap  # noqa: E402
+from check_freshness import classify, is_within_gap, select_groups  # noqa: E402
 
-from etl.ingestion.config import load_freshness_groups  # noqa: E402
+from etl.ingestion.config import FreshnessGroup, load_freshness_groups  # noqa: E402
 
 
 def test_is_within_gap_basic() -> None:
@@ -39,3 +39,50 @@ def test_freshness_config_loads_critical_and_noncritical_groups() -> None:
     vn = groups["vn_domestic"]
     assert vn.critical is False  # scraped spot ⇒ warn, not block the daily gate
     assert "GOLD_VN" in vn.commodities and "SILVER_VN" in vn.commodities
+
+
+# ETL-VN-4: --group filter + strict classification (pure; no DB/network).
+
+_FUT = FreshnessGroup(name="futures", critical=True, max_gap_days=3, commodities=("GOLD", "CRUDE_OIL"))
+_VN = FreshnessGroup(name="vn_domestic", critical=False, max_gap_days=4, commodities=("GOLD_VN", "SILVER_VN"))
+_ALL = [_FUT, _VN]
+
+
+def test_select_groups_none_returns_all() -> None:
+    selected, unknown = select_groups(_ALL, None)
+    assert [g.name for g in selected] == ["futures", "vn_domestic"]
+    assert unknown == []
+
+
+def test_select_groups_filters_to_named_group() -> None:
+    # The VN monitor scopes to vn_domestic only — futures must not leak in.
+    selected, unknown = select_groups(_ALL, ["vn_domestic"])
+    assert [g.name for g in selected] == ["vn_domestic"]
+    assert unknown == []
+
+
+def test_select_groups_reports_unknown_name() -> None:
+    # A typo must surface (caller exits non-zero) — never silently pass green.
+    selected, unknown = select_groups(_ALL, ["vn_domestic", "typo_xyz"])
+    assert [g.name for g in selected] == ["vn_domestic"]
+    assert unknown == ["typo_xyz"]
+
+
+def test_classify_strict_makes_noncritical_vn_fail() -> None:
+    today = date(2026, 7, 4)
+    stale = date(2026, 6, 20)  # 14 days > vn max_gap_days=4
+    assert classify(_VN, stale, today, strict=False) == "warn"  # daily gate: warn only
+    assert classify(_VN, stale, today, strict=True) == "fail"  # VN monitor: red
+
+
+def test_classify_critical_futures_fail_without_strict() -> None:
+    today = date(2026, 7, 4)
+    stale = date(2026, 6, 20)
+    assert classify(_FUT, stale, today, strict=False) == "fail"  # critical always blocks
+    assert classify(_FUT, None, today, strict=False) == "fail"  # no data ⇒ stale ⇒ fail
+
+
+def test_classify_fresh_is_ok_even_strict() -> None:
+    today = date(2026, 7, 4)
+    assert classify(_VN, date(2026, 7, 3), today, strict=True) == "ok"
+    assert classify(_FUT, date(2026, 7, 3), today, strict=True) == "ok"
