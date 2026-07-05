@@ -1,0 +1,41 @@
+name: Accuracy — forecast-log writer
+
+# WRITE half of the accuracy loop. After each SUCCESSFUL daily ingest, snapshot the
+# current 30/90-day forecasts into fact_forecast_log as `pending` rows (idempotent —
+# ON CONFLICT DO NOTHING on the unique grain, so a same-day rerun inserts 0). It runs
+# ml.forecast.forecast_commodity directly (no HTTP, so SEC-2's internal key is not
+# involved) and appends to fact_forecast_log ONLY — it never ingests prices, never
+# migrates, and never touches any other table. Real exit code: a validation error (2) or
+# an unhandled failure turns the run red (no continue-on-error, no `|| true`).
+
+on:
+  # Chain off the daily ingest so forecasts are logged on fresh prices.
+  workflow_run:
+    workflows: ["Daily ingestion"]
+    types: [completed]
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+concurrency:
+  group: accuracy-writer
+  cancel-in-progress: false
+
+jobs:
+  write-forecast-log:
+    # Only after a SUCCESSFUL ingest (skip a failed/cancelled one so we don't log on a
+    # broken feed). A manual dispatch has no triggering run, so allow it unconditionally.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Write forecast log (pending rows)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/write_forecast_log.py --write

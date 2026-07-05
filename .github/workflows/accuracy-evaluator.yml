@@ -1,0 +1,36 @@
+name: Accuracy — forecast evaluator
+
+# EVALUATE half of the accuracy loop. Weekly: for matured `pending` rows in
+# fact_forecast_log (target_date reached), fill actual_price + errors from the real price
+# series and flip status to `evaluated`; a row still without a real price past the grace
+# window becomes `expired`. It NEVER fabricates an actual. Single-table UPDATE on
+# fact_forecast_log ONLY — it never ingests prices, never migrates, never touches any
+# other table. Real exit code: a validation error (2) or an unhandled failure turns the
+# run red.
+
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Mondays 03:00 UTC
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+concurrency:
+  group: accuracy-evaluator
+  cancel-in-progress: false
+
+jobs:
+  evaluate-forecast-log:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Evaluate forecast log (fill actuals / expire matured rows)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/evaluate_forecast_log.py --write
