@@ -6,7 +6,7 @@
   pytest 9 / ruff / mypy) + Next.js + TS + vitest in `apps/web`
 - Git: yes (branch `master`; AI sessions commit only after gates pass, push/tag only when asked)
 - Baseline (2026-07-07, commit 4925b9d): **pytest 409 passed + 1 skipped** (PG-only, needs
-  `CQP_TEST_PG_URL`) · **web vitest 34 passed** · ruff 0 · mypy 0 (28+31 files) · 16 profiles
+  `CQP_TEST_PG_URL`) · **web vitest 34 passed** · ruff 0 · mypy 0 (28+31 files) · 20 profiles
 
 ## Gates (run from repo root with GLOBAL `python`, not `.venv` — see pitfalls)
 1. `python -m compileall -q etl scripts apps tests ml db apply_views.py`
@@ -39,7 +39,7 @@
   `…::test_core_pipeline_needs_no_network*`
 - INV-3 **Zero look-ahead**: features/views never see data with `valid_from > T` — pinned by
   `tests/integration/test_point_in_time_correctness.py`
-- INV-4 **Inventory counts** (16 profiles + instrument/commodity counts) — pinned by
+- INV-4 **Inventory counts** (20 profiles + instrument/commodity counts) — pinned by
   `tests/quality/test_profiles_quality.py`, `tests/integration/test_schema_and_load.py`,
   `apps/api/tests/test_loader.py`, `apps/api/tests/test_api.py`
 - INV-5 **Generic schema**: table names never hardcode a commodity — pinned by
