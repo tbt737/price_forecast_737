@@ -92,3 +92,5 @@
   the regenerated diff is expected — keep it.
 - Repo path contains Vietnamese diacritics — always quote paths; some tools garble the name in
   output (cosmetic only).
+- `git diff` shows nothing for untracked files — to review NEW files before commit use
+  `git add -N <files> && git diff -- <files>`, or stage then `git diff --cached -- <files>`.
