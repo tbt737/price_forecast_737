@@ -49,12 +49,12 @@ def test_create_all_and_load_all_profiles() -> None:
     with sessionmaker(bind=eng, future=True)() as session:
         summary = load_profiles(session)
         session.commit()
-        assert summary["profile:loaded"] == 20  # +GOLD_VN +SILVER_VN
-        assert session.scalar(select(func.count()).select_from(DimCommodity)) == 20
-        assert session.scalar(select(func.count()).select_from(CommodityProfileRegistry)) == 20
+        assert summary["profile:loaded"] == 21  # +GOLD_VN +SILVER_VN +PEPPER_VN
+        assert session.scalar(select(func.count()).select_from(DimCommodity)) == 21
+        assert session.scalar(select(func.count()).select_from(CommodityProfileRegistry)) == 21
         assert session.scalar(select(func.count()).select_from(CommodityRegionMap)) > 0
         # 52 baseline + 6 (2 dehydrated profiles) + 5 IN_NATIONAL_MEDIAN
         # (onion/chilli/garlic/peanuts/robusta national series) + 4 VN
-        # (2 GOLD_VN PNJ, 1 SILVER_VN, 1 GOLD_VN VNAppMob SJC 1L)
-        assert session.scalar(select(func.count()).select_from(DimMarketInstrument)) == 67
+        # (2 GOLD_VN PNJ, 1 SILVER_VN, 1 GOLD_VN VNAppMob SJC 1L) + 1 PEPPER_VN (giá tiêu average)
+        assert session.scalar(select(func.count()).select_from(DimMarketInstrument)) == 68
     eng.dispose()

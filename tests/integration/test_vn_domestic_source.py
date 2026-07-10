@@ -13,6 +13,7 @@ from etl.contracts import FactFamily
 from etl.ingestion.config import VnPriceSpec
 from etl.sources.market.vn_domestic import (
     VnDomesticPriceSource,
+    parse_giatieu_html,
     parse_phuquy_silver_html,
     parse_pnj_json,
 )
@@ -20,9 +21,11 @@ from etl.sources.market.vn_domestic import (
 _FIX = Path(__file__).resolve().parents[2] / "etl" / "tests" / "fixtures" / "vn"
 PNJ_JSON = (_FIX / "pnj_gold.json").read_text(encoding="utf-8")
 PHUQUY_HTML = (_FIX / "phuquy_silver.html").read_text(encoding="utf-8")
+GIATIEU_HTML = (_FIX / "giatieu_pepper.html").read_text(encoding="utf-8")
 
 GOLD_URL = "https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price"
 SILVER_URL = "https://giabac.phuquygroup.vn/PhuQuyPrice/SilverPricePartial"
+PEPPER_URL = "https://giatieu.com/gia-tieu-hom-nay/"
 TODAY = date(2026, 6, 29)
 
 
@@ -55,6 +58,25 @@ def test_phuquy_html_real_fixture_and_edge_cases() -> None:
     # the "BẠC 999 (MIẾNG...)" row has a non-numeric '_' sell → no usable price
     assert parse_phuquy_silver_html(PHUQUY_HTML, "BẠC 999 (MIẾNG - THANH - THỎI)") is None
     assert parse_phuquy_silver_html(PHUQUY_HTML, "KHÔNG TỒN TẠI") is None
+
+
+# ── parser: giá tiêu domestic HTML ───────────────────────────────────────────
+def test_giatieu_html_average_and_region_synthetic() -> None:
+    raw = (
+        "<h1>Giá tiêu hôm nay</h1><p>trung bình <b>139,200</b> VNĐ/kg</p>"
+        "<table><tr><td>Đắk Lắk</td><td>140,000</td><td>0</td></tr>"
+        "<tr><td>Gia Lai</td><td>138,000</td><td>0</td></tr></table>"
+    )
+    assert parse_giatieu_html(raw, "TRUNG_BINH") == 139200.0  # headline average (tags stripped)
+    assert parse_giatieu_html(raw, "AVG") == 139200.0  # alias
+    assert parse_giatieu_html(raw, "Đắk Lắk") == 140000.0  # region label → its price
+    assert parse_giatieu_html(raw, "KHÔNG CÓ") is None  # absent key
+
+
+def test_giatieu_html_real_fixture() -> None:
+    assert parse_giatieu_html(GIATIEU_HTML, "TRUNG_BINH") == 139200.0
+    assert parse_giatieu_html(GIATIEU_HTML, "Đắk Lắk") == 140000.0
+    assert parse_giatieu_html(GIATIEU_HTML, "Đắk Nông") == 141000.0
 
 
 # ── connector: collect() with injected fetch ─────────────────────────────────
@@ -101,6 +123,17 @@ def test_collect_is_fail_soft_on_fetch_error() -> None:
 def test_collect_skips_unknown_parser_format() -> None:
     bad = [VnPriceSpec("X_VN", "X", "PNJ", "no_such_format", GOLD_URL, "SJC", "VND", 0)]
     assert list(VnDomesticPriceSource(bad, today=TODAY, fetch=_fetch).collect()) == []
+
+
+def test_collect_pepper_domestic_average() -> None:
+    spec = [VnPriceSpec("PEPPER_VN", "GIATIEU_TB", "GIATIEU", "giatieu_html", PEPPER_URL, "TRUNG_BINH", "VND", 0)]
+    recs = list(VnDomesticPriceSource(spec, today=TODAY, fetch=lambda _u: GIATIEU_HTML).collect())
+    assert len(recs) == 1
+    r = recs[0]
+    assert r.commodity_code == "PEPPER_VN" and r.instrument_code == "GIATIEU_TB"
+    assert r.family == FactFamily.price_daily and r.currency == "VND"
+    assert r.value == 139200.0  # today's headline average, VNĐ/kg, as published
+    assert r.observation_date == TODAY and r.data_source_code == "GIATIEU"
 
 
 # ── VNAppMob historical SJC source (VN-PRICE-2A) ─────────────────────────────

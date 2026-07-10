@@ -26,6 +26,7 @@ INGESTION_SOURCES: dict[str, tuple[str, str]] = {
     "PNJ": ("PNJ public gold-price endpoint (Vietnam domestic)", "public"),
     "PHU_QUY": ("Phú Quý Group silver-price partial (Vietnam domestic)", "public"),
     "VNAPPMOB": ("VNAppMob Gold API v2 (historical SJC, Vietnam domestic)", "public"),
+    "GIATIEU": ("giatieu.com public daily domestic pepper-price page (Vietnam domestic)", "public"),
 }
 
 

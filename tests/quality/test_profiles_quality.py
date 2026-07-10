@@ -40,7 +40,7 @@ PROFILE_FILES = sorted(PROFILES_DIR.glob("*.yaml"))
 
 
 def test_sixteen_profiles_present() -> None:
-    assert len(PROFILE_FILES) == 20  # +GOLD_VN +SILVER_VN (Vietnam domestic)
+    assert len(PROFILE_FILES) == 21  # +GOLD_VN +SILVER_VN +PEPPER_VN (Vietnam domestic)
 
 
 @pytest.mark.parametrize("path", PROFILE_FILES, ids=lambda p: p.stem)

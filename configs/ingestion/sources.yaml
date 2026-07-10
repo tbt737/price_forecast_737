@@ -72,6 +72,8 @@ vn_prices:
         url: "https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price", product_key: "N24K", currency: VND }
     - { commodity_code: SILVER_VN, instrument_code: PQ_BAC_MIENG999, source_code: PHU_QUY, parser: phuquy_silver_html,
         url: "https://giabac.phuquygroup.vn/PhuQuyPrice/SilverPricePartial", product_key: "BẠC MIẾNG PHÚ QUÝ 999 1 LƯỢNG", currency: VND }
+    - { commodity_code: PEPPER_VN, instrument_code: GIATIEU_TB, source_code: GIATIEU, parser: giatieu_html,
+        url: "https://giatieu.com/gia-tieu-hom-nay/", product_key: "TRUNG_BINH", currency: VND }
 
 vn_history:
   # Vietnam domestic HISTORICAL prices via a date-range API (VNAppMob). ADDITIVE — a new

@@ -1,0 +1,55 @@
+commodity_code: "PEPPER_VN"
+commodity_name: "Black pepper (Vietnam domestic)"
+commodity_group: "agriculture"
+base_unit: "kg"
+default_currency: "VND"
+
+market_instruments:
+  - { instrument_code: "GIATIEU_TB", exchange: "Vietnam domestic spot (regional average)", symbol: "VN_PEPPER_AVG", description: "National average domestic black-pepper price (giá tiêu trung bình), VNĐ/kg", contract_unit: "kg", currency: "VND" }
+
+weather_regions:
+  - { region_code: "VN_CENTRAL_HIGHLANDS", name: "Central Highlands (Tây Nguyên) — Đắk Lắk / Đắk Nông / Gia Lai, the main pepper belt", country: "VN" }
+  - { region_code: "VN_SOUTHEAST", name: "Southeast (Bà Rịa - Vũng Tàu / Bình Phước / Đồng Nai)", country: "VN" }
+
+production_regions:
+  - { region_code: "VN", name: "Vietnam (world's largest black-pepper producer/exporter)", role: "production" }
+  - { region_code: "GLOBAL", name: "Brazil / Indonesia / India (competing origins set the world price)", role: "production" }
+
+consumption_regions:
+  - { region_code: "GLOBAL", name: "World spice demand (US / EU / India / China import for consumption)", role: "consumption" }
+  - { region_code: "VN", name: "Vietnam domestic consumption + processing", role: "consumption" }
+
+export_regions:
+  - { region_code: "VN", name: "Vietnam (dominant black-pepper exporter — export demand drives the domestic farmgate price)", role: "export" }
+
+import_regions:
+  - { region_code: "GLOBAL", name: "US / EU / China / India (major import destinations)", role: "import" }
+
+physical_drivers:
+  - { metric_code: "world_pepper_usd", description: "International black-pepper benchmark (IPC / India) — the export-parity anchor" }
+  - { metric_code: "vn_harvest", description: "Vietnam harvest volume / carry-over stocks (Feb–Apr main crop)" }
+  - { metric_code: "competing_origin_supply", description: "Brazil / Indonesia crop competing for export demand" }
+
+macro_drivers:
+  - { metric_code: "usd_vnd", description: "USD/VND exchange rate (export price → domestic VND farmgate)" }
+  - { metric_code: "global_spice_demand", description: "US/EU/China spice import demand + food-service cycle" }
+  - { metric_code: "vn_input_costs", description: "Fertiliser / labour / fuel input costs for growers" }
+
+logistics_drivers:
+  - { metric_code: "export_freight", description: "Container freight + export logistics from Vietnam ports" }
+  - { metric_code: "farmgate_trader_spread", description: "Farmgate-to-exporter trader margin" }
+
+event_risk_drivers:
+  - { metric_code: "weather_shock", description: "Drought / El Niño / unseasonal rain in the Central Highlands" }
+  - { metric_code: "disease_pressure", description: "Root-rot / quick-wilt disease cutting yields" }
+  - { metric_code: "trade_policy", description: "Import-tariff / MRL (pesticide-residue) rule changes in key markets" }
+
+data_sources:
+  - { source_code: "GIATIEU", name: "giatieu.com public daily domestic pepper-price page", access: "public", url: "https://giatieu.com/gia-tieu-hom-nay/" }
+
+models:
+  - { model_code: "naive_rw", family: "baseline", horizon: "daily", description: "Random-walk baseline (best-of pool)" }
+  - { model_code: "ridge_ar", family: "scikit-learn", horizon: "daily", description: "Ridge autoregression on lagged domestic price" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting once history accumulates" }
+
+notes: "Vietnam DOMESTIC black-pepper farmgate price (regional average, giá tiêu trung bình) in VNĐ/kg — distinct from any international benchmark. Vietnam is the world's largest producer/exporter, so the domestic price tracks export parity (world price × USD/VND) net of trader margin, and is highly weather- and export-demand-sensitive. Spot-scraped daily from the source's headline average (today's value only); forecasting becomes meaningful once enough daily history accumulates. Recorded value is the source-published price as-is."

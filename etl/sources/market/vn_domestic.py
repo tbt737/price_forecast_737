@@ -89,10 +89,31 @@ def parse_phuquy_silver_html(raw: str, product_key: str) -> float | None:
     return None
 
 
+#: headline "trung bình <N> VNĐ/kg" average on a normalized (upper-cased, tag-stripped) page.
+_VN_AVG_VND_KG = re.compile(r"TRUNG BÌNH\s*([\d.,]{5,})\s*VNĐ/KG")
+
+
+def parse_giatieu_html(raw: str, product_key: str) -> float | None:
+    """A Vietnamese domestic spot HTML page that publishes today's headline average plus a
+    per-region breakdown, in VNĐ/kg. Tags are stripped and the text upper-cased, then the
+    price for ``product_key`` is returned: ``TRUNG_BINH`` (or ``AVG`` / ``AVERAGE``) picks
+    the headline average; any other key is matched as a region label (e.g. ``ĐẮK LẮK``) and
+    returns the first VN-formatted number after it. Value is the published price as-is;
+    None if the key is absent or non-numeric."""
+    text = _norm(_TAG.sub(" ", raw))  # unescape + strip tags + collapse whitespace + upper
+    key = _norm(product_key)
+    if key in ("TRUNG BINH", "TRUNG_BINH", "AVG", "AVERAGE"):
+        m = _VN_AVG_VND_KG.search(text)
+        return _to_float(m.group(1)) if m else None
+    m = re.search(re.escape(key) + r"\s*([\d.,]{5,})", text)  # region label followed by its price
+    return _to_float(m.group(1)) if m else None
+
+
 #: parser FORMAT name -> implementation. Keyed on format, never on commodity.
 PARSERS: dict[str, Callable[[str, str], float | None]] = {
     "pnj_json": parse_pnj_json,
     "phuquy_silver_html": parse_phuquy_silver_html,
+    "giatieu_html": parse_giatieu_html,
 }
 
 
