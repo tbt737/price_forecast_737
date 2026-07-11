@@ -62,12 +62,20 @@ No code pack is currently in flight. Highest-value next actions, in order:
   4. a test simulates a dividend/split that restates the WHOLE adjusted history;
   5. checks for duplicate grain, NaN/Infinity, revision handling, and abnormal jumps;
   6. full gates green (pytest, vitest, ruff, mypy, build, architecture guards).
-  Approved production sequence (execute strictly in order): lock scheduled top-up →
-  snapshot/export DB state → `make db-load` → verify 51 profiles & old profiles
-  untouched → land+merge restatement pack → canary backfill 1–2 tickers → repeat
-  canary (convergence/idempotency) → full 30-ticker backfill → row-count/dup/range/
-  discontinuity checks → deploy API + smoke → deploy web + smoke `/stocks` →
-  re-enable scheduled top-up (`ENABLE_VN_STOCKS_INGEST=true`) → watch ≥1 ingest cycle.
+  Approved production sequence (execute strictly in order): lock scheduled top-up ✅
+  (`f3d2812`, contract-test-pinned) → snapshot/export DB state ✅ (2026-07-11,
+  pre/post JSON) → `make db-load` ✅ (2026-07-11 via Session pooler: 51 profiles /
+  98 instruments; 21 old registry rows byte-identical checksum+version;
+  fact_price_daily untouched at 106,455) → verify ✅ → **NEXT:** land+merge
+  restatement pack → canary backfill 1–2 tickers → repeat canary (convergence/
+  idempotency) → full 30-ticker backfill → row-count/dup/range/discontinuity checks →
+  deploy API + smoke → deploy web + smoke `/stocks` → re-enable scheduled top-up
+  (`ENABLE_VN_STOCKS_INGEST=true`) → watch ≥1 ingest cycle.
+  ⚠ Interim side effects until deploy: the LIVE explorer (old web build) shows the 30
+  equities mixed into the commodity list with DEMO badges (no `/stocks` page yet);
+  pack `8eb7dc2`+`f3d2812` are LOCAL-ONLY (not pushed), so the GitHub cron has no
+  vn_stocks step at all yet — double-locked. When pushing later, expect the strict VN
+  freshness monitor to flag the (still-empty) vn_stocks group STALE until backfill.
   VN30 basket = review effective 2026-02-02; refresh on each semiannual HOSE review.
 - **ACC-REVIEW — WAITING.** The accuracy loop is scheduled (`4925b9d`): writer logs pending
   forecasts to `fact_forecast_log` after each ingest; evaluator (Mondays 03:00 UTC) matures
