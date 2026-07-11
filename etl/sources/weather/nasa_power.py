@@ -28,7 +28,7 @@ def _nasa_power_fetch(
 ) -> dict[str, dict[date, float]]:
     import requests
 
-    query = {
+    query: dict[str, str | float] = {
         "parameters": ",".join(params),
         "community": "AG",
         "latitude": lat,
