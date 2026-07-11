@@ -58,8 +58,11 @@ jobs:
       # decision 2026-07-11; unlock criteria in PLAN.md §5). To enable, set the
       # repository variable ENABLE_VN_STOCKS_INGEST=true (Settings → Secrets and
       # variables → Actions → Variables). Unset/other values ⇒ step is skipped.
+      # `!cancelled()` (not `always()`): this step is independent of prior steps (only
+      # needs DATABASE_URL), so it still self-heals after an unrelated failure — but it
+      # must not fire on a cancelled run (owner decision 2026-07-11, observation 3).
       - name: Ingest VN30 equities (non-blocking, flag-gated)
-        if: ${{ always() && vars.ENABLE_VN_STOCKS_INGEST == 'true' }}
+        if: ${{ !cancelled() && vars.ENABLE_VN_STOCKS_INGEST == 'true' }}
         continue-on-error: true
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

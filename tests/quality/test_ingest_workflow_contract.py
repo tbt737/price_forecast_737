@@ -52,9 +52,12 @@ def test_vn_stocks_step_present_non_blocking_and_flag_gated() -> None:
     # 🔒 Owner decision 2026-07-11: the step is OFF unless the repo variable is
     # explicitly 'true' — an append-only top-up of a restating (adjusted) source is
     # unsafe until the revision-aware heal lands (unlock criteria in PLAN.md §5).
+    # Owner observation 3: `!cancelled()` (independent step: self-heals after an
+    # unrelated failure, but never fires on a cancelled run) — NOT `always()`.
     cond = str(step.get("if"))
-    assert "always()" in cond  # still runs even if a prior step failed…
-    assert "vars.ENABLE_VN_STOCKS_INGEST == 'true'" in cond  # …but ONLY when opted in
+    assert "!cancelled()" in cond
+    assert "always()" not in cond
+    assert "vars.ENABLE_VN_STOCKS_INGEST == 'true'" in cond  # ONLY when opted in
     assert "${{ secrets.DATABASE_URL }}" in (step.get("env", {}) or {}).get("DATABASE_URL", "")
 
 
