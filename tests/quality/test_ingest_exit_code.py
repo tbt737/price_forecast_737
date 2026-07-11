@@ -31,3 +31,10 @@ def test_exit_code_backfill_result_is_ok() -> None:
 def test_backfill_accepts_history_days() -> None:
     # vn_history top-up (--history-days 7) must thread through the backfill path.
     assert "history_days" in inspect.signature(backfill).parameters
+
+
+def test_exit_code_reconcile_error_is_failure() -> None:
+    # A reconcile report with any fail-closed per-instrument error must NOT exit 0
+    # (the cron step is continue-on-error, but the red step must still be visible).
+    assert _exit_code({"mode": "write", "instruments": [{"status": "error"}], "ok": False}) == 1
+    assert _exit_code({"mode": "dry_run", "instruments": [{"status": "empty"}], "ok": True}) == 0

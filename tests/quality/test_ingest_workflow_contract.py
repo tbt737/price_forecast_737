@@ -45,9 +45,14 @@ def test_vn_stocks_step_present_non_blocking_and_flag_gated() -> None:
     assert len(vn) == 1, "expected exactly one vn_stocks ingest step"
     step = vn[0]
     run = step["run"]
-    # Conflict-safe backfill top-up over a short self-healing window, never --write.
-    assert "--backfill --sources vn_stocks --history-days 7" in run
-    assert "--write" not in run
+    # Restatement-aware reconcile (etl/restatement.py): anchor-check + append at the
+    # latest revision + atomic revision-bump reload — NOT the append-only backfill
+    # path, which silently drops a restated (adjusted) history. The CLI is dry-run by
+    # default, so the scheduled step passes --write explicitly.
+    assert "--reconcile --sources vn_stocks" in run
+    assert "--history-days 10" in run
+    assert "--write" in run
+    assert "--backfill" not in run  # append-only path is banned for this source
     assert step.get("continue-on-error") is True  # a dead chart API must not fail the job
     # 🔒 Owner decision 2026-07-11: the step is OFF unless the repo variable is
     # explicitly 'true' — an append-only top-up of a restating (adjusted) source is
@@ -77,3 +82,14 @@ def test_freshness_gate_still_present() -> None:
     assert len(gate) == 1 and str(gate[0].get("if")).strip() == "always()"
     # The gate must not have been coupled to VN prices.
     assert "vn_prices" not in gate[0]["run"]
+
+
+def test_ml_feature_refresh_step_present_and_non_blocking() -> None:
+    steps = _steps()
+    refresh = _with_run(steps, "refresh_ml_features.py")
+    assert len(refresh) == 1, "expected a post-ingest MV refresh step"
+    step = refresh[0]
+    assert "--write" in step["run"]
+    assert step.get("continue-on-error") is True
+    assert str(step.get("if")).strip() == "always()"
+    assert "${{ secrets.DATABASE_URL }}" in (step.get("env", {}) or {}).get("DATABASE_URL", "")

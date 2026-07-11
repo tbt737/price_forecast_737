@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   api,
+  ApiError,
   type CommodityDetail,
   type Forecast,
   type PriceSeries,
@@ -16,6 +17,15 @@ import { RenderValue } from "@/widgets/profile-detail/render-value";
 
 function asArray(v: unknown): unknown[] {
   return Array.isArray(v) ? v : [];
+}
+
+function forecastErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 503) return "Dịch vụ dự báo tạm thời không khả dụng (503)";
+    if (err.status === 401) return "Thiếu cấu hình khóa nội bộ cho dự báo (401)";
+    return `Lỗi dự báo HTTP ${err.status}`;
+  }
+  return err instanceof Error ? err.message : "Không tải được dự báo";
 }
 
 function buildTabs(commodity: CommodityDetail, profile: Record<string, unknown>): TabItem[] {
@@ -130,7 +140,8 @@ interface Data {
   commodity: CommodityDetail;
   profile: Profile;
   prices: PriceSeries;
-  forecast: Forecast;
+  forecast: Forecast | null;
+  forecastError: string | null;
 }
 type State = { s: "loading" } | { s: "error"; m: string } | { s: "ready"; d: Data };
 
@@ -141,17 +152,40 @@ export function ProfileDetail({ code }: { code: string }) {
     let active = true;
     setState({ s: "loading" });
     (async () => {
-      try {
-        const [commodity, profile, prices, forecast] = await Promise.all([
-          api.getCommodity(code),
-          api.getProfile(code),
-          api.getPrices(code, 730),
-          api.getForecast(code),
-        ]);
-        if (active) setState({ s: "ready", d: { commodity, profile, prices, forecast } });
-      } catch (e) {
-        if (active) setState({ s: "error", m: e instanceof Error ? e.message : "unknown" });
+      // Forecast is compute-heavy and SEC-2 gated — never let it fail the whole page.
+      const [commodityR, profileR, pricesR, forecastR] = await Promise.allSettled([
+        api.getCommodity(code),
+        api.getProfile(code),
+        api.getPrices(code, 730),
+        api.getForecast(code),
+      ]);
+      if (!active) return;
+
+      if (commodityR.status === "rejected" || profileR.status === "rejected") {
+        const err =
+          commodityR.status === "rejected"
+            ? commodityR.reason
+            : profileR.status === "rejected"
+              ? profileR.reason
+              : "unknown";
+        setState({ s: "error", m: err instanceof Error ? err.message : "unknown" });
+        return;
       }
+
+      const emptyPrices: PriceSeries = {
+        commodity_code: commodityR.value.commodity_code,
+        points: [],
+      };
+      setState({
+        s: "ready",
+        d: {
+          commodity: commodityR.value,
+          profile: profileR.value,
+          prices: pricesR.status === "fulfilled" ? pricesR.value : emptyPrices,
+          forecast: forecastR.status === "fulfilled" ? forecastR.value : null,
+          forecastError: forecastR.status === "rejected" ? forecastErrorMessage(forecastR.reason) : null,
+        },
+      });
     })();
     return () => {
       active = false;
@@ -176,13 +210,13 @@ export function ProfileDetail({ code }: { code: string }) {
     return <p className="text-sm text-neg">Lỗi tải {code}: {state.m}</p>;
   }
 
-  const { commodity, profile: prof, prices, forecast } = state.d;
+  const { commodity, profile: prof, prices, forecast, forecastError } = state.d;
   const p = prof.profile;
   const sector = sectorMeta(commodity.commodity_group);
   const hasRealPrices = prices.points.length > 0;
   const priceValues = hasRealPrices ? prices.points.map((pt) => pt.value) : demoSeries(commodity.commodity_code);
   const priceLabels = hasRealPrices ? prices.points.map((pt) => pt.date) : undefined;
-  const fc30 = forecast.available ? forecast.horizons?.["30"] : undefined;
+  const fc30 = forecast?.available ? forecast.horizons?.["30"] : undefined;
   const overlay =
     hasRealPrices && fc30
       ? {
@@ -223,6 +257,12 @@ export function ProfileDetail({ code }: { code: string }) {
           <span>Source: <b className="text-text">{prof.source_path ?? "—"}</b></span>
         </div>
       </div>
+
+      {forecastError ? (
+        <p className="rounded-r-card border-l-2 border-neg bg-surface-2 px-3 py-2 text-sm text-muted">
+          {forecastError}. Giá và hồ sơ vẫn hiển thị bình thường.
+        </p>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-card border border-border bg-surface-2 p-3">

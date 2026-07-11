@@ -120,6 +120,11 @@ def main() -> int:
         "--backfill", action="store_true", help="bulk historical backfill (fast ON CONFLICT DO NOTHING path)"
     )
     parser.add_argument(
+        "--reconcile", action="store_true",
+        help="restatement-aware reconcile for --sources vn_stocks (anchor check, append at "
+             "latest revision, atomic revision-bump reload on restatement); dry-run unless --write",
+    )
+    parser.add_argument(
         "--csv-import", dest="csv_import", help="run a named import from configs/ingestion/csv_imports.yaml"
     )
     parser.add_argument(
@@ -146,7 +151,21 @@ def main() -> int:
     try:
         seed_ingestion_sources(session)
         session.commit()
-        if args.csv_import:
+        if args.reconcile:
+            if args.sources != "vn_stocks":
+                parser.error("--reconcile currently applies to --sources vn_stocks only")
+            if args.backfill:
+                parser.error("--reconcile and --backfill are mutually exclusive")
+            from datetime import date as _date
+
+            from etl.restatement import reconcile_stock_history
+
+            cfg = load_ingestion_config()
+            result = reconcile_stock_history(
+                session, cfg.vn_stocks, today=_date.today(), config=cfg.vn_stocks_reconcile,
+                history_days=args.history_days, dry_run=not args.write,
+            )
+        elif args.csv_import:
             from etl.backfill import backfill
             from etl.ingestion.config import load_csv_imports
             from etl.sources.csv_file import CsvPriceSource
@@ -181,7 +200,10 @@ def main() -> int:
 def _exit_code(result: dict[str, Any]) -> int:
     """Non-zero when a WRITE was attempted but the batch did NOT commit — so CI/cron can
     detect the silent-failure case (an all-or-nothing rollback) instead of a green exit 0.
-    Dry-runs and idempotent backfills (0 new rows is fine) exit 0."""
+    Dry-runs and idempotent backfills (0 new rows is fine) exit 0. A reconcile report
+    with any per-instrument ``error`` (fail-closed skip) is also non-zero."""
+    if isinstance(result, dict) and result.get("ok") is False and "instruments" in result:
+        return 1
     write = result.get("write") if isinstance(result, dict) else None
     if isinstance(write, dict) and write.get("mode") == "write" and write.get("committed") is False:
         return 1

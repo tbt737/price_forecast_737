@@ -99,6 +99,15 @@ def test_update_sql_targeted_and_non_destructive() -> None:
     assert "'expired'" in E.UPDATE_EXPIRED_SQL.lower()
 
 
+def test_lookup_actual_sql_matches_single_basis_read_path() -> None:
+    # Must mirror ml.forecast.load_price_series: DISTINCT dates + latest revision,
+    # otherwise restated equity series would bias instrument choice / mix bases.
+    s = " ".join(E.LOOKUP_ACTUAL_SQL.lower().split())
+    assert "count(distinct" in s.replace(" ", "")
+    assert "max(f.revision)" in s or "max(revision)" in s
+    assert "f.revision = lr.revision" in s
+
+
 # ── CLI dry-run vs --write ───────────────────────────────────────────────────
 def test_dry_run_performs_no_update(monkeypatch, capsys) -> None:
     fake = FakeSession()

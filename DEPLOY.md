@@ -104,11 +104,17 @@ Kaggle dump until a newer one is imported (no live mandi feed reachable).
 
 ```
 curl https://<backend>/health
-curl https://<backend>/stats                      # 18 commodities / 63 instruments
-curl https://<backend>/commodities/GOLD/forecast  # first call ~5–9s, then cached
+curl https://<backend>/stats                      # 51 commodities / 98 instruments (see PLAN.md)
+# Forecast is SEC-2 gated: either call via the Pages site (middleware injects the key),
+# or pass the header explicitly:
+curl -H "X-Internal-Key: $INTERNAL_API_KEY" https://<backend>/commodities/GOLD/forecast
 ```
+Provision the **same** `INTERNAL_API_KEY` on Cloud Run (`cqp-api`) **and** the web host
+(`cqp-web` / Cloudflare Pages) before relying on forecast. Blank key ⇒ API returns 503
+(fail-closed), not a public endpoint.
 Then open the Pages URL → Commodity Explorer should show real prices + forecasts, and
-the "⚖ So sánh hàng hóa" compare view should work.
+the "⚖ So sánh hàng hóa" compare view should work. VN30 equities live under `/stocks`
+after the web deploy that includes that page.
 
 ## Security
 

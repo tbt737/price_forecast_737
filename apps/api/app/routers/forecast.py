@@ -17,12 +17,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.forecast import ForecastRequest
+from app.schemas.forecast import ForecastOut, ForecastRequest
 
 router = APIRouter(tags=["forecast"])
 
 
-@router.post("/forecast", response_model=None)
+@router.post("/forecast", response_model=ForecastOut)
 def run_forecast(req: ForecastRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
     """Execute a 30/90-day price forecast for one commodity. 404 when the commodity
     is unknown or has too little history; 503 on an unexpected engine failure."""

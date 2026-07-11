@@ -39,18 +39,28 @@ ORDER BY target_date, forecast_log_id
 {limit}
 """
 
-# Same primary-instrument choice as ml.forecast.load_price_series (most rows), so the
-# actual is read on the exact series the forecast was made from.
+# Same primary-instrument + single-basis (latest revision) choice as
+# ml.forecast.load_price_series — DISTINCT dates avoid biasing toward restated
+# series, and revision = max(revision) keeps the evaluator on one adjustment basis.
 LOOKUP_ACTUAL_SQL = """
 WITH ck AS (SELECT commodity_key FROM dim_commodity WHERE commodity_code = :code),
      ik AS (
         SELECT f.market_instrument_key
         FROM fact_price_daily f, ck
         WHERE f.commodity_key = ck.commodity_key
-        GROUP BY f.market_instrument_key ORDER BY count(*) DESC LIMIT 1)
+        GROUP BY f.market_instrument_key
+        ORDER BY count(DISTINCT f.price_date) DESC
+        LIMIT 1),
+     lr AS (
+        SELECT COALESCE(MAX(f.revision), 0) AS revision
+        FROM fact_price_daily f, ck, ik
+        WHERE f.commodity_key = ck.commodity_key
+          AND f.market_instrument_key = ik.market_instrument_key)
 SELECT f.price_date, f.value
-FROM fact_price_daily f, ck, ik
-WHERE f.commodity_key = ck.commodity_key AND f.market_instrument_key = ik.market_instrument_key
+FROM fact_price_daily f, ck, ik, lr
+WHERE f.commodity_key = ck.commodity_key
+  AND f.market_instrument_key = ik.market_instrument_key
+  AND f.revision = lr.revision
   AND f.value IS NOT NULL AND f.value > 0
   AND f.price_date >= :target AND f.price_date <= :hi
 ORDER BY f.price_date ASC

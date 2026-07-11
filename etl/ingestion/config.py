@@ -76,6 +76,19 @@ class VnStockSpec:
 
 
 @dataclass(frozen=True)
+class StockReconcileConfig:
+    """Restatement-reconcile tuning for the listed-equity history source (an ADJUSTED
+    feed restates its whole history at corporate actions). Section
+    ``vn_stocks.reconcile`` in sources.yaml; every field has a safe default."""
+
+    epsilon_pct: float = 0.5  # anchor relative-mismatch threshold (%) ⇒ restatement
+    anchor_days: int = 5  # how many recent stored dates to re-verify
+    jump_alert_pct: float = 15.0  # day-over-day |return| that only WARNS (HOSE band ±7%)
+    deep_from: str = "2000-01-01"  # full-history refetch window start (ISO date)
+    min_reload_coverage: float = 0.9  # reloaded series must cover ≥ this × stored dates
+
+
+@dataclass(frozen=True)
 class WeatherSpec:
     commodity_code: str
     region_code: str
@@ -121,6 +134,7 @@ class IngestionConfig:
     vn_prices: list[VnPriceSpec]
     vn_history: list[VnHistorySpec]
     vn_stocks: list[VnStockSpec]
+    vn_stocks_reconcile: StockReconcileConfig = StockReconcileConfig()
 
     @property
     def source_codes(self) -> set[str]:
@@ -312,10 +326,19 @@ def load_ingestion_config(path: Path = CONFIG_PATH) -> IngestionConfig:
         for e in vs.get("endpoints", [])
     ]
 
+    rc = vs.get("reconcile", {}) or {}
+    vn_stocks_reconcile = StockReconcileConfig(
+        epsilon_pct=float(rc.get("epsilon_pct", 0.5)),
+        anchor_days=int(rc.get("anchor_days", 5)),
+        jump_alert_pct=float(rc.get("jump_alert_pct", 15.0)),
+        deep_from=str(rc.get("deep_from", "2000-01-01")),
+        min_reload_coverage=float(rc.get("min_reload_coverage", 0.9)),
+    )
+
     return IngestionConfig(
         prices=prices, weather=weather, macro=macro, events=events,
         supply_demand=supply_demand, vn_prices=vn_prices, vn_history=vn_history,
-        vn_stocks=vn_stocks,
+        vn_stocks=vn_stocks, vn_stocks_reconcile=vn_stocks_reconcile,
     )
 
 

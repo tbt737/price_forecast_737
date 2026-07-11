@@ -1,13 +1,14 @@
 # Multi-Commodity Quant Forecasting Platform
 
 A **generic, configuration-driven** AI platform for forecasting commodity prices across
-**agriculture, energy, and metals**, plus macro/logistics indicators. New commodities
-are onboarded by adding a YAML profile — **never** by hardcoding business logic.
+**agriculture, energy, and metals**, plus VN equities and macro/logistics indicators.
+New assets are onboarded by adding a YAML profile — **never** by hardcoding business logic.
 
-> **Project status: Phase 10 — Productionization & UI.** This repository now contains
-> the fully implemented ETL pipelines, zero-lookahead ML feature views, Walk-Forward
-> Backtesting registry, FastAPI caching backend, and the Next.js interactive UI.
-> It is ready for Docker / Cloud deployment.
+> **Project status: Phase 10 — Productionization & UI (live).** See `PLAN.md` for the
+> authoritative snapshot (51 profiles / 98 instruments, Cloud Run + Supabase).
+> Companion docs: `ARCHITECTURE.md` (design), `DEPLOY.md` (hosting), `CLAUDE.md` (agent rules).
+>
+> This README may lag on inventory counts — prefer `PLAN.md` §2.
 
 ---
 
@@ -65,12 +66,10 @@ engine forecasts robusta coffee and gold because both are just *instruments + re
 
 ## Getting started (local)
 
-> Phase 1 only scaffolds the project. The commands below describe the intended
-> workflow; most targets are placeholders until later phases land.
-
 ```bash
 # 1. Configure environment
 cp .env.example .env        # then fill in values locally (never commit .env)
+# Set the SAME INTERNAL_API_KEY on API + web (SEC-2); blank key ⇒ /forecast returns 503
 
 # 2. Start local PostgreSQL
 docker compose up -d postgres
@@ -89,15 +88,16 @@ docker compose up -d        # Starts Postgres, API, and Next.js Dashboard
 make lint                   # ruff
 make typecheck              # mypy
 make test                   # pytest
-make quality                # integration + data-quality suite
+make quality                # compileall + ruff + mypy + pytest + workflow check
 ```
 
 ## Commodity profiles
 
-The 16 profiles in `configs/commodities/` span agriculture, metals, energy, and
-logistics — including specialty agri trades (chinese garlic, indian chilies, red onion
-India/China, peanuts) and the `freight_indices` logistics driver set. Each profile
-follows the strict schema documented in `ARCHITECTURE.md` and `CLAUDE.md`.
+Profiles live in `configs/commodities/` (agriculture, metals, energy, logistics,
+Vietnam domestic, and VN30 equities). Count is pinned by
+`tests/quality/test_profiles_quality.py` and reported in `PLAN.md` §2 — currently
+**51** (21 commodities + 30 equities). Each profile follows the schema in
+`ARCHITECTURE.md` / `CLAUDE.md`.
 
 ## Contributing / agent sessions
 

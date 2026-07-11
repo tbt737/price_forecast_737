@@ -26,17 +26,19 @@ never go down; locked invariants never weaken.
 > Current (2026-07-11, pack VN30-STOCKS-1): **pytest 456 + 1 skipped · vitest 39 · 51
 > profiles / 98 instruments** (21 commodities + 30 VN30 equities, `commodity_group: equity`).
 
-> ⚠️ Stale companion docs: `README.md` still says "16 profiles" and `ARCHITECTURE.md`'s
-> status header still says "18 profiles / Phases 1–9 / cloud hosting pending — see DEPLOY.md".
-> Those predate production. **This file supersedes them for current status** — in particular,
-> do NOT follow ARCHITECTURE's "go live" pointer; deploys need explicit approval (§11).
+> ⚠️ Companion docs: `README.md` / `ARCHITECTURE.md` / `DEPLOY.md` were refreshed in the
+> RESTATE-1 hardening pack (2026-07-11) for profile counts, SEC-2 smoke, and live status.
+> **This file remains authoritative** for unlock criteria and approval gates — in particular,
+> do NOT follow older "go live" pointers without §11 approval.
 
 ## 3. Active priorities
 
-No code pack is currently in flight. Highest-value next actions, in order:
+Highest-value next actions, in order:
 1. The two **manual-only GitHub tasks** (§4) — they close the last Đợt-1 gaps.
-2. **ACC-REVIEW** when its artifact exists (§5) — first real evidence of live forecast skill.
-3. If idle capacity remains: deferred polish (§6) as a small tooling pack.
+2. **Land RESTATE-1 gates green**, then follow the VN30-PROD canary sequence in §5
+   (still needs explicit owner approval per write/deploy step).
+3. **ACC-REVIEW** when its artifact exists (§5) — first real evidence of live forecast skill.
+4. If idle capacity remains: deferred polish (§6) as a small tooling pack.
 
 ## 4. Manual-only tasks (owner, GitHub UI — sessions have no gh auth)
 
@@ -66,8 +68,10 @@ No code pack is currently in flight. Highest-value next actions, in order:
   (`f3d2812`, contract-test-pinned) → snapshot/export DB state ✅ (2026-07-11,
   pre/post JSON) → `make db-load` ✅ (2026-07-11 via Session pooler: 51 profiles /
   98 instruments; 21 old registry rows byte-identical checksum+version;
-  fact_price_daily untouched at 106,455) → verify ✅ → **NEXT:** land+merge
-  restatement pack → canary backfill 1–2 tickers → repeat canary (convergence/
+  fact_price_daily untouched at 106,455) → verify ✅ → **NEXT:** merge restatement
+  pack after gates green (release_date=reconcile-day PIT stamp; evaluator + forecast
+  cache revision-aware; backfill via provenance gate; MV refresh after ingest) →
+  canary backfill 1–2 tickers → repeat canary (convergence/
   idempotency) → full 30-ticker backfill → row-count/dup/range/discontinuity checks →
   deploy API + smoke → deploy web + smoke `/stocks` → re-enable scheduled top-up
   (`ENABLE_VN_STOCKS_INGEST=true`) → watch ≥1 ingest cycle.
@@ -89,8 +93,8 @@ No code pack is currently in flight. Highest-value next actions, in order:
 - Migrate `next lint` → ESLint CLI (deprecated in Next 16).
 - Silence the multiple-lockfiles workspace-root warning via `outputFileTracingRoot`.
 - Optional whitespace gate in CI.
-- Refresh stale docs: `README.md` profile count (16→20) and `ARCHITECTURE.md` status header
-  (18 profiles / "cloud hosting pending" → current production reality; see §2 note).
+- Optional: Dependabot / container scan; parameterize web Docker `API_PROXY_TARGET`.
+- Optional: E2E smoke (health + one forecast via proxy).
 
 ## 7. Locked / approval-required work
 

@@ -66,7 +66,7 @@ jobs:
         continue-on-error: true
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python -m etl.ingest --backfill --sources vn_stocks --history-days 7
+        run: python -m etl.ingest --reconcile --sources vn_stocks --history-days 10 --write
 
       # Non-critical exogenous sources must never block the price feed. NOAA is
       # fail-soft in code; these steps are also continue-on-error so a flaky upstream
@@ -86,6 +86,16 @@ jobs:
         run: |
           python -m etl.ingest --backfill --sources weather
           python -m etl.ingest --backfill --sources events
+
+      # Refresh the ML wide panel after fact writes so forecast exog stays current.
+      # Non-blocking: a missing MV (pre-apply_views) or lock contention must not fail
+      # the price feed — freshness gate below still enforces data advancement.
+      - name: Refresh ML feature view (non-blocking)
+        if: always()
+        continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/refresh_ml_features.py --write
 
       # Freshness gate (read-only): the run is green ONLY if futures prices actually
       # advanced to the previous business day or later — a green run can no longer mean

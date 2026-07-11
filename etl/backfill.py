@@ -75,9 +75,14 @@ def backfill(
     by_family: dict[FactFamily, list[dict[str, Any]]] = defaultdict(list)
     collected = 0
     skipped_invalid = 0
+    skipped_provenance = 0
 
     for connector in connectors:
-        for record in connector.collect():
+        # Same provenance gate as the incremental write path: connector-originated
+        # records must carry deterministic source identity before any insert.
+        gate = connector.gate()
+        skipped_provenance += len(gate.rejected)
+        for record in gate.accepted:
             collected += 1
             spec = record.spec()
             resolution = resolver.resolve(record)
@@ -99,6 +104,7 @@ def backfill(
     return {
         "collected": collected,
         "skipped_invalid": skipped_invalid,
+        "skipped_provenance": skipped_provenance,
         "inserted": inserted,
         "inserted_total": sum(inserted.values()),
     }

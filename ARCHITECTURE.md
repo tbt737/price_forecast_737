@@ -1,15 +1,15 @@
 # ARCHITECTURE — Multi-Commodity Quant Forecasting Platform
 
-> **Status:** Phases 1–9 implemented. 18 commodity profiles; star schema + loaders;
-> ETL connectors (Yahoo prices, NASA POWER weather, config-driven CSV/Agmarknet
+> **Status:** Phases 1–10 implemented and **live** (Cloud Run + Supabase). **51**
+> profiles (21 commodities + 30 VN30 equities); star schema + loaders; ETL connectors
+> (Yahoo prices, NASA POWER weather, VN domestic/stocks, config-driven CSV/Agmarknet
 > imports) with a fail-closed provenance gate; ML forecasting (Ridge AR + XGBoost,
-> multi-scale Cobweb cycle harmonics with wavelet stability, anchored damped-trend
-> Fourier baseline) chosen per-commodity by walk-forward backtest with an honest
-> naive fallback; FastAPI service (cached forecasts) + Next.js dashboard with a
-> forecast-compare view; daily GitHub Actions ingest. Outstanding: macro/logistics/
-> S&D/event-driver connectors (Phase 3B), model
-> registry (Phase 7), and productionization (Phase 10 — Dockerfile + DEPLOY.md
-> exist; cloud hosting pending). See `DEPLOY.md` to go live.
+> multi-scale Cobweb cycle harmonics, OU mean-reversion) chosen per-commodity by
+> walk-forward backtest with an honest naive fallback; FastAPI + Next.js dashboard;
+> daily GitHub Actions ingest. Outstanding ops: VN30 restatement pack canary/backfill
+> (flag-gated), ACC-REVIEW when forecast log matures, and optional logistics connectors.
+> **Authoritative current status:** `PLAN.md` (supersedes stale counts in older docs).
+> See `DEPLOY.md` for hosting; never deploy without explicit owner approval.
 
 ---
 

@@ -81,22 +81,36 @@ def load_price_series(session: Session, commodity_code: str) -> dict[str, Any] |
     ).scalar_one_or_none()
     if commodity is None:
         return None
+    # Most-populated instrument by DISTINCT dates (a restated series carries several
+    # revisions of the same dates — raw row counts would bias toward restated series).
     instrument_key = session.execute(
         select(FactPriceDaily.market_instrument_key)
         .where(FactPriceDaily.commodity_key == commodity.commodity_key)
         .group_by(FactPriceDaily.market_instrument_key)
-        .order_by(func.count().desc())
+        .order_by(func.count(func.distinct(FactPriceDaily.price_date)).desc())
         .limit(1)
     ).scalar_one_or_none()
     if instrument_key is None:
         return {"commodity": commodity, "instrument": None, "dates": [], "values": []}
 
     instrument = session.get(DimMarketInstrument, instrument_key)
+    # Single-basis rule: an ADJUSTED source restates its whole history at corporate
+    # actions and is re-ingested at revision+1 (etl/restatement.py) — mixing revisions
+    # would splice two adjustment bases, so read ONLY the instrument's latest revision.
+    latest_revision = (
+        select(func.max(FactPriceDaily.revision))
+        .where(
+            FactPriceDaily.commodity_key == commodity.commodity_key,
+            FactPriceDaily.market_instrument_key == instrument_key,
+        )
+        .scalar_subquery()
+    )
     rows = session.execute(
         select(FactPriceDaily.price_date, FactPriceDaily.value)
         .where(
             FactPriceDaily.commodity_key == commodity.commodity_key,
             FactPriceDaily.market_instrument_key == instrument_key,
+            FactPriceDaily.revision == latest_revision,
             FactPriceDaily.value.is_not(None),
         )
         .order_by(FactPriceDaily.price_date)

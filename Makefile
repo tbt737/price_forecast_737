@@ -1,11 +1,6 @@
-# ──────────────────────────────────────────────────────────────────────────────
 # Multi-Commodity Quant Forecasting Platform — developer commands
 #
-# Phase 1 note: most targets are PLACEHOLDERS. They echo intent and exit cleanly
-# so the workflow is documented now and wired up in later phases. Replace the
-# placeholder bodies as each phase lands (see ARCHITECTURE.md roadmap).
-# ──────────────────────────────────────────────────────────────────────────────
-
+# Wired targets for local/CI use (see ARCHITECTURE.md + PLAN.md). Quality mirrors CI.
 .DEFAULT_GOAL := help
 .PHONY: help test lint typecheck quality db-migrate db-load seed-sources api-dev web-dev etl-run \
         db-up db-down env
@@ -33,9 +28,11 @@ typecheck: ## Static type-check with mypy (app package + etl)
 	python -m mypy -p app
 	python -m mypy etl
 
-quality: ## Full quality gate (mirrors CI): byte-compile, ruff, pytest (all suites), workflow YAML
+quality: ## Full quality gate (mirrors CI): byte-compile, ruff, mypy, pytest, workflow YAML
 	python -m compileall -q etl scripts apps tests ml db apply_views.py
 	python -m ruff check .
+	python -m mypy -p app
+	python -m mypy etl
 	python -m pytest
 	python scripts/ci_check_workflows.py
 

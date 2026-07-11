@@ -93,19 +93,26 @@ vn_stocks:
   # chart API returning TradingView-style t/o/h/l/c/v arrays. parser names a FORMAT in
   # etl.sources.market.vn_stocks.STOCK_HISTORY_PARSERS — never a per-ticker code path.
   # Quotes are published in thousands of VND; scale rescales to full VND at ingest.
-  # Date-range source: runs ONLY via --sources vn_stocks (daily workflow tops up a
-  # 7-day window; a deep backfill passes a wide --history-days). Adjusted prices
-  # (corporate actions), as served by the chart API.
-  # ⚠ KNOWN LIMITATION: the API RESTATES the whole history at each corporate action
-  # (dividend/split), while ingest is append-only (ON CONFLICT DO NOTHING) — so rows
-  # ingested before an ex-date keep the old adjustment basis and a small artificial
-  # level step appears at that date until the affected instrument's window is
-  # deleted + re-backfilled (manual, approval-gated) or a revision-aware reload
-  # lands as its own pack. Do not "fix" this by switching to --write (all-or-nothing).
+  # Date-range source: runs ONLY via --sources vn_stocks. Initial empty-store load uses
+  # --backfill; daily top-up uses --reconcile (revision-aware). Adjusted prices
+  # (corporate actions) are healed by etl/restatement.py — do NOT use append-only
+  # --backfill after an instrument already has history (see PLAN.md §5 / docs).
   source_code: ENTRADE
   release_lag_days: 0 # HOSE close (15:00 ICT) is published the same day
   parser: chart_arrays_json
   scale: 1000
+  # Restatement reconcile (etl/restatement.py): anchors are recent stored dates
+  # re-fetched and compared; a relative mismatch > epsilon_pct on any anchor means
+  # the source restated its history (corporate action) and the FULL series is
+  # re-inserted at revision+1 with release_date=reconcile day (PIT-safe). Old
+  # revisions stay for audit. min_reload_coverage guards against a truncated
+  # response silently shortening the canonical series. jump_alert_pct only WARNS.
+  reconcile:
+    epsilon_pct: 0.5
+    anchor_days: 5
+    jump_alert_pct: 15
+    deep_from: "2000-01-01"
+    min_reload_coverage: 0.9
   url_template: "https://services.entrade.com.vn/chart-api/v2/ohlcs/stock?from={ts_from}&to={ts_to}&symbol={ticker}&resolution=1D"
   # Basket = VN30 effective 2026-02-02 (Jan-2026 HOSE review: VPL in, BCM out).
   # HOSE revises the basket semiannually (Jan/Jul, effective early Feb/Aug) —

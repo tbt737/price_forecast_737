@@ -1,7 +1,7 @@
 """Read-only endpoints over the commodity dimensions and profile registry.
 
-Phase 2 scope: reads only. No write/ingest/forecast routes yet (deferred to
-their phases). Fully generic — nothing is special-cased per commodity.
+Generic across all commodity/equity profiles. Forecast compute is gated by
+SEC-2 (X-Internal-Key) and cached until the price fingerprint changes.
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ from app.schemas.commodity import (
     ProfileRegistryOut,
     StatsOut,
 )
+from app.schemas.forecast import ForecastOut
 
 router = APIRouter(tags=["commodities"])
 logger = logging.getLogger(__name__)
@@ -124,23 +125,35 @@ def get_commodity_prices(
     if commodity is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Unknown commodity '{commodity_code}'")
 
+    # Benchmark by DISTINCT dates; serve ONLY the instrument's latest revision — a
+    # restated (adjusted) series is re-ingested at revision+1 (etl/restatement.py) and
+    # mixing revisions would splice two adjustment bases (see ml.forecast counterpart).
     best = db.execute(
         select(FactPriceDaily.market_instrument_key)
         .where(FactPriceDaily.commodity_key == commodity.commodity_key)
         .group_by(FactPriceDaily.market_instrument_key)
-        .order_by(func.count().desc())
+        .order_by(func.count(func.distinct(FactPriceDaily.price_date)).desc())
         .limit(1)
     ).scalar_one_or_none()
     if best is None:  # no prices ingested for this commodity yet
         return PriceSeriesOut(commodity_code=commodity.commodity_code, points=[])
 
     instrument = db.get(DimMarketInstrument, best)
+    latest_revision = (
+        select(func.max(FactPriceDaily.revision))
+        .where(
+            FactPriceDaily.commodity_key == commodity.commodity_key,
+            FactPriceDaily.market_instrument_key == best,
+        )
+        .scalar_subquery()
+    )
     cutoff = date.today() - timedelta(days=max(1, days))
     rows = db.execute(
         select(FactPriceDaily.price_date, FactPriceDaily.value, FactPriceDaily.currency)
         .where(
             FactPriceDaily.commodity_key == commodity.commodity_key,
             FactPriceDaily.market_instrument_key == best,
+            FactPriceDaily.revision == latest_revision,
             FactPriceDaily.price_date >= cutoff,
         )
         .order_by(FactPriceDaily.price_date)
@@ -158,16 +171,16 @@ def get_commodity_prices(
 
 # In-process forecast cache. Forecasting is a multi-second walk-forward; the price
 # data only changes on (infrequent) ingest. Cache the result keyed by a cheap data
-# fingerprint (row count + latest date) that auto-invalidates on new data. Within
-# FINGERPRINT_TTL we serve the cached result without even re-running the fingerprint
-# query, so warm repeat calls are instant.
-_FORECAST_CACHE: dict[str, tuple[float, tuple[int, str | None], dict[str, Any]]] = {}
+# fingerprint (row count + latest date + max revision) that auto-invalidates on new
+# data or restatement. Within FINGERPRINT_TTL we serve the cached result without even
+# re-running the fingerprint query, so warm repeat calls are instant.
+_FORECAST_CACHE: dict[str, tuple[float, tuple[int, str | None, int], dict[str, Any]]] = {}
 FINGERPRINT_TTL = 300.0  # seconds before re-checking whether the data changed
 
 
 @router.get(
     "/commodities/{commodity_code}/forecast",
-    response_model=None,
+    response_model=ForecastOut,
     dependencies=[Depends(require_internal_key)],  # SEC-2: compute-heavy, gated when key is set
 )
 def get_commodity_forecast(commodity_code: str, db: Session = Depends(get_db)) -> dict[str, Any]:
@@ -185,11 +198,20 @@ def get_commodity_forecast(commodity_code: str, db: Session = Depends(get_db)) -
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Unknown commodity '{commodity_code}'")
 
     row = db.execute(
-        select(func.count(), func.max(FactPriceDaily.price_date)).where(
-            FactPriceDaily.commodity_key == commodity.commodity_key
-        )
+        select(
+            func.count(),
+            func.max(FactPriceDaily.price_date),
+            func.max(FactPriceDaily.revision),
+        ).where(FactPriceDaily.commodity_key == commodity.commodity_key)
     ).one()
-    fingerprint = (int(row[0]), row[1].isoformat() if row[1] else None)
+    # Fingerprint includes max(revision): a restatement can rewrite values without
+    # changing max(price_date) or (on a same-length reload) even the raw row count
+    # of the canonical series alone; the extra revision rows always bump this.
+    fingerprint = (
+        int(row[0]),
+        row[1].isoformat() if row[1] else None,
+        int(row[2] or 0),
+    )
     if cached is not None and cached[1] == fingerprint:
         _FORECAST_CACHE[code] = (time.monotonic(), fingerprint, cached[2])  # data unchanged; refresh TTL
         return cached[2]

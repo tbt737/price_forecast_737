@@ -31,6 +31,10 @@ jobs:
         run: python -m compileall -q etl scripts apps tests ml db apply_views.py
       - name: Lint (ruff)
         run: ruff check .
+      - name: Typecheck (mypy)
+        run: |
+          python -m mypy -p app
+          python -m mypy etl
       - name: Tests (pytest — quality, integration, api, ml)
         run: python -m pytest
       - name: Workflow YAML static check
@@ -52,6 +56,8 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - name: Install dependencies (npm ci)
         run: npm ci
+      - name: Typecheck (tsc)
+        run: npm run typecheck
       - name: Test (vitest)
         run: npm test
       - name: Lint (next lint)
