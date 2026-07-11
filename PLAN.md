@@ -49,18 +49,26 @@ No code pack is currently in flight. Highest-value next actions, in order:
 
 ## 5. Waiting workstreams (do not execute yet)
 
-- **VN30-PROD (production phase of VN30-STOCKS-1) — WAITING on user approval.** The 30
-  VN30 equity profiles + `vn_stocks` connector + `/stocks` page shipped code-complete
-  (2026-07-11); production still needs, in order: (1) profile load (`make db-load` against
-  the Supabase pooler URL), (2) `seed_ingestion_sources` (auto-runs with ingest),
-  (3) one deep backfill `python -m etl.ingest --backfill --sources vn_stocks
-  --history-days 5400`, (4) Cloud Run redeploy of cqp-api + cqp-web. ⚠ Before or shortly
-  after (3), land the **adjusted-price restatement heal** pack (see the vn_stocks caveat
-  in `configs/ingestion/sources.yaml`): the chart API restates history at each corporate
-  action while ingest is append-only — plan = revision-aware reload using the existing
-  `revision` grain column. The daily workflow step is already in `ingest.yml` and is inert
-  until (1) happens. VN30 basket = review effective 2026-02-02; refresh on each
-  semiannual HOSE review.
+- **VN30-PROD (production phase of VN30-STOCKS-1) — CONDITIONALLY APPROVED (owner,
+  2026-07-11).** Code shipped `8eb7dc2`. Owner decision: **only `make db-load` is
+  approved, and only after the scheduled `vn_stocks` top-up is locked** behind the
+  repo variable `ENABLE_VN_STOCKS_INGEST` (default OFF; step skipped unless the
+  variable is exactly `true`). Deep backfill (5400d) and Cloud Run deploy are **NOT
+  approved** until the restatement pack lands and meets ALL of:
+  1. re-ingest can UPDATE history the source restated (no `ON CONFLICT DO NOTHING`
+     for the same revision logic);
+  2. re-running the same payload is idempotent;
+  3. no mixed-basis (old/new adjustment) series can persist;
+  4. a test simulates a dividend/split that restates the WHOLE adjusted history;
+  5. checks for duplicate grain, NaN/Infinity, revision handling, and abnormal jumps;
+  6. full gates green (pytest, vitest, ruff, mypy, build, architecture guards).
+  Approved production sequence (execute strictly in order): lock scheduled top-up →
+  snapshot/export DB state → `make db-load` → verify 51 profiles & old profiles
+  untouched → land+merge restatement pack → canary backfill 1–2 tickers → repeat
+  canary (convergence/idempotency) → full 30-ticker backfill → row-count/dup/range/
+  discontinuity checks → deploy API + smoke → deploy web + smoke `/stocks` →
+  re-enable scheduled top-up (`ENABLE_VN_STOCKS_INGEST=true`) → watch ≥1 ingest cycle.
+  VN30 basket = review effective 2026-02-02; refresh on each semiannual HOSE review.
 - **ACC-REVIEW — WAITING.** The accuracy loop is scheduled (`4925b9d`): writer logs pending
   forecasts to `fact_forecast_log` after each ingest; evaluator (Mondays 03:00 UTC) matures
   rows once `target_date <= today`. Writer started 2026-07-05, so no matured rows exist yet.

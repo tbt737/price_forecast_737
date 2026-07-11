@@ -52,10 +52,14 @@ jobs:
           python -m etl.ingest --backfill --sources vn_history --history-days 7
 
       # VN30 listed equities (30 HOSE blue chips): same self-healing 7-day top-up
-      # pattern as vn_history. Inert until the equity profiles + ENTRADE source are
-      # seeded in the target DB (unknown codes are rejected cleanly, not crashed).
-      - name: Ingest VN30 equities (non-blocking)
-        if: always()
+      # pattern as vn_history. 🔒 FEATURE-FLAGGED OFF BY DEFAULT: the chart API serves
+      # ADJUSTED prices that restate history at corporate actions, and this append-only
+      # top-up must NOT run until the revision-aware restatement heal lands (owner
+      # decision 2026-07-11; unlock criteria in PLAN.md §5). To enable, set the
+      # repository variable ENABLE_VN_STOCKS_INGEST=true (Settings → Secrets and
+      # variables → Actions → Variables). Unset/other values ⇒ step is skipped.
+      - name: Ingest VN30 equities (non-blocking, flag-gated)
+        if: ${{ always() && vars.ENABLE_VN_STOCKS_INGEST == 'true' }}
         continue-on-error: true
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

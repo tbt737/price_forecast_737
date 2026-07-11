@@ -39,7 +39,7 @@ def test_vn_prices_step_present_and_non_blocking() -> None:
     assert "${{ secrets.DATABASE_URL }}" in (step.get("env", {}) or {}).get("DATABASE_URL", "")
 
 
-def test_vn_stocks_step_present_and_non_blocking() -> None:
+def test_vn_stocks_step_present_non_blocking_and_flag_gated() -> None:
     steps = _steps()
     vn = _with_run(steps, "--sources vn_stocks")
     assert len(vn) == 1, "expected exactly one vn_stocks ingest step"
@@ -49,7 +49,12 @@ def test_vn_stocks_step_present_and_non_blocking() -> None:
     assert "--backfill --sources vn_stocks --history-days 7" in run
     assert "--write" not in run
     assert step.get("continue-on-error") is True  # a dead chart API must not fail the job
-    assert str(step.get("if")).strip() == "always()"
+    # 🔒 Owner decision 2026-07-11: the step is OFF unless the repo variable is
+    # explicitly 'true' — an append-only top-up of a restating (adjusted) source is
+    # unsafe until the revision-aware heal lands (unlock criteria in PLAN.md §5).
+    cond = str(step.get("if"))
+    assert "always()" in cond  # still runs even if a prior step failed…
+    assert "vars.ENABLE_VN_STOCKS_INGEST == 'true'" in cond  # …but ONLY when opted in
     assert "${{ secrets.DATABASE_URL }}" in (step.get("env", {}) or {}).get("DATABASE_URL", "")
 
 
