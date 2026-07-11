@@ -4,6 +4,34 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-07-11 RESTATE-1 + HOTFIX — RESTATE_1_PASS (prod API/web redeployed; VN30 data canary still gated)
+Shipped (commit `9f10657`): `etl/restatement.py` + `--reconcile` CLI (dry-run default,
+INV-7) + `vn_stocks.reconcile` YAML; single-basis latest-revision reads in
+`ml/forecast.load_price_series` + `/commodities/{code}/prices`; restatement rows stamp
+`release_date=reconcile day` (PIT); coverage guard = stored-date overlap (not raw row
+count — reviewer PoC); backfill goes through provenance `gate()`; accuracy evaluator
+LOOKUP_ACTUAL mirrors DISTINCT dates + latest revision; forecast cache fingerprint
+includes `max(revision)`; ingest.yml MV refresh step (`scripts/refresh_ml_features.py`,
+non-blocking); CI mypy + web typecheck; ProfileDetail `allSettled`; `ForecastOut`; docs
+sync (PLAN/README/ARCHITECTURE/DEPLOY/sources.yaml).
+Prod hotfix (same commit): Cloud Run `cqp-api-00008-ng4` + `cqp-web-00013-7zj` — fixed
+500 on `/commodities` after `db-load` wrote `commodity_group=equity` rows that the old
+API StrEnum could not deserialize (`/stats` COUNT stayed healthy). Smoke: health/ready/
+stats/commodities/GOLD/VCB_VN + web `/` `/stocks` `/api/commodities` all 200.
+Invariants: INV-1/2 (restatement stays offline; connector is network boundary), INV-3
+(release_date stamp), INV-4 unchanged at 51/98, INV-7 (no prod write/backfill; flag
+`ENABLE_VN_STOCKS_INGEST` still OFF).
+Gates at land: pytest **473+1skip** · vitest **39** · ruff 0 · mypy 0 · build ✓.
+**Still gated (PLAN §5):** production canary backfill 1–2 tickers → full 30 → re-enable
+scheduled reconcile. **Known residual (MAJOR-2 accepted):** PIT wide MV / `build_pandas_mv`
+/ per-date revision collapse can still mix bases on exog `price_close` for equity —
+documented in `docs/etl/vn-stocks-restatement.md` §5; live FIT path is single-basis.
+**Rules distilled:** (1) Never `db-load` a new enum/group value into live dims before the
+serving API revision knows that value — COUNT endpoints will lie green while list/detail
+500. (2) Coverage for restatement reloads must be intersection-of-dates, never
+len(payload)/len(stored). (3) Hotfix deploy order: API smoke (incl. one new-group row)
+before web.
+
 ## 2026-07-11 VN30-STOCKS-1 — VN30_STOCKS_1_PASS (prod phase gated, see PLAN §5)
 Shipped: 30 VN30 equity profiles (`configs/commodities/<ticker>_vn.yaml`, group `equity`,
 basket effective 2026-02-02) + `vn_stocks` connector (`etl/sources/market/vn_stocks.py`,
