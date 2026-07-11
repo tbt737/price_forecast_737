@@ -60,7 +60,10 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "f
 "ml/build_pandas_mv.py" = ["E501"]
 
 [tool.mypy]
-python_version = "3.11"
+# Match CI / runtime (actions/setup-python 3.13). Keeping 3.11 makes mypy reject
+# current NumPy stubs that use PEP 695 `type` aliases (CI: "Type statement is only
+# supported in Python 3.12 and greater").
+python_version = "3.13"
 mypy_path = "apps/api"
 explicit_package_bases = true
 namespace_packages = true
