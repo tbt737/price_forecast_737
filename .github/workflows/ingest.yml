@@ -51,6 +51,16 @@ jobs:
           python -m etl.ingest --backfill --sources vn_prices
           python -m etl.ingest --backfill --sources vn_history --history-days 7
 
+      # VN30 listed equities (30 HOSE blue chips): same self-healing 7-day top-up
+      # pattern as vn_history. Inert until the equity profiles + ENTRADE source are
+      # seeded in the target DB (unknown codes are rejected cleanly, not crashed).
+      - name: Ingest VN30 equities (non-blocking)
+        if: always()
+        continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m etl.ingest --backfill --sources vn_stocks --history-days 7
+
       # Non-critical exogenous sources must never block the price feed. NOAA is
       # fail-soft in code; these steps are also continue-on-error so a flaky upstream
       # cannot turn CI red on its own.

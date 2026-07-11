@@ -27,9 +27,9 @@ def test_list_commodities(client: TestClient) -> None:
     r = client.get("/commodities")
     assert r.status_code == 200
     body = r.json()
-    assert len(body) == 21  # +GOLD_VN +SILVER_VN +PEPPER_VN
+    assert len(body) == 51  # 21 commodities + 30 VN30 equities
     codes = {c["commodity_code"] for c in body}
-    assert {"ROBUSTA", "GOLD", "CRUDE_OIL", "FREIGHT_INDICES"}.issubset(codes)
+    assert {"ROBUSTA", "GOLD", "CRUDE_OIL", "FREIGHT_INDICES", "VCB_VN", "FPT_VN"}.issubset(codes)
 
 
 def test_get_commodity_detail_with_instruments(client: TestClient) -> None:
@@ -47,7 +47,7 @@ def test_get_commodity_unknown_404(client: TestClient) -> None:
 def test_list_and_get_profiles(client: TestClient) -> None:
     r = client.get("/profiles")
     assert r.status_code == 200
-    assert len(r.json()) == 21  # +GOLD_VN +SILVER_VN +PEPPER_VN
+    assert len(r.json()) == 51  # 21 commodities + 30 VN30 equities
 
     r = client.get("/profiles/gold")
     assert r.status_code == 200
@@ -62,8 +62,8 @@ def test_stats(client: TestClient) -> None:
     assert r.status_code == 200
     body = r.json()
     assert set(body) == {"commodities", "profiles", "instruments", "regions", "data_sources", "fact_rows"}
-    assert body["commodities"] == 21  # +GOLD_VN +SILVER_VN +PEPPER_VN
-    assert body["profiles"] == 21
+    assert body["commodities"] == 51  # 21 commodities + 30 VN30 equities
+    assert body["profiles"] == 51
     assert body["instruments"] > 0
     assert body["fact_rows"] == 0  # no ingestion yet
 

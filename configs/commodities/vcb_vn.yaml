@@ -1,0 +1,52 @@
+commodity_code: "VCB_VN"
+commodity_name: "Vietcombank — Ngân hàng Ngoại thương Việt Nam (VCB)"
+commodity_group: "equity"
+base_unit: "share"
+default_currency: "VND"
+
+market_instruments:
+  - { instrument_code: "HOSE_VCB", exchange: "HOSE (Ho Chi Minh Stock Exchange)", symbol: "VCB", description: "Vietcombank common shares — daily adjusted close (giá điều chỉnh), full VND per share", contract_unit: "share", currency: "VND" }
+
+weather_regions:
+  - { region_code: "GLOBAL_NA", name: "Not a price driver — listed equity; weather has no direct price channel", country: "" }
+
+production_regions:
+  - { region_code: "VN", name: "Vietnam (the issuer's core operations are domestic)", role: "production" }
+
+consumption_regions:
+  - { region_code: "VN", name: "Vietnam domestic demand for the issuer's products/services", role: "consumption" }
+
+export_regions:
+  - { region_code: "GLOBAL", name: "Not an export good — the share trades on HOSE; foreign portfolio flows are the cross-border channel", role: "export" }
+
+import_regions:
+  - { region_code: "GLOBAL", name: "Foreign portfolio investors (ETF rebalancing, foreign room) buying via HOSE", role: "import" }
+
+physical_drivers:
+  - { metric_code: "earnings_growth", description: "Profit cycle: system credit growth, NIM, fee income and asset quality (NPL / provisioning)" }
+  - { metric_code: "sector_cycle", description: "Vietnam banking cycle — credit quotas, deposit-rate competition, bad-debt workout" }
+
+macro_drivers:
+  - { metric_code: "vn_index", description: "VN-Index market beta — VN30 blue chips co-move with the broad HOSE index" }
+  - { metric_code: "vn_policy_rate", description: "SBV policy/deposit rates — the discount rate for equities and credit conditions" }
+  - { metric_code: "usd_vnd", description: "USD/VND — FX pressure drives foreign flows and SBV policy room" }
+
+logistics_drivers:
+  - { metric_code: "market_liquidity", description: "HOSE turnover and margin-lending balances — the liquidity regime for blue chips" }
+  - { metric_code: "foreign_flows", description: "Foreign net buy/sell in the ticker (foreign room, ETF rebalancing, index reviews)" }
+
+event_risk_drivers:
+  - { metric_code: "regulatory_policy", description: "SBV regulation — credit quotas, Basel II/III, risk-weight and provisioning rules" }
+  - { metric_code: "corporate_events", description: "Dividends / splits / rights issues, M&A and VN30 index-review changes" }
+  - { metric_code: "global_risk", description: "Global risk-off episodes, EM outflows and US rates spilling into HOSE" }
+
+data_sources:
+  - { source_code: "ENTRADE", name: "DNSE Entrade public chart API (daily adjusted OHLC bars)", access: "public", url: "https://services.entrade.com.vn/chart-api/v2/ohlcs/stock" }
+  - { source_code: "HOSE", name: "Ho Chi Minh Stock Exchange (listing reference; VN30 constituent)", access: "public", url: "https://www.hsx.vn" }
+
+models:
+  - { model_code: "naive_rw", family: "baseline", horizon: "daily", description: "Random-walk baseline (best-of pool)" }
+  - { model_code: "ridge_ar", family: "scikit-learn", horizon: "daily", description: "Ridge autoregression on lagged close" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting on lagged/exogenous features" }
+
+notes: "Vietnamese listed equity — Vietcombank — Ngân hàng Ngoại thương Việt Nam (VCB) (HOSE: VCB), a VN30 blue-chip constituent (basket of the semiannual HOSE review effective 2026-02-02; membership can change at future reviews). Daily ADJUSTED close from a public chart API (quotes published in thousands of VND, rescaled ×1000 to full VND at ingest; corporate actions already adjusted — see the vn_stocks restatement caveat in configs/ingestion/sources.yaml). Forecasts are statistical analytics over price history — not investment advice (không phải lời khuyên đầu tư)."

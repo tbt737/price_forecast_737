@@ -7,13 +7,13 @@ export default function HomePage() {
         <div>
           <h2 className="text-lg font-semibold">Commodity Explorer</h2>
           <p className="text-sm text-muted">
-            18 hồ sơ hàng hóa cấu hình-hoá. Phần lớn đã có giá thật + dự báo (Ridge AR / XGBoost, có
-            backtest vs naive); mặt hàng chưa có nguồn dữ liệu được đánh dấu{" "}
-            <span className="font-medium text-demo">DEMO</span>.
+            Các hồ sơ hàng hóa cấu hình-hoá. Phần lớn đã có giá thật + dự báo (Ridge AR / XGBoost,
+            có backtest vs naive); mặt hàng chưa có nguồn dữ liệu được đánh dấu{" "}
+            <span className="font-medium text-demo">DEMO</span>. Cổ phiếu VN30 có trang riêng.
           </p>
         </div>
       </div>
-      <CommodityExplorer />
+      <CommodityExplorer excludeGroup="equity" />
     </div>
   );
 }

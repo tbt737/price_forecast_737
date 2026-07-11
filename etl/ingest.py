@@ -32,6 +32,7 @@ from etl.sources.base import BaseSource  # noqa: E402
 from etl.sources.events.noaa_oni import NoaaOniSource  # noqa: E402
 from etl.sources.macro.yahoo_fx import MacroFxSource  # noqa: E402
 from etl.sources.market.vn_domestic import VnAppMobGoldSource, VnDomesticPriceSource  # noqa: E402
+from etl.sources.market.vn_stocks import VnStockHistorySource  # noqa: E402
 from etl.sources.market.yahoo import YahooPriceSource  # noqa: E402
 from etl.sources.supply_demand.usda_psd_bulk import UsdaPsdBulkSource  # noqa: E402
 from etl.sources.weather.nasa_power import NasaPowerSource  # noqa: E402
@@ -54,6 +55,14 @@ def build_connectors(
         ts_to = calendar.timegm(today.timetuple())
         ts_from = ts_to - max(1, history_days) * 86400
         connectors.append(VnAppMobGoldSource(config.vn_history, date_from=ts_from, date_to=ts_to))
+    # Listed-equity daily bars: same explicit-only, date-range pattern as vn_history
+    # (the daily workflow tops up a short window; a deep backfill widens --history-days).
+    if which == "vn_stocks" and config.vn_stocks:
+        import calendar
+
+        ts_to = calendar.timegm(today.timetuple())
+        ts_from = ts_to - max(1, history_days) * 86400
+        connectors.append(VnStockHistorySource(config.vn_stocks, date_from=ts_from, date_to=ts_to))
     if which in ("weather", "all") and config.weather:
         end = today - timedelta(days=1)
         start = end - timedelta(days=weather_days)
@@ -115,13 +124,17 @@ def main() -> int:
     )
     parser.add_argument(
         "--sources",
-        choices=["prices", "vn_prices", "vn_history", "weather", "macro", "events", "supply_demand", "all"],
+        choices=[
+            "prices", "vn_prices", "vn_history", "vn_stocks",
+            "weather", "macro", "events", "supply_demand", "all",
+        ],
         default="all",
     )
     parser.add_argument("--period", default="5d", help="yfinance history period (e.g. 5d, 1mo, 1y, 10y, max)")
     parser.add_argument("--weather-days", type=int, default=10, help="weather lookback window (days)")
     parser.add_argument(
-        "--history-days", dest="history_days", type=int, default=400, help="vn_history lookback window (days)"
+        "--history-days", dest="history_days", type=int, default=400,
+        help="vn_history / vn_stocks lookback window (days)",
     )
     args = parser.parse_args()
 

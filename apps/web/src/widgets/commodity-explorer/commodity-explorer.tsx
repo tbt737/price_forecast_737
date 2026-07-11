@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { api, type Commodity, type Stats } from "@/shared/api";
 import { cn } from "@/shared/lib/cn";
+import { filterByGroup, type GroupScope } from "@/shared/lib/filter-group";
 import { sectorMeta } from "@/shared/lib/sectors";
 import { Card, CardBody, CardHeader, EmptyState, SectorChip, Skeleton, Stat } from "@/shared/ui";
 import { ForecastCompare } from "@/widgets/commodity-explorer/forecast-compare";
@@ -15,7 +16,14 @@ interface Loaded {
 }
 type State = { s: "loading" } | { s: "error"; m: string } | { s: "ready"; d: Loaded };
 
-export function CommodityExplorer() {
+interface ExplorerProps extends GroupScope {
+  /** Hide the platform-wide stat row (it counts every asset class). */
+  showStats?: boolean;
+  /** Header label of the list card (e.g. "Cổ phiếu" on the stocks page). */
+  listLabel?: string;
+}
+
+export function CommodityExplorer({ group, excludeGroup, showStats = true, listLabel = "Commodities" }: ExplorerProps = {}) {
   const [state, setState] = useState<State>({ s: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -50,7 +58,8 @@ export function CommodityExplorer() {
     try {
       const [stats, commodities] = await Promise.all([api.stats(), api.listCommodities()]);
       setState({ s: "ready", d: { stats, commodities } });
-      setSelected((prev) => prev ?? commodities[0]?.commodity_code ?? null);
+      const scoped = filterByGroup(commodities, { group, excludeGroup });
+      setSelected((prev) => prev ?? scoped[0]?.commodity_code ?? null);
       setLastSync(new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
     } catch (e) {
       // On a manual re-sync, keep the data already on screen rather than blanking it.
@@ -58,14 +67,14 @@ export function CommodityExplorer() {
     } finally {
       if (opts?.manual) setSyncing(false);
     }
-  }, []);
+  }, [group, excludeGroup]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
   const filtered = useMemo(() => {
-    const all = state.s === "ready" ? state.d.commodities : [];
+    const all = filterByGroup(state.s === "ready" ? state.d.commodities : [], { group, excludeGroup });
     const q = query.trim().toLowerCase();
     if (!q) return all;
     return all.filter(
@@ -74,7 +83,7 @@ export function CommodityExplorer() {
         c.commodity_name.toLowerCase().includes(q) ||
         c.commodity_group.toLowerCase().includes(q),
     );
-  }, [state, query]);
+  }, [state, query, group, excludeGroup]);
 
   if (state.s === "loading") {
     return (
@@ -103,13 +112,15 @@ export function CommodityExplorer() {
 
   return (
     <div className="space-y-6">
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Stat label="Commodities" value={stats.commodities} accent="var(--brand)" />
-        <Stat label="Instruments" value={stats.instruments} accent="var(--info)" />
-        <Stat label="Regions" value={stats.regions} accent="var(--sector-agriculture)" />
-        <Stat label="Data sources" value={stats.data_sources} accent="var(--sector-metal)" />
-        <Stat label="Fact rows" value={stats.fact_rows} hint="chưa ingest" accent="var(--demo)" />
-      </section>
+      {showStats ? (
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <Stat label="Commodities" value={stats.commodities} accent="var(--brand)" />
+          <Stat label="Instruments" value={stats.instruments} accent="var(--info)" />
+          <Stat label="Regions" value={stats.regions} accent="var(--sector-agriculture)" />
+          <Stat label="Data sources" value={stats.data_sources} accent="var(--sector-metal)" />
+          <Stat label="Fact rows" value={stats.fact_rows} hint="chưa ingest" accent="var(--demo)" />
+        </section>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="inline-flex rounded-lg border border-border bg-surface-2 p-0.5">
@@ -164,7 +175,7 @@ export function CommodityExplorer() {
       <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
         <Card className="self-start">
           <CardHeader
-            title={compareMode ? `So sánh · ${compareSet.size} chọn` : `Commodities · ${filtered.length}`}
+            title={compareMode ? `So sánh · ${compareSet.size} chọn` : `${listLabel} · ${filtered.length}`}
             right={
               <input
                 type="search"

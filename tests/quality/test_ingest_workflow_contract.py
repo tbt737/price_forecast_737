@@ -39,6 +39,20 @@ def test_vn_prices_step_present_and_non_blocking() -> None:
     assert "${{ secrets.DATABASE_URL }}" in (step.get("env", {}) or {}).get("DATABASE_URL", "")
 
 
+def test_vn_stocks_step_present_and_non_blocking() -> None:
+    steps = _steps()
+    vn = _with_run(steps, "--sources vn_stocks")
+    assert len(vn) == 1, "expected exactly one vn_stocks ingest step"
+    step = vn[0]
+    run = step["run"]
+    # Conflict-safe backfill top-up over a short self-healing window, never --write.
+    assert "--backfill --sources vn_stocks --history-days 7" in run
+    assert "--write" not in run
+    assert step.get("continue-on-error") is True  # a dead chart API must not fail the job
+    assert str(step.get("if")).strip() == "always()"
+    assert "${{ secrets.DATABASE_URL }}" in (step.get("env", {}) or {}).get("DATABASE_URL", "")
+
+
 def test_futures_price_step_stays_critical() -> None:
     steps = _steps()
     fut = _with_run(steps, "--sources prices")

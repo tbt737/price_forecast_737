@@ -88,6 +88,60 @@ vn_history:
         data_url: "https://vapi.vnappmob.com/api/v2/gold/sjc",
         field: sell_1l, buy_field: buy_1l, currency: VND }
 
+vn_stocks:
+  # Vietnamese listed-equity daily bars (HOSE blue chips / VN30 basket) via a public
+  # chart API returning TradingView-style t/o/h/l/c/v arrays. parser names a FORMAT in
+  # etl.sources.market.vn_stocks.STOCK_HISTORY_PARSERS — never a per-ticker code path.
+  # Quotes are published in thousands of VND; scale rescales to full VND at ingest.
+  # Date-range source: runs ONLY via --sources vn_stocks (daily workflow tops up a
+  # 7-day window; a deep backfill passes a wide --history-days). Adjusted prices
+  # (corporate actions), as served by the chart API.
+  # ⚠ KNOWN LIMITATION: the API RESTATES the whole history at each corporate action
+  # (dividend/split), while ingest is append-only (ON CONFLICT DO NOTHING) — so rows
+  # ingested before an ex-date keep the old adjustment basis and a small artificial
+  # level step appears at that date until the affected instrument's window is
+  # deleted + re-backfilled (manual, approval-gated) or a revision-aware reload
+  # lands as its own pack. Do not "fix" this by switching to --write (all-or-nothing).
+  source_code: ENTRADE
+  release_lag_days: 0 # HOSE close (15:00 ICT) is published the same day
+  parser: chart_arrays_json
+  scale: 1000
+  url_template: "https://services.entrade.com.vn/chart-api/v2/ohlcs/stock?from={ts_from}&to={ts_to}&symbol={ticker}&resolution=1D"
+  # Basket = VN30 effective 2026-02-02 (Jan-2026 HOSE review: VPL in, BCM out).
+  # HOSE revises the basket semiannually (Jan/Jul, effective early Feb/Aug) —
+  # update these endpoints + the matching profiles on each review.
+  endpoints:
+    - { commodity_code: ACB_VN, instrument_code: HOSE_ACB, ticker: ACB }
+    - { commodity_code: BID_VN, instrument_code: HOSE_BID, ticker: BID }
+    - { commodity_code: BVH_VN, instrument_code: HOSE_BVH, ticker: BVH }
+    - { commodity_code: CTG_VN, instrument_code: HOSE_CTG, ticker: CTG }
+    - { commodity_code: FPT_VN, instrument_code: HOSE_FPT, ticker: FPT }
+    - { commodity_code: GAS_VN, instrument_code: HOSE_GAS, ticker: GAS }
+    - { commodity_code: GVR_VN, instrument_code: HOSE_GVR, ticker: GVR }
+    - { commodity_code: HDB_VN, instrument_code: HOSE_HDB, ticker: HDB }
+    - { commodity_code: HPG_VN, instrument_code: HOSE_HPG, ticker: HPG }
+    - { commodity_code: LPB_VN, instrument_code: HOSE_LPB, ticker: LPB }
+    - { commodity_code: MBB_VN, instrument_code: HOSE_MBB, ticker: MBB }
+    - { commodity_code: MSN_VN, instrument_code: HOSE_MSN, ticker: MSN }
+    - { commodity_code: MWG_VN, instrument_code: HOSE_MWG, ticker: MWG }
+    - { commodity_code: PLX_VN, instrument_code: HOSE_PLX, ticker: PLX }
+    - { commodity_code: SAB_VN, instrument_code: HOSE_SAB, ticker: SAB }
+    - { commodity_code: SHB_VN, instrument_code: HOSE_SHB, ticker: SHB }
+    - { commodity_code: SSB_VN, instrument_code: HOSE_SSB, ticker: SSB }
+    - { commodity_code: SSI_VN, instrument_code: HOSE_SSI, ticker: SSI }
+    - { commodity_code: STB_VN, instrument_code: HOSE_STB, ticker: STB }
+    - { commodity_code: TCB_VN, instrument_code: HOSE_TCB, ticker: TCB }
+    - { commodity_code: TPB_VN, instrument_code: HOSE_TPB, ticker: TPB }
+    - { commodity_code: VCB_VN, instrument_code: HOSE_VCB, ticker: VCB }
+    - { commodity_code: VHM_VN, instrument_code: HOSE_VHM, ticker: VHM }
+    - { commodity_code: VIB_VN, instrument_code: HOSE_VIB, ticker: VIB }
+    - { commodity_code: VIC_VN, instrument_code: HOSE_VIC, ticker: VIC }
+    - { commodity_code: VJC_VN, instrument_code: HOSE_VJC, ticker: VJC }
+    - { commodity_code: VNM_VN, instrument_code: HOSE_VNM, ticker: VNM }
+    - { commodity_code: VPB_VN, instrument_code: HOSE_VPB, ticker: VPB }
+    - { commodity_code: VPL_VN, instrument_code: HOSE_VPL, ticker: VPL }
+    - { commodity_code: VRE_VN, instrument_code: HOSE_VRE, ticker: VRE }
+
 monitoring:
   # Freshness/coverage gate groups (scripts/check_freshness.py) — config-over-code, no
   # hardcoded ticker list. max_gap_days = tolerated calendar staleness before a group is
@@ -102,3 +156,10 @@ monitoring:
       critical: false
       max_gap_days: 4 # scraped spot; a dead PNJ/Phú Quý/VNAppMob endpoint is surfaced
       commodities: [GOLD_VN, SILVER_VN]
+    - name: vn_stocks
+      critical: false
+      max_gap_days: 5 # daily bars incl. long holiday weekends (Tết gaps stay WARNING-only)
+      commodities: [ACB_VN, BID_VN, BVH_VN, CTG_VN, FPT_VN, GAS_VN, GVR_VN, HDB_VN,
+                    HPG_VN, LPB_VN, MBB_VN, MSN_VN, MWG_VN, PLX_VN, SAB_VN, SHB_VN,
+                    SSB_VN, SSI_VN, STB_VN, TCB_VN, TPB_VN, VCB_VN, VHM_VN, VIB_VN,
+                    VIC_VN, VJC_VN, VNM_VN, VPB_VN, VPL_VN, VRE_VN]

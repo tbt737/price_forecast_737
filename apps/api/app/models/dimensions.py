@@ -28,6 +28,7 @@ class CommodityGroup(enum.StrEnum):
     energy = "energy"
     metal = "metal"
     logistics = "logistics"
+    equity = "equity"  # listed shares (e.g. Vietnamese VN30 blue chips) — same generic pipeline
 
 
 class RegionRole(enum.StrEnum):

@@ -23,6 +23,9 @@ Locked 2026-07-07 at commit `4925b9d` (details + monotonic rule in `.claude/loop
 **20 commodity profiles** (pinned by `tests/quality/test_profiles_quality.py`). Test counts
 never go down; locked invariants never weaken.
 
+> Current (2026-07-11, pack VN30-STOCKS-1): **pytest 456 + 1 skipped · vitest 39 · 51
+> profiles / 98 instruments** (21 commodities + 30 VN30 equities, `commodity_group: equity`).
+
 > ⚠️ Stale companion docs: `README.md` still says "16 profiles" and `ARCHITECTURE.md`'s
 > status header still says "18 profiles / Phases 1–9 / cloud hosting pending — see DEPLOY.md".
 > Those predate production. **This file supersedes them for current status** — in particular,
@@ -46,6 +49,18 @@ No code pack is currently in flight. Highest-value next actions, in order:
 
 ## 5. Waiting workstreams (do not execute yet)
 
+- **VN30-PROD (production phase of VN30-STOCKS-1) — WAITING on user approval.** The 30
+  VN30 equity profiles + `vn_stocks` connector + `/stocks` page shipped code-complete
+  (2026-07-11); production still needs, in order: (1) profile load (`make db-load` against
+  the Supabase pooler URL), (2) `seed_ingestion_sources` (auto-runs with ingest),
+  (3) one deep backfill `python -m etl.ingest --backfill --sources vn_stocks
+  --history-days 5400`, (4) Cloud Run redeploy of cqp-api + cqp-web. ⚠ Before or shortly
+  after (3), land the **adjusted-price restatement heal** pack (see the vn_stocks caveat
+  in `configs/ingestion/sources.yaml`): the chart API restates history at each corporate
+  action while ingest is append-only — plan = revision-aware reload using the existing
+  `revision` grain column. The daily workflow step is already in `ingest.yml` and is inert
+  until (1) happens. VN30 basket = review effective 2026-02-02; refresh on each
+  semiannual HOSE review.
 - **ACC-REVIEW — WAITING.** The accuracy loop is scheduled (`4925b9d`): writer logs pending
   forecasts to `fact_forecast_log` after each ingest; evaluator (Mondays 03:00 UTC) matures
   rows once `target_date <= today`. Writer started 2026-07-05, so no matured rows exist yet.

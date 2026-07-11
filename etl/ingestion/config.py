@@ -57,6 +57,25 @@ class VnHistorySpec:
 
 
 @dataclass(frozen=True)
+class VnStockSpec:
+    """One Vietnamese listed-equity daily-bar endpoint (date-range chart API).
+    ``parser`` names a FORMAT in ``etl.sources.market.vn_stocks.STOCK_HISTORY_PARSERS``
+    (e.g. chart_arrays_json); ``url_template`` carries ``{ts_from}``/``{ts_to}``/
+    ``{ticker}`` placeholders; ``scale`` rescales published quotes to full currency
+    units (the source publishes thousands of VND)."""
+
+    commodity_code: str
+    instrument_code: str
+    source_code: str
+    parser: str
+    url_template: str
+    ticker: str
+    currency: str
+    scale: float
+    release_lag_days: int
+
+
+@dataclass(frozen=True)
 class WeatherSpec:
     commodity_code: str
     region_code: str
@@ -101,6 +120,7 @@ class IngestionConfig:
     supply_demand: list[SupplyDemandSpec]
     vn_prices: list[VnPriceSpec]
     vn_history: list[VnHistorySpec]
+    vn_stocks: list[VnStockSpec]
 
     @property
     def source_codes(self) -> set[str]:
@@ -108,6 +128,7 @@ class IngestionConfig:
             {s.source_code for s in self.prices}
             | {s.source_code for s in self.vn_prices}
             | {s.source_code for s in self.vn_history}
+            | {s.source_code for s in self.vn_stocks}
             | {s.source_code for s in self.weather}
             | {s.source_code for s in self.macro}
             | {s.source_code for s in self.events}
@@ -270,9 +291,31 @@ def load_ingestion_config(path: Path = CONFIG_PATH) -> IngestionConfig:
         for e in vh.get("endpoints", [])
     ]
 
+    vs = data.get("vn_stocks", {}) or {}
+    vs_source = vs.get("source_code", "ENTRADE")
+    vs_lag = int(vs.get("release_lag_days", 0))
+    vs_parser = vs.get("parser", "chart_arrays_json")
+    vs_scale = float(vs.get("scale", 1000))
+    vs_template = vs.get("url_template", "")
+    vn_stocks = [
+        VnStockSpec(
+            commodity_code=e["commodity_code"],
+            instrument_code=e["instrument_code"],
+            source_code=e.get("source_code", vs_source),
+            parser=e.get("parser", vs_parser),
+            url_template=e.get("url_template", vs_template),
+            ticker=e["ticker"],
+            currency=e.get("currency", "VND"),
+            scale=float(e.get("scale", vs_scale)),
+            release_lag_days=vs_lag,
+        )
+        for e in vs.get("endpoints", [])
+    ]
+
     return IngestionConfig(
         prices=prices, weather=weather, macro=macro, events=events,
         supply_demand=supply_demand, vn_prices=vn_prices, vn_history=vn_history,
+        vn_stocks=vn_stocks,
     )
 
 

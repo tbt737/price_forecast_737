@@ -24,6 +24,7 @@ NETWORK_EXEMPT = {
     ETL_DIR / "ingest.py",
     ETL_DIR / "sources" / "market" / "yahoo.py",
     ETL_DIR / "sources" / "market" / "vn_domestic.py",
+    ETL_DIR / "sources" / "market" / "vn_stocks.py",
     ETL_DIR / "sources" / "weather" / "nasa_power.py",
     ETL_DIR / "sources" / "macro" / "yahoo_fx.py",
     ETL_DIR / "sources" / "events" / "noaa_oni.py",

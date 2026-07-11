@@ -95,13 +95,13 @@ def test_loads_all_real_profiles(session: Session) -> None:
     summary = load_profiles(session)
     session.commit()
 
-    assert summary["profile:loaded"] == 21  # +GOLD_VN +SILVER_VN +PEPPER_VN
-    assert _count(session, DimCommodity) == 21
-    assert _count(session, CommodityProfileRegistry) == 21
+    assert summary["profile:loaded"] == 51  # 21 commodities + 30 VN30 equities
+    assert _count(session, DimCommodity) == 51
+    assert _count(session, CommodityProfileRegistry) == 51
     assert _count(session, CommodityRegionMap) > 0
 
     groups = {g for (g,) in session.execute(select(DimCommodity.commodity_group).distinct())}
-    assert {"agriculture", "energy", "metal", "logistics"}.issubset({g.value for g in groups})
+    assert {"agriculture", "energy", "metal", "logistics", "equity"}.issubset({g.value for g in groups})
 
     reg = session.execute(select(CommodityProfileRegistry).filter_by(commodity_code="ROBUSTA")).scalar_one()
     assert reg.profile["commodity_group"] == "agriculture"

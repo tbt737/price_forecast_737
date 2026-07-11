@@ -30,6 +30,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </Link>
           <nav className="ml-auto flex shrink-0 items-center gap-3 sm:gap-4">
+            <Link href="/stocks" className="text-xs font-medium text-text hover:text-brand">
+              📈 Cổ phiếu
+            </Link>
             <Link href="/iching" className="text-xs font-medium text-text hover:text-brand">
               🔮 Gieo quẻ
             </Link>

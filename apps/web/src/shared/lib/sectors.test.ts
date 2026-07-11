@@ -8,6 +8,13 @@ describe("sectorMeta", () => {
     expect(sectorMeta("metal").icon).toBeTruthy();
   });
 
+  it("maps the equity sector (VN30 listed shares)", () => {
+    const m = sectorMeta("equity");
+    expect(m.label).toBe("Cổ phiếu");
+    expect(m.color).toContain("--sector-equity");
+    expect(m.icon).toBeTruthy();
+  });
+
   it("falls back gracefully for unknown groups", () => {
     const m = sectorMeta("widgets");
     expect(m.label).toBe("widgets");
