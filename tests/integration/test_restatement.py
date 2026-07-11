@@ -100,6 +100,9 @@ def _series(session: Session) -> dict[date, float]:
     """The canonical series exactly as the ML read path sees it (single basis)."""
     out = load_price_series(session, "TSTA_VN")
     assert out is not None
+    # Mutation guard: if the loader's revision filter is dropped, both revisions of a
+    # date come back and dict(zip(...)) would silently mask it — assert BEFORE zipping.
+    assert len(out["dates"]) == len(set(out["dates"])), "duplicate dates ⇒ revision filter lost"
     return dict(zip(out["dates"], out["values"], strict=True))
 
 
@@ -119,16 +122,49 @@ def test_empty_store_writes_nothing(session: Session) -> None:
     assert session.execute(select(func.count()).select_from(FactPriceDaily)).scalar_one() == 0
 
 
-def test_no_anchor_overlap_writes_nothing(session: Session) -> None:
+def test_no_anchor_overlap_writes_nothing_and_turns_red(session: Session) -> None:
     _seed_initial(session, BASIS_A)
-    # Source only serves dates far in the future — nothing overlaps the store.
+    # Source only serves dates far in the future — nothing overlaps the store even
+    # though the window auto-reaches the stored tail ⇒ the source lost our history.
     future_only = {TODAY + timedelta(days=30): 500.0}
     report = reconcile_stock_history(
         session, [_spec()], today=TODAY + timedelta(days=31),
         fetch=_fetch_for(future_only), history_days=2, dry_run=False,
     )
     assert report["instruments"][0]["status"] == "no_anchor"
+    assert report["ok"] is False  # a silent stall must be VISIBLE (CLI exit 1)
     assert len(_all_rows(session)) == len(BASIS_A)  # untouched
+
+
+def test_gap_longer_than_window_still_finds_anchors(session: Session) -> None:
+    # Tết/outage scenario: 30 calendar days pass with no runs. A fixed 10-day window
+    # would permanently no_anchor; the window must auto-reach the stored tail instead.
+    _seed_initial(session, BASIS_A)
+    later = TODAY + timedelta(days=30)
+    grown = dict(BASIS_A)
+    for i in (1, 2):  # two new business-day bars right before the late run
+        d = later - timedelta(days=i)
+        if d.weekday() < 5:
+            grown[d] = 130.0 + i
+    added = {d for d in grown if d not in BASIS_A}
+    report = reconcile_stock_history(
+        session, [_spec()], today=later, fetch=_fetch_for(grown), history_days=10, dry_run=False
+    )
+    item = report["instruments"][0]
+    assert item["status"] == "appended" and report["ok"]
+    assert set(_series(session)) == set(BASIS_A) | added
+
+
+def test_epsilon_tolerance_band_boundaries(session: Session) -> None:
+    # Anchor drift below epsilon (0.5%) is noise ⇒ fresh; above it ⇒ restatement.
+    _seed_initial(session, BASIS_A)
+    within = {d: v * 1.004 for d, v in BASIS_A.items()}  # +0.4%
+    r_within = reconcile_stock_history(session, [_spec()], today=TODAY, fetch=_fetch_for(within), dry_run=True)
+    assert r_within["instruments"][0]["status"] == "fresh"
+
+    beyond = {d: v * 1.006 for d, v in BASIS_A.items()}  # +0.6%
+    r_beyond = reconcile_stock_history(session, [_spec()], today=TODAY, fetch=_fetch_for(beyond), dry_run=True)
+    assert r_beyond["instruments"][0]["status"] == "would_restate"
 
 
 def test_dry_run_never_writes(session: Session) -> None:
@@ -351,6 +387,19 @@ def test_atomic_insert_duplicate_grain_rolls_back_everything(session: Session) -
     with pytest.raises(SQLAlchemyError):
         _atomic_insert(session, FactFamily.price_daily, [payloads[0], dict(payloads[0])])
     assert len(_all_rows(session)) == before  # rolled back — the valid twin is gone too
+
+
+def test_restated_rows_release_date_is_reconcile_day(session: Session) -> None:
+    # PIT: the restated basis only became knowable on the reconcile day — as-of reads
+    # before that day must keep seeing the old revision (release_date gate in the view).
+    _seed_initial(session, BASIS_A)
+    restated = {d: round(v * 0.85, 4) for d, v in BASIS_A.items()}
+    reconcile_stock_history(session, [_spec()], today=TODAY, fetch=_fetch_for(restated), dry_run=False)
+    rel = {
+        r.release_date
+        for r in session.execute(select(FactPriceDaily).where(FactPriceDaily.revision == 1)).scalars()
+    }
+    assert rel == {TODAY}
 
 
 # ── config plumbing ──────────────────────────────────────────────────────────

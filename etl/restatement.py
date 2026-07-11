@@ -174,7 +174,13 @@ def reconcile_stock_history(
             item["status"] = "empty"
             continue
 
-        window = _fetch_records(spec, date_from=today.fromordinal(today.toordinal() - max(1, history_days)),
+        # Window ALWAYS reaches back to the stored tail (minus a small buffer) — a
+        # fixed N-day window would go permanently `no_anchor` after any gap > N days
+        # (Tết closure, a stretch of failed runs, backfill-then-enable-later), because
+        # the window slides forward daily while the store never grows.
+        window_from = date.fromordinal(today.toordinal() - max(1, history_days))
+        anchor_floor = date.fromordinal(max(stored).toordinal() - 3)
+        window = _fetch_records(spec, date_from=min(window_from, anchor_floor),
                                 date_to=today, fetch=fetch)
         fetched: dict[date, float] = {
             r.observation_date: float(r.value)
@@ -192,8 +198,11 @@ def reconcile_stock_history(
         anchors = overlap[-max(1, cfg.anchor_days):]
         item["anchors_checked"] = len(anchors)
         if not anchors:
-            item["status"] = "no_anchor"  # cannot verify the basis ⇒ fail closed
-            item["warnings"].append("no overlap between stored dates and the fetched window")
+            # The window reaches the stored tail by construction, so an empty overlap
+            # means the source no longer serves our stored dates (delisting / dead
+            # ticker) — fail closed AND surface it (counts into ok:false ⇒ exit 1).
+            item["status"] = "no_anchor"
+            item["warnings"].append("source no longer serves any stored date — cannot verify basis")
             continue
 
         mismatched = [
@@ -293,5 +302,7 @@ def reconcile_stock_history(
         "mode": "dry_run" if dry_run else "write",
         "instruments": items,
         "totals": {s: statuses.count(s) for s in sorted(set(statuses))},
-        "ok": not any(s == "error" for s in statuses),
+        # no_anchor is a stall that would otherwise repeat silently forever — both it
+        # and error must turn the run red (the cron step is continue-on-error anyway).
+        "ok": not any(s in ("error", "no_anchor") for s in statuses),
     }

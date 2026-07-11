@@ -32,6 +32,11 @@
   `python -m etl.ingest --reconcile --sources vn_stocks --history-days 10 --write`
   — mỗi ngày đều là một lần reconcile đầy đủ: kiểm tra 5 anchors gần nhất rồi mới
   append; restatement được phát hiện muộn nhất là lần chạy kế tiếp sau corporate action.
+- **Cửa sổ tự vươn tới đuôi kho** (`min(today − history_days, max(stored) − 3d)`): nghỉ
+  Tết / gián đoạn dài quá `history_days` KHÔNG làm kẹt `no_anchor` — cửa sổ luôn phủ
+  các ngày đã lưu gần nhất. `no_anchor` vì thế chỉ còn nghĩa "nguồn không còn phục vụ
+  lịch sử của ta" (hủy niêm yết / đổi mã) và được tính vào `ok:false` ⇒ CLI exit 1
+  (bước cron là continue-on-error nên job không đỏ, nhưng step đỏ — nhìn thấy được).
 - Đường `--backfill --sources vn_stocks` (append-only) từ nay CHỈ dùng cho lần nạp đầu
   trên kho rỗng (bị cấm trong workflow bằng contract test; sau khi một instrument đã
   có revision > 0, backfill rev-0 chỉ tạo dòng "vô hình" với mọi đường đọc — quy tắc
@@ -109,7 +114,7 @@ connector vẫn là biên mạng duy nhất). Sim-to-real: dry-run trên prod th
 |---|---|---|
 | 1 | Ingest sau cập nhật được lịch sử bị restate, không ON CONFLICT DO NOTHING cùng revision | ✅ revision-bump reload, add_all + commit, không conflict suppression |
 | 2 | Re-run cùng payload idempotent | ✅ test `fresh` + store bất biến (synthetic + real-data canary) |
-| 3 | Không có chuỗi lai basis cũ/mới | ✅ single-basis rule ở cả 2 đường đọc + test API/ML |
+| 3 | Không có chuỗi lai basis cũ/mới | ✅ latest-revision ở CẢ BA đường đọc persist: API `/prices`, `ml.forecast.load_price_series` (mutation-guard chống mất filter), `ml/build_pandas_mv.py` (revision-aware + collapse deterministic); view PIT chọn revision mới nhất theo ngày với gate `release_date` = ngày reconcile nên as-of cũ giữ basis cũ đúng PIT |
 | 4 | Test mô phỏng cổ tức/tách CP restate toàn bộ lịch sử | ✅ 15% dividend + 2:1 split (rev 1 → 2) |
 | 5 | Duplicate grain / NaN / revision / jump bất thường | ✅ unique-grain abort test, parser NaN gate, revision đơn điệu, jump warning |
 | 6 | Full gates xanh | ✅ §7 |

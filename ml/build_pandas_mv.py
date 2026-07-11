@@ -45,7 +45,21 @@ def build_wide_table_pandas(session=None):
         grid_df = pd.concat(grid_dfs, ignore_index=True)
 
         print("2. Fetching metrics...")
-        q_price = "SELECT commodity_key, price_date as as_of_date, 'price_close' as metric_code, COALESCE(close, settle, value) as val FROM fact_price_daily"
+        # Single-basis rule: only the LATEST revision per (commodity, instrument) — a
+        # restated (adjusted) series is re-ingested at revision+1 (etl/restatement.py);
+        # reading all revisions here would mix adjustment bases in the backtest target.
+        q_price = """
+        SELECT f.commodity_key, f.price_date as as_of_date,
+               'price_close' as metric_code, COALESCE(f.close, f.settle, f.value) as val
+        FROM fact_price_daily f
+        JOIN (
+            SELECT commodity_key, market_instrument_key, MAX(revision) AS max_rev
+            FROM fact_price_daily
+            GROUP BY commodity_key, market_instrument_key
+        ) m ON m.commodity_key = f.commodity_key
+           AND m.market_instrument_key = f.market_instrument_key
+           AND f.revision = m.max_rev
+        """
         q_weather = "SELECT commodity_key, release_date as as_of_date, metric_code, value as val FROM fact_weather_daily"
         q_macro = "SELECT commodity_key, release_date as as_of_date, indicator_code as metric_code, value as val FROM fact_macro_daily"
         q_logistics = "SELECT commodity_key, release_date as as_of_date, indicator_code as metric_code, value as val FROM fact_logistics_periodic"
@@ -73,6 +87,11 @@ def build_wide_table_pandas(session=None):
         else:
             all_events = comm_events
 
+        # Deterministic collapse: read_sql has no ORDER BY, so sort before .last() —
+        # otherwise the kept row depends on the DB's physical scan order run-to-run.
+        all_events = all_events.sort_values(
+            ['commodity_key', 'as_of_date', 'metric_code', 'val'], kind='mergesort'
+        )
         all_events = all_events.groupby(['commodity_key', 'as_of_date', 'metric_code'])['val'].last().reset_index()
 
         print("3. Pivoting...")

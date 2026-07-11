@@ -51,13 +51,14 @@ jobs:
           python -m etl.ingest --backfill --sources vn_prices
           python -m etl.ingest --backfill --sources vn_history --history-days 7
 
-      # VN30 listed equities (30 HOSE blue chips): same self-healing 7-day top-up
-      # pattern as vn_history. 🔒 FEATURE-FLAGGED OFF BY DEFAULT: the chart API serves
-      # ADJUSTED prices that restate history at corporate actions, and this append-only
-      # top-up must NOT run until the revision-aware restatement heal lands (owner
-      # decision 2026-07-11; unlock criteria in PLAN.md §5). To enable, set the
-      # repository variable ENABLE_VN_STOCKS_INGEST=true (Settings → Secrets and
-      # variables → Actions → Variables). Unset/other values ⇒ step is skipped.
+      # VN30 listed equities (30 HOSE blue chips): restatement-aware RECONCILE
+      # (etl/restatement.py) — anchor-checks the stored tail, appends new days at the
+      # instrument's latest revision, and atomically reloads the full series at
+      # revision+1 when the ADJUSTED source restates history (corporate action).
+      # 🔒 FEATURE-FLAGGED OFF BY DEFAULT until the production canary sequence in
+      # PLAN.md §5 completes (owner decision 2026-07-11). To enable, set the repository
+      # variable ENABLE_VN_STOCKS_INGEST=true (Settings → Secrets and variables →
+      # Actions → Variables). Unset/other values ⇒ step is skipped.
       # `!cancelled()` (not `always()`): this step is independent of prior steps (only
       # needs DATABASE_URL), so it still self-heals after an unrelated failure — but it
       # must not fire on a cancelled run (owner decision 2026-07-11, observation 3).

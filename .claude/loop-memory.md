@@ -23,14 +23,22 @@ Invariants: INV-1/2 (restatement stays offline; connector is network boundary), 
 `ENABLE_VN_STOCKS_INGEST` still OFF).
 Gates at land: pytest **473+1skip** · vitest **39** · ruff 0 · mypy 0 · build ✓.
 **Still gated (PLAN §5):** production canary backfill 1–2 tickers → full 30 → re-enable
-scheduled reconcile. **Known residual (MAJOR-2 accepted):** PIT wide MV / `build_pandas_mv`
-/ per-date revision collapse can still mix bases on exog `price_close` for equity —
-documented in `docs/etl/vn-stocks-restatement.md` §5; live FIT path is single-basis.
+scheduled reconcile. **Residual CLOSED by round-2 hardening (same day):**
+`build_pandas_mv` now revision-aware (per-instrument max revision) + deterministic
+collapse (sort before groupby.last — read_sql has no ORDER BY); reconcile window
+auto-reaches the stored tail (`min(today−N, max(stored)−3d)`) so a gap > N days (Tết)
+can't strand `no_anchor`; `no_anchor` now counts into `ok:false` ⇒ exit 1 (visible
+stall); mutation-guard in `_series` pins the ML revision filter; epsilon boundary
+(0.4%→fresh / 0.6%→restate), rev-1 release_date=reconcile-day, and gap-recovery tests
+added (suite 476+1skip).
 **Rules distilled:** (1) Never `db-load` a new enum/group value into live dims before the
 serving API revision knows that value — COUNT endpoints will lie green while list/detail
 500. (2) Coverage for restatement reloads must be intersection-of-dates, never
 len(payload)/len(stored). (3) Hotfix deploy order: API smoke (incl. one new-group row)
-before web.
+before web. (4) Adversarial reviewers should mutation-test the pack's central invariant —
+two "green" tests here were provably not pinning it (dict(zip) masked duplicates;
+append-at-rev never exercised post-restatement). (5) A fail-closed skip that repeats
+daily is a silent stall — every self-repeating skip status must turn the run red.
 
 ## 2026-07-11 VN30-STOCKS-1 — VN30_STOCKS_1_PASS (prod phase gated, see PLAN §5)
 Shipped: 30 VN30 equity profiles (`configs/commodities/<ticker>_vn.yaml`, group `equity`,
