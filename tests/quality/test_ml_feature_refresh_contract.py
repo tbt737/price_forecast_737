@@ -73,11 +73,11 @@ def test_offline_builder_constants_decoupled() -> None:
     assert PRODUCTION_MV == "mv_ml_daily_features_wide"
 
 
-def test_canonicalize_runner_uses_two_phase_cutover() -> None:
+def test_canonicalize_runner_uses_two_phase_operator_boundary() -> None:
     runner = (REPO / "scripts" / "canonicalize_ml_feature_mv.py").read_text(encoding="utf-8")
     assert "pg_advisory_lock" in runner
-    assert "with conn.begin()" in runner
-    assert "--write" in runner
+    assert "--prepare-candidate" in runner
+    assert "--cutover" in runner
     assert "--rollback" in runner
     assert "--cleanup-candidate" in runner
     assert "mv_ml_daily_features_wide_cand" in runner
@@ -85,29 +85,34 @@ def test_canonicalize_runner_uses_two_phase_cutover() -> None:
     assert "statement_timeout = 0" not in runner
     assert "lock_timeout" in runner
     assert "fact_snapshot" in runner
-    assert "_revoke_public_roles" in runner
+    assert "fact_event_risk" in runner
+    assert "DEFAULT_REFRESH_TIMEOUT_MIN = 30" in runner
+    assert "--write is removed" in runner or "write is removed" in runner
 
     preamble = PREAMBLE.read_text(encoding="utf-8")
     rollback = ROLLBACK.read_text(encoding="utf-8")
     runbook = RUNBOOK.read_text(encoding="utf-8")
 
     for needle in (
-        "two-phase",
+        "prepare-candidate",
+        "cutover",
         "candidate",
         "RENAME TO",
         "mv_ml_daily_features_wide_table_bak",
         "WITH NO DATA",
         "lock_timeout",
         "REVOKE",
+        "30",
     ):
-        assert needle.lower() in (preamble + runbook).lower(), needle
+        assert needle.lower() in (preamble + runbook + runner).lower(), needle
 
     assert "DROP MATERIALIZED VIEW" in rollback
     assert "mv_ml_daily_features_wide_table_bak" in rollback
     assert "parity" in runbook.lower()
     assert "canonicalize_ml_feature_mv.py" in runbook
     assert "offline_ml_daily_features_wide_pandas" in runbook
-    assert "no REFRESH" in runbook or "No REFRESH" in runbook or "no REFRESH" in runbook.lower()
+    assert "operator" in runbook.lower()
+    assert "six" in runbook.lower() or "fact_event_risk" in runbook
     assert "pg_advisory_lock" in runner
 
 

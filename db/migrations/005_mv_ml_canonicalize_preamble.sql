@@ -2,14 +2,14 @@
 -- 005_mv_ml_canonicalize_preamble.sql
 -- REFERENCE / manual fragment ONLY — NOT the production apply path.
 --
--- Production apply MUST use:
---   python scripts/canonicalize_ml_feature_mv.py --write
--- which runs a TWO-PHASE cutover:
---   1) build/refresh candidate MV (…_cand) with finite statement_timeout
---   2) short cutover txn: TABLE→backup, candidate→canonical (NO REFRESH inside)
+-- Production apply MUST use two mutually exclusive commands:
+--   python scripts/canonicalize_ml_feature_mv.py --prepare-candidate
+--   python scripts/canonicalize_ml_feature_mv.py --cutover
+-- (no one-shot --write). Default refresh timeout 30min (bounded CLI override).
 --
--- Do NOT run a long REFRESH inside the same transaction that renames the
--- production TABLE — that holds AccessExclusiveLock for the full rebuild.
+-- Prepare builds/refreshes mv_ml_daily_features_wide_cand under session advisory
+-- lock and STOPS. Cutover revalidates, concurrent-refreshes, checks the 6-family
+-- fact fingerprint, then runs a short rename txn (NO REFRESH inside).
 --
 -- Rollback: python scripts/canonicalize_ml_feature_mv.py --rollback
 -- Orphan candidate: python scripts/canonicalize_ml_feature_mv.py --cleanup-candidate
@@ -23,7 +23,7 @@
 -- SET LOCAL lock_timeout = '3s';
 -- SET LOCAL statement_timeout = '15s';
 -- SELECT pg_advisory_xact_lock(hashtext('ml_feature_view_canonicalize'));
--- -- re-check fact_price_daily snapshot here
+-- -- re-check 6-family fact fingerprint here
 -- ALTER TABLE public.mv_ml_daily_features_wide RENAME TO mv_ml_daily_features_wide_table_bak;
 -- ALTER INDEX public.uq_mv_ml_daily_features_wide RENAME TO uq_mv_ml_daily_features_wide_table_bak;
 -- ALTER MATERIALIZED VIEW public.mv_ml_daily_features_wide_cand RENAME TO mv_ml_daily_features_wide;
