@@ -1,11 +1,13 @@
 -- ============================================================================
 -- 005_mv_ml_canonicalize_rollback.sql
--- Rollback for direction-A canonicalize (OWNER APPROVAL REQUIRED).
--- Restores the pre-migration TABLE backup and removes the new matview.
+-- REFERENCE — prefer: python scripts/canonicalize_ml_feature_mv.py --rollback
+-- Restores the pre-cutover TABLE backup and removes the new matview.
+-- Does not drop a leftover candidate; use --cleanup-candidate for that.
 -- ============================================================================
 
 BEGIN;
 SELECT pg_advisory_xact_lock(hashtext('ml_feature_view_canonicalize'));
+SET LOCAL lock_timeout = '3s';
 
 DO $$
 DECLARE

@@ -73,12 +73,18 @@ def test_offline_builder_constants_decoupled() -> None:
     assert PRODUCTION_MV == "mv_ml_daily_features_wide"
 
 
-def test_canonicalize_runner_uses_session_lock_and_single_txn() -> None:
+def test_canonicalize_runner_uses_two_phase_cutover() -> None:
     runner = (REPO / "scripts" / "canonicalize_ml_feature_mv.py").read_text(encoding="utf-8")
     assert "pg_advisory_lock" in runner
     assert "with conn.begin()" in runner
     assert "--write" in runner
-    assert "already exists" in runner
+    assert "--rollback" in runner
+    assert "--cleanup-candidate" in runner
+    assert "mv_ml_daily_features_wide_cand" in runner
+    assert "REFRESH MATERIALIZED VIEW CONCURRENTLY" in runner
+    assert "statement_timeout = 0" not in runner
+    assert "lock_timeout" in runner
+    assert "fact_snapshot" in runner
     assert "_revoke_public_roles" in runner
 
     preamble = PREAMBLE.read_text(encoding="utf-8")
@@ -86,11 +92,12 @@ def test_canonicalize_runner_uses_session_lock_and_single_txn() -> None:
     runbook = RUNBOOK.read_text(encoding="utf-8")
 
     for needle in (
-        "pg_advisory_xact_lock",
+        "two-phase",
+        "candidate",
         "RENAME TO",
         "mv_ml_daily_features_wide_table_bak",
         "WITH NO DATA",
-        "non-concurrent",
+        "lock_timeout",
         "REVOKE",
     ):
         assert needle.lower() in (preamble + runbook).lower(), needle
@@ -100,6 +107,7 @@ def test_canonicalize_runner_uses_session_lock_and_single_txn() -> None:
     assert "parity" in runbook.lower()
     assert "canonicalize_ml_feature_mv.py" in runbook
     assert "offline_ml_daily_features_wide_pandas" in runbook
+    assert "no REFRESH" in runbook or "No REFRESH" in runbook or "no REFRESH" in runbook.lower()
     assert "pg_advisory_lock" in runner
 
 
