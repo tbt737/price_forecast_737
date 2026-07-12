@@ -6,7 +6,13 @@ from datetime import date, timedelta
 
 import pytest
 
-from etl.ingestion.config import EventRiskSpec, SupplyDemandSpec, load_ingestion_config
+from etl.ingest import build_connectors
+from etl.ingestion.config import (
+    EventRiskSpec,
+    SupplyDemandMetricDetail,
+    SupplyDemandSpec,
+    load_ingestion_config,
+)
 from etl.provenance import gate_record
 from etl.sources.events.noaa_oni import NoaaOniSource, _parse_oni_lines
 from etl.sources.supply_demand.usda_psd import UsdaPsdSource
@@ -179,22 +185,72 @@ def test_usda_bulk_connector_fails_closed_on_duplicate_grain() -> None:
         list(UsdaPsdBulkSource([spec], fetch=lambda: dup_csv).collect())
 
 
-def test_usda_api_connector_builds_records_with_mock_fetch() -> None:
-    spec = SupplyDemandSpec("ROBUSTA", "0711100", "manual", 0, {"production_estimate": 28})
+def test_usda_api_connector_is_disabled_fail_closed() -> None:
+    """The legacy API path predates country-grain hardening (no country filter, no
+    country in provenance, hardcoded unit) — constructing it must raise, so no ingest
+    path can silently produce PSD records without a country."""
+    spec = SupplyDemandSpec(
+        "ROBUSTA", "0711100", "manual", 0, {"production_estimate": 28}, country_code="VM"
+    )
+    with pytest.raises(RuntimeError, match="DISABLED fail-closed"):
+        UsdaPsdSource([spec])
+    with pytest.raises(RuntimeError, match="DISABLED fail-closed"):
+        UsdaPsdSource([spec], fetch=lambda _cid: [])
 
-    def fetch(_commodity_id: str) -> list[dict]:
-        return [
-            {
-                "attribute_id": 28,
-                "market_year": 2024,
-                "start_date": date(2024, 10, 1),
-                "value": 1500.0,
-            }
-        ]
 
-    records = list(UsdaPsdSource([spec], fetch=fetch).collect())
-    assert len(records) == 1
-    r = records[0]
-    assert r.metric_code == "production_estimate"
-    assert r.value == 1500.0
-    assert gate_record(r) == []
+def test_build_connectors_psd_path_is_bulk_only_with_full_country_grain() -> None:
+    """No path in build_connectors may create a PSD record lacking a country: the
+    only supply_demand connector is the hardened bulk source, and every configured
+    metric resolves a country + region before any fetch happens."""
+    cfg = load_ingestion_config()
+    connectors = build_connectors(
+        cfg, which="supply_demand", period="5d", weather_days=7, today=date(2026, 7, 12)
+    )
+    assert len(connectors) == 1
+    assert type(connectors[0]) is UsdaPsdBulkSource
+    for spec in cfg.supply_demand:
+        for metric in spec.metrics:
+            assert spec.country_for(metric)
+            assert spec.region_for(metric)
+
+
+def test_usda_bulk_connector_fails_closed_on_unit_drift() -> None:
+    """A configured unit is a contract: if the upstream CSV changes units, refuse to
+    emit rather than silently mixing magnitudes."""
+    drift_csv = (
+        "Commodity_Code,Country_Code,Market_Year,Month,Attribute_ID,Value,Unit_Description\n"
+        "0440000,US,2024,9,4,100.0,(MT)\n"
+    )
+    spec = SupplyDemandSpec(
+        "CORN",
+        "0440000",
+        "manual",
+        0,
+        {"planted_area": 4},
+        (SupplyDemandMetricDetail("planted_area", 4, "(1000 HA)", "Area Harvested"),),
+        country_code="US",
+    )
+    with pytest.raises(RuntimeError, match="unit drift"):
+        list(UsdaPsdBulkSource([spec], fetch=lambda: drift_csv).collect())
+
+
+def test_usda_bulk_connector_source_id_and_unit_contract() -> None:
+    """Provenance id embeds country; unit comes from the source row (never hardcoded)."""
+    csv = (
+        "Commodity_Code,Country_Code,Market_Year,Month,Attribute_ID,Value,Unit_Description\n"
+        "0440000,US,2024,9,4,100.0,(1000 HA)\n"
+    )
+    spec = SupplyDemandSpec(
+        "CORN",
+        "0440000",
+        "manual",
+        0,
+        {"planted_area": 4},
+        (SupplyDemandMetricDetail("planted_area", 4, "(1000 HA)", "Area Harvested"),),
+        country_code="US",
+    )
+    (record,) = list(UsdaPsdBulkSource([spec], fetch=lambda: csv).collect())
+    assert record.source_record_id == "manual:0440000:2024-09-01_4_US"
+    assert record.unit == "(1000 HA)"
+    assert record.region_code == "US"
+    assert gate_record(record) == []

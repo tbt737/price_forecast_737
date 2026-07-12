@@ -200,10 +200,10 @@
   PSD market years span 1960-2026, but EVERY record would get
   release_date = ingest day. Walk-forward (folds=5, min_train=252)
   places all fold cut dates strictly in the past => folds that can see any
-  supply-driver value: 0/5 (0%). mechanistic_fourier_supply cannot be
-  evaluated on history until either (a) >= 252 post-ingest daily rows
-  accrue (~1 trading year), or (b) a per-release-month PIT reconstruction pack
-  is approved (PSD releaseMonth API preserves historical vintages).
+  supply-driver value: 0/5 (0%). Locked FORWARD-ONLY by the PIT vintage
+  feasibility audit (5c78d4d: no trustworthy historical vintage source exists):
+  mechanistic history stays locked until >= 252 post-ingest daily rows
+  accrue (~1 trading year of real forward vintages).
 
 SUGAR: imports/inventory only ù NOT mechanistic_ready (planted_area absent). OK
 COCOA: excluded from config. OK

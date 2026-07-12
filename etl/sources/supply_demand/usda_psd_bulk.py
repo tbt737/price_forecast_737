@@ -51,10 +51,13 @@ class UsdaPsdBulkSource(BaseSource):
         # PSD bulk has NO world-aggregate row: every configured metric is pinned to
         # exactly one PSD Country_Code (fail-closed at config load). The map is
         # {usda_commodity_id: {(attribute_id, country_code):
-        #   (commodity_code, metric_code, region_code)}}.
-        commodity_map: dict[str, dict[tuple[int, str], tuple[str, str, str]]] = {}
+        #   (commodity_code, metric_code, region_code, expected_unit)}}.
+        # expected_unit comes from the catalog-validated metric detail; None for
+        # legacy series without declared units.
+        commodity_map: dict[str, dict[tuple[int, str], tuple[str, str, str, str | None]]] = {}
         for spec in self._specs:
             attr_map = commodity_map.setdefault(spec.usda_commodity_id, {})
+            units_by_metric = {d.metric_code: d.unit for d in spec.metric_details}
             for metric_code, attr_id in spec.metrics.items():
                 country = spec.country_for(metric_code)  # raises if unconfigured
                 region = spec.region_for(metric_code)
@@ -64,7 +67,12 @@ class UsdaPsdBulkSource(BaseSource):
                         f"USDA PSD config maps ({spec.usda_commodity_id}, attribute {attr_id}, "
                         f"country {country}) twice — ambiguous series (fail-closed)"
                     )
-                attr_map[key] = (spec.commodity_code, metric_code, region)
+                attr_map[key] = (
+                    spec.commodity_code,
+                    metric_code,
+                    region,
+                    units_by_metric.get(metric_code),
+                )
 
         csv_content = self._fetch()
         if not csv_content.strip():
@@ -94,7 +102,15 @@ class UsdaPsdBulkSource(BaseSource):
             hit = commodity_map[comm_code].get((attr_id, country))
             if hit is None:
                 continue
-            target_comm_code, metric_code, region_code = hit
+            target_comm_code, metric_code, region_code, expected_unit = hit
+
+            unit = (row.get("Unit_Description") or "").strip()
+            if expected_unit is not None and unit != expected_unit:
+                raise RuntimeError(
+                    f"USDA PSD unit drift for {target_comm_code}/{metric_code}@{country}: "
+                    f"CSV unit {unit!r} != configured {expected_unit!r} — refusing to emit "
+                    "records in an unexpected unit (fail-closed)"
+                )
 
             # The CSV has Market_Year, Month, Value
             try:
@@ -150,7 +166,7 @@ class UsdaPsdBulkSource(BaseSource):
                 period_end=end_date,
                 release_date=release_date,
                 value=val,
-                unit=row.get("Unit_Description", "1000 MT"),
+                unit=unit or None,
             )
 
             prov_key = f"{start_date.isoformat()}_{attr_id}_{country}"

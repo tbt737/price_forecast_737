@@ -28,7 +28,8 @@ NETWORK_EXEMPT = {
     ETL_DIR / "sources" / "weather" / "nasa_power.py",
     ETL_DIR / "sources" / "macro" / "yahoo_fx.py",
     ETL_DIR / "sources" / "events" / "noaa_oni.py",
-    ETL_DIR / "sources" / "supply_demand" / "usda_psd.py",
+    # usda_psd.py (API path) is deliberately NOT exempt: it is disabled fail-closed
+    # and must stay network-free until a hardening pack re-enables it.
     ETL_DIR / "sources" / "supply_demand" / "usda_psd_bulk.py",
 }
 

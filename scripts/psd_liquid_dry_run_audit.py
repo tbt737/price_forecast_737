@@ -238,10 +238,10 @@ def main() -> int:
         f"  PSD market years span {yrs_all[0]}-{yrs_all[-1]}, but EVERY record would get\n"
         f"  release_date = ingest day. Walk-forward (folds={WF_FOLDS}, min_train={WF_MIN_TRAIN})\n"
         f"  places all fold cut dates strictly in the past => folds that can see any\n"
-        f"  supply-driver value: 0/{WF_FOLDS} (0%). mechanistic_fourier_supply cannot be\n"
-        f"  evaluated on history until either (a) >= {WF_MIN_TRAIN} post-ingest daily rows\n"
-        f"  accrue (~1 trading year), or (b) a per-release-month PIT reconstruction pack\n"
-        f"  is approved (PSD releaseMonth API preserves historical vintages)."
+        f"  supply-driver value: 0/{WF_FOLDS} (0%). Locked FORWARD-ONLY by the PIT vintage\n"
+        f"  feasibility audit (5c78d4d: no trustworthy historical vintage source exists):\n"
+        f"  mechanistic history stays locked until >= {WF_MIN_TRAIN} post-ingest daily rows\n"
+        f"  accrue (~1 trading year of real forward vintages)."
     )
     warnings.append(f"PIT: 0/{WF_FOLDS} historical folds see drivers with release_date=ingest")
 
