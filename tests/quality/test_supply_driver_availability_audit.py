@@ -31,6 +31,15 @@ def test_metric_codes_include_inventory_aliases() -> None:
     codes = metric_codes_for_role("inventory")
     assert "inventory" in codes
     assert "cold_storage_inventory" in codes
+    assert "ending_stocks" in codes
+    assert "certified_stocks" in codes
+
+
+def test_liquid_codes_nonempty() -> None:
+    from scripts.supply_driver_availability_audit import LIQUID_COMMODITY_CODES
+
+    assert "GOLD" in LIQUID_COMMODITY_CODES
+    assert "ROBUSTA" in LIQUID_COMMODITY_CODES
 
 
 def test_format_report_mentions_gate() -> None:

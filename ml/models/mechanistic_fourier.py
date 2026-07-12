@@ -21,10 +21,34 @@ import pandas as pd
 from ml.models.cash_flow_predictor import CashFlowFourierPredictor, SupplyConfig
 
 # Metric-code aliases (config/MV column names) — not commodity names.
+# Includes USDA PSD-style codes so liquid ag commodities can satisfy roles.
 SUPPLY_ALIASES: dict[str, tuple[str, ...]] = {
-    "planted_area": ("planted_area", "area_planted", "sown_area", "acreage"),
-    "import_volume": ("import_volume", "imports", "import_qty", "import_tonnes"),
-    "inventory": ("inventory", "cold_storage_inventory", "stocks", "ending_stocks"),
+    "planted_area": (
+        "planted_area",
+        "area_planted",
+        "sown_area",
+        "acreage",
+        "area_harvested",
+        "harvested_area",
+        "area",
+    ),
+    "import_volume": (
+        "import_volume",
+        "imports",
+        "import_qty",
+        "import_tonnes",
+        "imports_quantity",
+        "importable_supply",
+    ),
+    "inventory": (
+        "inventory",
+        "cold_storage_inventory",
+        "stocks",
+        "ending_stocks",
+        "certified_stocks",
+        "beginning_stocks",
+        "rabi_storage_stock",
+    ),
     "weather_index": ("weather_index", "weather", "rainfall_index"),
 }
 

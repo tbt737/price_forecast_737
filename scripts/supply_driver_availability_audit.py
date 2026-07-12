@@ -46,6 +46,22 @@ DEFAULT_COMMODITY_CODES: tuple[str, ...] = (
     "RED_ONION_CHINA",
 )
 
+# Liquid / public-data candidates for production-formula recheck (price-heavy).
+LIQUID_COMMODITY_CODES: tuple[str, ...] = (
+    "GOLD",
+    "GOLD_VN",
+    "ROBUSTA",
+    "CRUDE_OIL",
+    "CORN",
+    "WHEAT",
+    "SOYBEAN",
+    "SUGAR",
+    "COCOA",
+    "COPPER",
+    "PEPPER_VN",
+    "RICE",
+)
+
 DRIVER_ROLES: tuple[str, ...] = ("planted_area", "import_volume", "inventory")
 
 MIN_HISTORY = 252
@@ -137,13 +153,14 @@ def run_audit(
     mv_cols = {str(r[0]).lower() for r in mv_cols_rows}
 
     for code in codes:
-        commodity = session.execute(
-            text(
-                "SELECT commodity_key, commodity_code FROM dim_commodity "
-                "WHERE commodity_code = :code"
-            ),
-            {"code": code},
-        ).mappings().first()
+        commodity = (
+            session.execute(
+                text("SELECT commodity_key, commodity_code FROM dim_commodity WHERE commodity_code = :code"),
+                {"code": code},
+            )
+            .mappings()
+            .first()
+        )
         notes: list[str] = []
         if commodity is None:
             out.append(
@@ -165,18 +182,22 @@ def run_audit(
             continue
 
         key = int(commodity["commodity_key"])
-        price = session.execute(
-            text(
-                """
+        price = (
+            session.execute(
+                text(
+                    """
                 SELECT COUNT(*) FILTER (WHERE value > 0) AS n_pos,
                        MIN(price_date) FILTER (WHERE value > 0) AS dmin,
                        MAX(price_date) FILTER (WHERE value > 0) AS dmax
                 FROM fact_price_daily
                 WHERE commodity_key = :key
                 """
-            ),
-            {"key": key},
-        ).mappings().one()
+                ),
+                {"key": key},
+            )
+            .mappings()
+            .one()
+        )
         n_pos = int(price["n_pos"] or 0)
         price_folds = approx_walk_forward_folds(n_pos)
 
@@ -192,9 +213,10 @@ def run_audit(
                     mv_present.append(a)
 
             filt, alias_params = _alias_filter_sql(aliases)
-            rows = session.execute(
-                text(
-                    f"""
+            rows = (
+                session.execute(
+                    text(
+                        f"""
                     SELECT
                         f.metric_code,
                         COUNT(*) AS n_rows,
@@ -212,9 +234,12 @@ def run_audit(
                     GROUP BY f.metric_code
                     ORDER BY f.metric_code
                     """
-                ),
-                {"key": key, **alias_params},
-            ).mappings().all()
+                    ),
+                    {"key": key, **alias_params},
+                )
+                .mappings()
+                .all()
+            )
 
             if not rows:
                 roles_missing.append(role)
@@ -270,9 +295,7 @@ def run_audit(
 
         ready = len(roles_missing) == 0 and price_folds > 0
         if price_folds == 0:
-            notes.append(
-                f"price history too short for walk-forward (n_pos={n_pos}, need >{MIN_HISTORY}+30)"
-            )
+            notes.append(f"price history too short for walk-forward (n_pos={n_pos}, need >{MIN_HISTORY}+30)")
         if roles_missing:
             notes.append(f"missing supply roles: {', '.join(roles_missing)}")
         if not mv_present:
@@ -332,6 +355,36 @@ def emit_audit_unavailable(reason: str, *, host_kind: str | None = None) -> int:
     return EXIT_UNAVAILABLE
 
 
+def list_all_commodity_codes(session: Any) -> tuple[str, ...]:
+    """All commodity codes in dim_commodity (sorted)."""
+    rows = session.execute(text("SELECT commodity_code FROM dim_commodity ORDER BY commodity_code")).fetchall()
+    return tuple(str(r[0]).upper() for r in rows)
+
+
+def format_ready_summary(audits: list[CommodityAudit]) -> str:
+    """Compact table: which codes are formula-recheck candidates."""
+    lines = [
+        "",
+        "READY SUMMARY",
+        "-" * 60,
+        f"{'code':<22} {'price_n':>8} {'wf30':>5} {'roles':>8} {'mech':>5} {'mv_cols':>7}",
+    ]
+    for a in sorted(audits, key=lambda x: (-int(x.mechanistic_ready), -x.price_n_positive, x.commodity_code)):
+        lines.append(
+            f"{a.commodity_code:<22} {a.price_n_positive:>8} {a.price_approx_wf_folds_h30:>5} "
+            f"{len(a.roles_with_data):>8} {str(a.mechanistic_ready):>5} {len(a.mv_columns_present):>7}"
+        )
+    price_ok = [a for a in audits if a.price_approx_wf_folds_h30 > 0]
+    mech_ok = [a for a in audits if a.mechanistic_ready]
+    lines.append("-" * 60)
+    lines.append(f"price_walkforward_ok={len(price_ok)}/{len(audits)}  mechanistic_ready={len(mech_ok)}/{len(audits)}")
+    if mech_ok:
+        lines.append("mechanistic_ready codes: " + ", ".join(a.commodity_code for a in mech_ok))
+    if price_ok:
+        lines.append("price_ok codes (production formula recheck): " + ", ".join(a.commodity_code for a in price_ok))
+    return "\n".join(lines)
+
+
 def format_report(audits: list[CommodityAudit]) -> str:
     lines: list[str] = [
         "SUPPLY_DRIVER_AVAILABILITY_AUDIT (read-only)",
@@ -361,11 +414,13 @@ def format_report(audits: list[CommodityAudit]) -> str:
         for note in a.notes:
             lines.append(f"  NOTE: {note}")
     ready_n = sum(1 for a in audits if a.mechanistic_ready)
+    price_n = sum(1 for a in audits if a.price_approx_wf_folds_h30 > 0)
     lines.append("\n" + "=" * 60)
     lines.append(f"summary: {ready_n}/{len(audits)} commodities mechanistic_ready")
-    lines.append(
-        "gate: do NOT add drivers to canonical MV / ingest / cutover until coverage is sufficient."
-    )
+    lines.append(f"summary: {price_n}/{len(audits)} commodities price_walkforward_ok (n folds>0)")
+    lines.append(format_ready_summary(audits))
+    lines.append("gate: do NOT add drivers to canonical MV / ingest / cutover until coverage is sufficient.")
+    lines.append("next: for price_walkforward_ok codes, run scripts/recheck_price_formula.py (read-only).")
     return "\n".join(lines)
 
 
@@ -377,6 +432,16 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         dest="commodities",
         help="Commodity code (repeatable). Default: garlic/chili/onion set.",
+    )
+    parser.add_argument(
+        "--liquid",
+        action="store_true",
+        help="Audit LIQUID_COMMODITY_CODES (gold/robusta/grains/…) for formula recheck.",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Audit every commodity in dim_commodity (read-only discovery).",
     )
     args = parser.parse_args(argv)
 
@@ -398,14 +463,12 @@ def main(argv: list[str] | None = None) -> int:
         return emit_audit_unavailable(f"cannot resolve DATABASE_URL / session factory: {exc}")
 
     if host_kind == "supabase_direct":
-        # Soft warning only — still attempt connect (some networks have IPv6).
         print(
             "warning: DATABASE_URL looks like Supabase direct (db.*.supabase.co). "
             "Prefer Session Pooler IPv4 if connect fails — DEPLOY.md §0.",
             file=sys.stderr,
         )
 
-    codes = tuple(args.commodities) if args.commodities else DEFAULT_COMMODITY_CODES
     try:
         session = get_session_factory()()
     except Exception as exc:  # noqa: BLE001
@@ -416,8 +479,15 @@ def main(argv: list[str] | None = None) -> int:
             session.execute(text("SET TRANSACTION READ ONLY"))
         except Exception:  # noqa: BLE001
             pass
-        # Cheap connectivity probe before the multi-commodity scan.
         session.execute(text("SELECT 1"))
+        if args.all:
+            codes = list_all_commodity_codes(session)
+        elif args.liquid:
+            codes = LIQUID_COMMODITY_CODES
+        elif args.commodities:
+            codes = tuple(args.commodities)
+        else:
+            codes = DEFAULT_COMMODITY_CODES
         audits = run_audit(session, commodity_codes=codes)
     except Exception as exc:  # noqa: BLE001
         return emit_audit_unavailable(f"database unreachable or query failed: {exc}", host_kind=host_kind)
