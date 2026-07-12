@@ -47,18 +47,38 @@ class UsdaPsdBulkSource(BaseSource):
         if not self._specs:
             return records
 
-        # Pre-build filtering dictionaries
-        # commodity_map: {usda_commodity_id: {attribute_id: metric_code}}
-        commodity_map: dict[str, dict[int, tuple[str, str]]] = {}
+        # Pre-build filtering dictionaries.
+        # PSD bulk has NO world-aggregate row: every configured metric is pinned to
+        # exactly one PSD Country_Code (fail-closed at config load). The map is
+        # {usda_commodity_id: {(attribute_id, country_code):
+        #   (commodity_code, metric_code, region_code)}}.
+        commodity_map: dict[str, dict[tuple[int, str], tuple[str, str, str]]] = {}
         for spec in self._specs:
-            attr_map: dict[int, tuple[str, str]] = {}
+            attr_map = commodity_map.setdefault(spec.usda_commodity_id, {})
             for metric_code, attr_id in spec.metrics.items():
-                attr_map[attr_id] = (spec.commodity_code, metric_code)
-            commodity_map[spec.usda_commodity_id] = attr_map
+                country = spec.country_for(metric_code)  # raises if unconfigured
+                region = spec.region_for(metric_code)
+                key = (attr_id, country)
+                if key in attr_map:
+                    raise RuntimeError(
+                        f"USDA PSD config maps ({spec.usda_commodity_id}, attribute {attr_id}, "
+                        f"country {country}) twice — ambiguous series (fail-closed)"
+                    )
+                attr_map[key] = (spec.commodity_code, metric_code, region)
 
         csv_content = self._fetch()
         if not csv_content.strip():
             raise RuntimeError("USDA PSD bulk CSV was empty")
+
+        # Fail-closed accounting: every configured (commodity, metric, country) must
+        # match at least one CSV row, and no output grain may be produced twice.
+        expected: set[tuple[str, str, str]] = {
+            (spec.commodity_code, metric_code, spec.country_for(metric_code))
+            for spec in self._specs
+            for metric_code in spec.metrics
+        }
+        matched: set[tuple[str, str, str]] = set()
+        seen_grain: set[tuple[str, str, str, date]] = set()
 
         reader = csv.DictReader(io.StringIO(csv_content))
         for row in reader:
@@ -69,12 +89,12 @@ class UsdaPsdBulkSource(BaseSource):
             attr_id_str = row.get("Attribute_ID")
             if not attr_id_str:
                 continue
-
             attr_id = int(attr_id_str)
-            if attr_id not in commodity_map[comm_code]:
+            country = (row.get("Country_Code") or "").strip()
+            hit = commodity_map[comm_code].get((attr_id, country))
+            if hit is None:
                 continue
-
-            target_comm_code, metric_code = commodity_map[comm_code][attr_id]
+            target_comm_code, metric_code, region_code = hit
 
             # The CSV has Market_Year, Month, Value
             try:
@@ -96,6 +116,16 @@ class UsdaPsdBulkSource(BaseSource):
             except ValueError:
                 continue
 
+            grain = (target_comm_code, metric_code, country, start_date)
+            if grain in seen_grain:
+                raise RuntimeError(
+                    "USDA PSD bulk produced a duplicate grain "
+                    f"{target_comm_code}/{metric_code}/{country}/{start_date} — refusing to "
+                    "emit ambiguous records (fail-closed)"
+                )
+            seen_grain.add(grain)
+            matched.add((target_comm_code, metric_code, country))
+
             end_date = start_date + timedelta(days=365)
 
             # No look-ahead bias: set release date to today because this bulk file
@@ -107,12 +137,14 @@ class UsdaPsdBulkSource(BaseSource):
                 "metric_code": metric_code,
                 "data_source_code": self.source_code,
                 "market_year": market_year,
+                "country_code": country,
                 "value": val
             }
             record = NormalizedRecord(
                 family=FactFamily.supply_demand_periodic,
                 data_source_code=self.source_code,
                 commodity_code=target_comm_code,
+                region_code=region_code,
                 metric_code=metric_code,
                 period_start=start_date,
                 period_end=end_date,
@@ -121,13 +153,20 @@ class UsdaPsdBulkSource(BaseSource):
                 unit=row.get("Unit_Description", "1000 MT"),
             )
 
-            key = f"{start_date.isoformat()}_{attr_id}"
+            prov_key = f"{start_date.isoformat()}_{attr_id}_{country}"
             records.append(
                 attach_provenance(
-                    record, payload, source_code=self.source_code, origin=comm_code, key=key
+                    record, payload, source_code=self.source_code, origin=comm_code, key=prov_key
                 )
             )
 
         if not records:
             raise RuntimeError("USDA PSD bulk CSV contained no rows matching configured commodities/metrics")
+        missing = expected - matched
+        if missing:
+            raise RuntimeError(
+                "USDA PSD bulk CSV has NO rows for configured country series: "
+                + ", ".join(f"{c}/{m}@{ctry}" for c, m, ctry in sorted(missing))
+                + " — country missing or renamed upstream (fail-closed)"
+            )
         return records

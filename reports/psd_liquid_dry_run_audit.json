@@ -1,0 +1,12 @@
+{
+  "verdict": "PASS",
+  "failures": [],
+  "warnings": [
+    "PIT: 0/5 historical folds see drivers with release_date=ingest"
+  ],
+  "n_records_dry_run": 926,
+  "provenance_collisions": 0,
+  "writer_grain_collisions": 0,
+  "pre_hardening_would_drop": 92997,
+  "pre_hardening_total": 99294
+}

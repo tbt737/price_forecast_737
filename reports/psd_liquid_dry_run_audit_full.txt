@@ -1,0 +1,215 @@
+# PSD bulk rows total: 2090920
+
+=== Coverage per commodity x attribute x country (top by rows) ===
+
+## CORN / import_volume: countries=145 rows=7586
+  AF   Afghanistan                  MY 1960-2026 n=  67 npos=  18 zero=  49 missing_years=0 unit='(1000 MT)' my_start_months={7: 35, 4: 19, 5: 11, 8: 1, 11: 1}
+  AL   Albania                      MY 1960-2026 n=  67 npos=  53 zero=  14 missing_years=0 unit='(1000 MT)' my_start_months={7: 41, 12: 2, 5: 16, 10: 1, 4: 3, 11: 3, 1: 1}
+  AG   Algeria                      MY 1960-2026 n=  67 npos=  66 zero=   1 missing_years=0 unit='(1000 MT)' my_start_months={7: 47, 1: 2, 4: 6, 5: 6, 11: 4, 9: 1, 6: 1}
+  AR   Argentina                    MY 1960-2026 n=  67 npos=  41 zero=  26 missing_years=0 unit='(1000 MT)' my_start_months={7: 28, 4: 16, 5: 14, 12: 6, 8: 2, 1: 1}
+  AS   Australia                    MY 1960-2026 n=  67 npos=  49 zero=  18 missing_years=0 unit='(1000 MT)' my_start_months={7: 34, 1: 12, 5: 13, 10: 4, 8: 1, 6: 1, 4: 2}
+  DM   Benin                        MY 1960-2026 n=  67 npos=  30 zero=  37 missing_years=0 unit='(1000 MT)' my_start_months={7: 41, 9: 8, 5: 11, 11: 7}
+  BL   Bolivia                      MY 1960-2026 n=  67 npos=  38 zero=  29 missing_years=0 unit='(1000 MT)' my_start_months={7: 27, 9: 34, 12: 2, 5: 1, 3: 1, 8: 1, 4: 1}
+  BR   Brazil                       MY 1960-2026 n=  67 npos=  60 zero=   7 missing_years=0 unit='(1000 MT)' my_start_months={7: 42, 5: 13, 11: 4, 2: 2, 6: 6}
+  ... and 137 more countries
+  world_aggregate_present=False
+
+## CORN / inventory: countries=145 rows=7586
+  AF   Afghanistan                  MY 1960-2026 n=  67 npos=   0 zero=  67 missing_years=0 unit='(1000 MT)' my_start_months={7: 35, 4: 19, 5: 11, 8: 1, 11: 1}
+  AL   Albania                      MY 1960-2026 n=  67 npos=   7 zero=  60 missing_years=0 unit='(1000 MT)' my_start_months={7: 41, 12: 2, 5: 16, 10: 1, 4: 3, 11: 3, 1: 1}
+  AG   Algeria                      MY 1960-2026 n=  67 npos=  38 zero=  29 missing_years=0 unit='(1000 MT)' my_start_months={7: 47, 1: 2, 4: 6, 5: 6, 11: 4, 9: 1, 6: 1}
+  AR   Argentina                    MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 28, 4: 16, 5: 14, 12: 6, 8: 2, 1: 1}
+  AS   Australia                    MY 1960-2026 n=  67 npos=  66 zero=   1 missing_years=0 unit='(1000 MT)' my_start_months={7: 34, 1: 12, 5: 13, 10: 4, 8: 1, 6: 1, 4: 2}
+  DM   Benin                        MY 1960-2026 n=  67 npos=  19 zero=  48 missing_years=0 unit='(1000 MT)' my_start_months={7: 41, 9: 8, 5: 11, 11: 7}
+  BL   Bolivia                      MY 1960-2026 n=  67 npos=  49 zero=  18 missing_years=0 unit='(1000 MT)' my_start_months={7: 27, 9: 34, 12: 2, 5: 1, 3: 1, 8: 1, 4: 1}
+  BR   Brazil                       MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 42, 5: 13, 11: 4, 2: 2, 6: 6}
+  ... and 137 more countries
+  world_aggregate_present=False
+
+## CORN / planted_area: countries=145 rows=7586
+  AF   Afghanistan                  MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 35, 4: 19, 5: 11, 8: 1, 11: 1}
+  AL   Albania                      MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 41, 12: 2, 5: 16, 10: 1, 4: 3, 11: 3, 1: 1}
+  AG   Algeria                      MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 47, 1: 2, 4: 6, 5: 6, 11: 4, 9: 1, 6: 1}
+  AR   Argentina                    MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 28, 4: 16, 5: 14, 12: 6, 8: 2, 1: 1}
+  AS   Australia                    MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 34, 1: 12, 5: 13, 10: 4, 8: 1, 6: 1, 4: 2}
+  DM   Benin                        MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 41, 9: 8, 5: 11, 11: 7}
+  BL   Bolivia                      MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 27, 9: 34, 12: 2, 5: 1, 3: 1, 8: 1, 4: 1}
+  BR   Brazil                       MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 42, 5: 13, 11: 4, 2: 2, 6: 6}
+  ... and 137 more countries
+  world_aggregate_present=False
+
+## WHEAT / import_volume: countries=145 rows=7754
+  AF   Afghanistan                  MY 1960-2026 n=  67 npos=  65 zero=   2 missing_years=0 unit='(1000 MT)' my_start_months={7: 32, 4: 12, 8: 1, 5: 15, 3: 3, 10: 4}
+  AL   Albania                      MY 1960-2026 n=  67 npos=  59 zero=   8 missing_years=0 unit='(1000 MT)' my_start_months={7: 39, 11: 3, 10: 12, 4: 2, 5: 4, 8: 1, 1: 1, 2: 5}
+  AG   Algeria                      MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 43, 2: 20, 4: 1, 8: 2, 9: 1}
+  AO   Angola                       MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 41, 5: 14, 9: 10, 2: 2}
+  AR   Argentina                    MY 1960-2026 n=  67 npos=  42 zero=  25 missing_years=0 unit='(1000 MT)' my_start_months={7: 28, 4: 18, 5: 4, 8: 3, 9: 4, 11: 5, 3: 1, 1: 4}
+  AS   Australia                    MY 1960-2026 n=  67 npos=  41 zero=  26 missing_years=0 unit='(1000 MT)' my_start_months={7: 42, 10: 4, 11: 5, 12: 4, 5: 1, 9: 1, 6: 4, 2: 6}
+  BG   Bangladesh                   MY 1960-2026 n=  67 npos=  56 zero=  11 missing_years=0 unit='(1000 MT)' my_start_months={7: 45, 5: 10, 9: 3, 11: 4, 8: 2, 2: 3}
+  BL   Bolivia                      MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 26, 9: 29, 3: 5, 12: 3, 5: 1, 11: 3}
+  ... and 137 more countries
+  world_aggregate_present=False
+
+## WHEAT / inventory: countries=145 rows=7754
+  AF   Afghanistan                  MY 1960-2026 n=  67 npos=  32 zero=  35 missing_years=0 unit='(1000 MT)' my_start_months={7: 32, 4: 12, 8: 1, 5: 15, 3: 3, 10: 4}
+  AL   Albania                      MY 1960-2026 n=  67 npos=  27 zero=  40 missing_years=0 unit='(1000 MT)' my_start_months={7: 39, 11: 3, 10: 12, 4: 2, 5: 4, 8: 1, 1: 1, 2: 5}
+  AG   Algeria                      MY 1960-2026 n=  67 npos=  55 zero=  12 missing_years=0 unit='(1000 MT)' my_start_months={7: 43, 2: 20, 4: 1, 8: 2, 9: 1}
+  AO   Angola                       MY 1960-2026 n=  67 npos=  16 zero=  51 missing_years=0 unit='(1000 MT)' my_start_months={7: 41, 5: 14, 9: 10, 2: 2}
+  AR   Argentina                    MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 28, 4: 18, 5: 4, 8: 3, 9: 4, 11: 5, 3: 1, 1: 4}
+  AS   Australia                    MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 42, 10: 4, 11: 5, 12: 4, 5: 1, 9: 1, 6: 4, 2: 6}
+  BG   Bangladesh                   MY 1960-2026 n=  67 npos=  50 zero=  17 missing_years=0 unit='(1000 MT)' my_start_months={7: 45, 5: 10, 9: 3, 11: 4, 8: 2, 2: 3}
+  BL   Bolivia                      MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 26, 9: 29, 3: 5, 12: 3, 5: 1, 11: 3}
+  ... and 137 more countries
+  world_aggregate_present=False
+
+## WHEAT / planted_area: countries=145 rows=7754
+  AF   Afghanistan                  MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 32, 4: 12, 8: 1, 5: 15, 3: 3, 10: 4}
+  AL   Albania                      MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 39, 11: 3, 10: 12, 4: 2, 5: 4, 8: 1, 1: 1, 2: 5}
+  AG   Algeria                      MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 43, 2: 20, 4: 1, 8: 2, 9: 1}
+  AO   Angola                       MY 1960-2026 n=  67 npos=  66 zero=   1 missing_years=0 unit='(1000 HA)' my_start_months={7: 41, 5: 14, 9: 10, 2: 2}
+  AR   Argentina                    MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 28, 4: 18, 5: 4, 8: 3, 9: 4, 11: 5, 3: 1, 1: 4}
+  AS   Australia                    MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 42, 10: 4, 11: 5, 12: 4, 5: 1, 9: 1, 6: 4, 2: 6}
+  BG   Bangladesh                   MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 45, 5: 10, 9: 3, 11: 4, 8: 2, 2: 3}
+  BL   Bolivia                      MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 26, 9: 29, 3: 5, 12: 3, 5: 1, 11: 3}
+  ... and 137 more countries
+  world_aggregate_present=False
+
+## SOYBEAN / import_volume: countries=98 rows=3808
+  AS   Australia                    MY 1964-2026 n=  63 npos=  56 zero=   7 missing_years=0 unit='(1000 MT)' my_start_months={6: 35, 1: 6, 4: 11, 11: 1, 5: 6, 12: 1, 3: 2, 7: 1}
+  CA   Canada                       MY 1964-2026 n=  63 npos=  63 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={6: 26, 11: 14, 12: 8, 9: 4, 10: 1, 4: 4, 5: 3, 7: 3}
+  CH   China                        MY 1964-2026 n=  63 npos=  54 zero=   9 missing_years=0 unit='(1000 MT)' my_start_months={6: 33, 2: 5, 11: 4, 5: 4, 9: 9, 4: 5, 3: 1, 7: 2}
+  CO   Colombia                     MY 1964-2026 n=  63 npos=  52 zero=  11 missing_years=0 unit='(1000 MT)' my_start_months={6: 37, 7: 5, 5: 2, 4: 6, 8: 1, 3: 5, 12: 7}
+  ID   Indonesia                    MY 1964-2026 n=  63 npos=  53 zero=  10 missing_years=0 unit='(1000 MT)' my_start_months={6: 35, 12: 5, 5: 7, 2: 1, 4: 13, 8: 1, 7: 1}
+  IS   Israel                       MY 1964-2026 n=  63 npos=  63 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={6: 35, 1: 4, 5: 4, 4: 10, 12: 5, 3: 4, 7: 1}
+  JA   Japan                        MY 1964-2026 n=  63 npos=  63 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={6: 36, 12: 4, 3: 1, 4: 18, 5: 3, 7: 1}
+  KN   Korea, North                 MY 1964-2026 n=  63 npos=  44 zero=  19 missing_years=0 unit='(1000 MT)' my_start_months={6: 27, 2: 15, 5: 2, 10: 1, 12: 1, 4: 9, 9: 7, 7: 1}
+  ... and 90 more countries
+  world_aggregate_present=False
+
+## SOYBEAN / inventory: countries=98 rows=3808
+  AS   Australia                    MY 1964-2026 n=  63 npos=  40 zero=  23 missing_years=0 unit='(1000 MT)' my_start_months={6: 35, 1: 6, 4: 11, 11: 1, 5: 6, 12: 1, 3: 2, 7: 1}
+  CA   Canada                       MY 1964-2026 n=  63 npos=  63 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={6: 26, 11: 14, 12: 8, 9: 4, 10: 1, 4: 4, 5: 3, 7: 3}
+  CH   China                        MY 1964-2026 n=  63 npos=  31 zero=  32 missing_years=0 unit='(1000 MT)' my_start_months={6: 33, 2: 5, 11: 4, 5: 4, 9: 9, 4: 5, 3: 1, 7: 2}
+  CO   Colombia                     MY 1964-2026 n=  63 npos=  52 zero=  11 missing_years=0 unit='(1000 MT)' my_start_months={6: 37, 7: 5, 5: 2, 4: 6, 8: 1, 3: 5, 12: 7}
+  ID   Indonesia                    MY 1964-2026 n=  63 npos=  46 zero=  17 missing_years=0 unit='(1000 MT)' my_start_months={6: 35, 12: 5, 5: 7, 2: 1, 4: 13, 8: 1, 7: 1}
+  IS   Israel                       MY 1964-2026 n=  63 npos=  62 zero=   1 missing_years=0 unit='(1000 MT)' my_start_months={6: 35, 1: 4, 5: 4, 4: 10, 12: 5, 3: 4, 7: 1}
+  JA   Japan                        MY 1964-2026 n=  63 npos=  63 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={6: 36, 12: 4, 3: 1, 4: 18, 5: 3, 7: 1}
+  KN   Korea, North                 MY 1964-2026 n=  63 npos=  17 zero=  46 missing_years=0 unit='(1000 MT)' my_start_months={6: 27, 2: 15, 5: 2, 10: 1, 12: 1, 4: 9, 9: 7, 7: 1}
+  ... and 90 more countries
+  world_aggregate_present=False
+
+## SOYBEAN / planted_area: countries=98 rows=3808
+  AS   Australia                    MY 1964-2026 n=  63 npos=  63 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={6: 35, 1: 6, 4: 11, 11: 1, 5: 6, 12: 1, 3: 2, 7: 1}
+  CA   Canada                       MY 1964-2026 n=  63 npos=  63 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={6: 26, 11: 14, 12: 8, 9: 4, 10: 1, 4: 4, 5: 3, 7: 3}
+  CH   China                        MY 1964-2026 n=  63 npos=  63 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={6: 33, 2: 5, 11: 4, 5: 4, 9: 9, 4: 5, 3: 1, 7: 2}
+  CO   Colombia                     MY 1964-2026 n=  63 npos=  63 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={6: 37, 7: 5, 5: 2, 4: 6, 8: 1, 3: 5, 12: 7}
+  ID   Indonesia                    MY 1964-2026 n=  63 npos=  63 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={6: 35, 12: 5, 5: 7, 2: 1, 4: 13, 8: 1, 7: 1}
+  IS   Israel                       MY 1964-2026 n=  63 npos=   0 zero=  63 missing_years=0 unit='(1000 HA)' my_start_months={6: 35, 1: 4, 5: 4, 4: 10, 12: 5, 3: 4, 7: 1}
+  JA   Japan                        MY 1964-2026 n=  63 npos=  63 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={6: 36, 12: 4, 3: 1, 4: 18, 5: 3, 7: 1}
+  KN   Korea, North                 MY 1964-2026 n=  63 npos=  63 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={6: 27, 2: 15, 5: 2, 10: 1, 12: 1, 4: 9, 9: 7, 7: 1}
+  ... and 90 more countries
+  world_aggregate_present=False
+
+## RICE / import_volume: countries=138 rows=7616
+  AF   Afghanistan                  MY 1960-2026 n=  67 npos=  42 zero=  25 missing_years=0 unit='(1000 MT)' my_start_months={7: 33, 4: 16, 3: 9, 2: 3, 5: 6}
+  AG   Algeria                      MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 30, 11: 1, 2: 21, 4: 3, 5: 4, 8: 1, 12: 1, 3: 6}
+  AO   Angola                       MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 42, 8: 8, 10: 1, 3: 4, 2: 3, 5: 9}
+  AR   Argentina                    MY 1960-2026 n=  67 npos=  40 zero=  27 missing_years=0 unit='(1000 MT)' my_start_months={7: 42, 5: 8, 3: 2, 4: 2, 1: 2, 10: 4, 2: 6, 6: 1}
+  AS   Australia                    MY 1960-2026 n=  67 npos=  60 zero=   7 missing_years=0 unit='(1000 MT)' my_start_months={7: 48, 5: 14, 6: 4, 2: 1}
+  BG   Bangladesh                   MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 46, 8: 2, 6: 2, 5: 6, 4: 2, 1: 1, 2: 7, 3: 1}
+  DM   Benin                        MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 44, 6: 3, 5: 7, 11: 1, 10: 9, 3: 3}
+  BL   Bolivia                      MY 1960-2026 n=  67 npos=  43 zero=  24 missing_years=0 unit='(1000 MT)' my_start_months={7: 24, 9: 31, 8: 9, 11: 1, 3: 1, 4: 1}
+  ... and 130 more countries
+  world_aggregate_present=False
+
+## RICE / inventory: countries=138 rows=7616
+  AF   Afghanistan                  MY 1960-2026 n=  67 npos=   0 zero=  67 missing_years=0 unit='(1000 MT)' my_start_months={7: 33, 4: 16, 3: 9, 2: 3, 5: 6}
+  AG   Algeria                      MY 1960-2026 n=  67 npos=   4 zero=  63 missing_years=0 unit='(1000 MT)' my_start_months={7: 30, 11: 1, 2: 21, 4: 3, 5: 4, 8: 1, 12: 1, 3: 6}
+  AO   Angola                       MY 1960-2026 n=  67 npos=   1 zero=  66 missing_years=0 unit='(1000 MT)' my_start_months={7: 42, 8: 8, 10: 1, 3: 4, 2: 3, 5: 9}
+  AR   Argentina                    MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 42, 5: 8, 3: 2, 4: 2, 1: 2, 10: 4, 2: 6, 6: 1}
+  AS   Australia                    MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 48, 5: 14, 6: 4, 2: 1}
+  BG   Bangladesh                   MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={7: 46, 8: 2, 6: 2, 5: 6, 4: 2, 1: 1, 2: 7, 3: 1}
+  DM   Benin                        MY 1960-2026 n=  67 npos=   0 zero=  67 missing_years=0 unit='(1000 MT)' my_start_months={7: 44, 6: 3, 5: 7, 11: 1, 10: 9, 3: 3}
+  BL   Bolivia                      MY 1960-2026 n=  67 npos=   6 zero=  61 missing_years=0 unit='(1000 MT)' my_start_months={7: 24, 9: 31, 8: 9, 11: 1, 3: 1, 4: 1}
+  ... and 130 more countries
+  world_aggregate_present=False
+
+## RICE / planted_area: countries=138 rows=7616
+  AF   Afghanistan                  MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 33, 4: 16, 3: 9, 2: 3, 5: 6}
+  AG   Algeria                      MY 1960-2026 n=  67 npos=  30 zero=  37 missing_years=0 unit='(1000 HA)' my_start_months={7: 30, 11: 1, 2: 21, 4: 3, 5: 4, 8: 1, 12: 1, 3: 6}
+  AO   Angola                       MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 42, 8: 8, 10: 1, 3: 4, 2: 3, 5: 9}
+  AR   Argentina                    MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 42, 5: 8, 3: 2, 4: 2, 1: 2, 10: 4, 2: 6, 6: 1}
+  AS   Australia                    MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 48, 5: 14, 6: 4, 2: 1}
+  BG   Bangladesh                   MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 46, 8: 2, 6: 2, 5: 6, 4: 2, 1: 1, 2: 7, 3: 1}
+  DM   Benin                        MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 44, 6: 3, 5: 7, 11: 1, 10: 9, 3: 3}
+  BL   Bolivia                      MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 HA)' my_start_months={7: 24, 9: 31, 8: 9, 11: 1, 3: 1, 4: 1}
+  ... and 130 more countries
+  world_aggregate_present=False
+
+## SUGAR / import_volume: countries=194 rows=9501
+  AL   Albania                      MY 1960-2026 n=  67 npos=  57 zero=  10 missing_years=0 unit='(1000 MT)' my_start_months={1: 42, 5: 13, 11: 11, 12: 1}
+  AO   Angola                       MY 1960-2026 n=  67 npos=  63 zero=   4 missing_years=0 unit='(1000 MT)' my_start_months={1: 42, 5: 18, 11: 7}
+  AR   Argentina                    MY 1960-2026 n=  67 npos=  20 zero=  47 missing_years=0 unit='(1000 MT)' my_start_months={1: 41, 5: 22, 11: 3, 12: 1}
+  AS   Australia                    MY 1960-2026 n=  67 npos=  37 zero=  30 missing_years=0 unit='(1000 MT)' my_start_months={1: 44, 5: 11, 11: 11, 12: 1}
+  BB   Barbados                     MY 1960-2026 n=  67 npos=  41 zero=  26 missing_years=0 unit='(1000 MT)' my_start_months={1: 42, 5: 22, 11: 3}
+  BH   Belize                       MY 1960-2026 n=  67 npos=  22 zero=  45 missing_years=0 unit='(1000 MT)' my_start_months={1: 42, 5: 20, 11: 5}
+  BL   Bolivia                      MY 1960-2026 n=  67 npos=  10 zero=  57 missing_years=0 unit='(1000 MT)' my_start_months={1: 42, 5: 20, 11: 5}
+  BR   Brazil                       MY 1960-2026 n=  67 npos=   5 zero=  62 missing_years=0 unit='(1000 MT)' my_start_months={1: 44, 5: 13, 11: 8, 12: 2}
+  ... and 186 more countries
+  world_aggregate_present=False
+
+## SUGAR / inventory: countries=194 rows=9501
+  AL   Albania                      MY 1960-2026 n=  67 npos=  53 zero=  14 missing_years=0 unit='(1000 MT)' my_start_months={1: 42, 5: 13, 11: 11, 12: 1}
+  AO   Angola                       MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={1: 42, 5: 18, 11: 7}
+  AR   Argentina                    MY 1960-2026 n=  67 npos=  66 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={1: 41, 5: 22, 11: 3, 12: 1}
+  AS   Australia                    MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={1: 44, 5: 11, 11: 11, 12: 1}
+  BB   Barbados                     MY 1960-2026 n=  67 npos=  66 zero=   1 missing_years=0 unit='(1000 MT)' my_start_months={1: 42, 5: 22, 11: 3}
+  BH   Belize                       MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={1: 42, 5: 20, 11: 5}
+  BL   Bolivia                      MY 1960-2026 n=  67 npos=  67 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={1: 42, 5: 20, 11: 5}
+  BR   Brazil                       MY 1960-2026 n=  67 npos=  63 zero=   0 missing_years=0 unit='(1000 MT)' my_start_months={1: 44, 5: 13, 11: 8, 12: 2}
+  ... and 186 more countries
+  world_aggregate_present=False
+
+=== In-CSV duplicate (commodity,country,MY,attr): 0 ===
+
+=== Country-collapse reference (if country were ignored) ===
+  rows across all countries: 99294; would-collide rows: 92997 (93.7%) ù hardened connector must avoid this
+
+=== Configured country per series (must exist with data) ===
+  CORN     planted_area   @US region=US n=67 npos=67 MY 1960-2026
+  CORN     import_volume  @US region=US n=67 npos=67 MY 1960-2026
+  CORN     inventory      @US region=US n=67 npos=67 MY 1960-2026
+  WHEAT    planted_area   @US region=US n=67 npos=67 MY 1960-2026
+  WHEAT    import_volume  @US region=US n=67 npos=67 MY 1960-2026
+  WHEAT    inventory      @US region=US n=67 npos=67 MY 1960-2026
+  SOYBEAN  planted_area   @US region=US n=63 npos=63 MY 1964-2026
+  SOYBEAN  import_volume  @US region=US n=63 npos=40 MY 1964-2026
+  SOYBEAN  inventory      @US region=US n=63 npos=63 MY 1964-2026
+  SUGAR    import_volume  @CH region=CN n=67 npos=66 MY 1960-2026
+  SUGAR    inventory      @IN region=IN n=67 npos=67 MY 1960-2026
+  RICE     planted_area   @TH region=TH n=67 npos=67 MY 1960-2026
+  RICE     import_volume  @TH region=TH n=67 npos=25 MY 1960-2026
+  RICE     inventory      @TH region=TH n=67 npos=67 MY 1960-2026
+
+=== Dry-run collect + gate (hardened connector) ===
+  records=926 gate_rejected=0
+  provenance collisions=0  writer-grain collisions=0
+  regions on records: {'US': 591, 'TH': 201, 'CN': 67, 'IN': 67}
+
+=== PIT impact (release_date = ingest date) ===
+  PSD market years span 1960-2026, but EVERY record would get
+  release_date = ingest day. Walk-forward (folds=5, min_train=252)
+  places all fold cut dates strictly in the past => folds that can see any
+  supply-driver value: 0/5 (0%). mechanistic_fourier_supply cannot be
+  evaluated on history until either (a) >= 252 post-ingest daily rows
+  accrue (~1 trading year), or (b) a per-release-month PIT reconstruction pack
+  is approved (PSD releaseMonth API preserves historical vintages).
+
+SUGAR: imports/inventory only ù NOT mechanistic_ready (planted_area absent). OK
+COCOA: excluded from config. OK
+
+=== VERDICT ===
+  WARN: PIT: 0/5 historical folds see drivers with release_date=ingest
+
+AUDIT_PASS (read-only; no DB writes performed)
+summary json: reports\psd_liquid_dry_run_audit.json

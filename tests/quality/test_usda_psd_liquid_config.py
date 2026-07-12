@@ -23,7 +23,6 @@ from etl.ingestion.validate_psd import (
 from etl.sources.supply_demand.usda_psd_bulk import UsdaPsdBulkSource
 from ml.models.mechanistic_fourier import has_supply_drivers, resolve_supply_column
 
-
 LIQUID_FULL_TRIAD = ("CORN", "WHEAT", "SOYBEAN", "RICE")
 LIQUID_PARTIAL = ("SUGAR",)
 
@@ -63,6 +62,46 @@ def test_sources_yaml_liquid_series_match_catalog() -> None:
     assert set(sugar.metrics) == {"import_volume", "inventory"}
     assert "planted_area" not in sugar.metrics
     assert sugar.usda_commodity_id == cat["SUGAR"]["usda_commodity_id"]
+
+
+def test_country_grain_mapping_is_pinned_per_series() -> None:
+    """PSD bulk has no world aggregate: every metric must resolve exactly one country."""
+    cfg = load_ingestion_config()
+    by_code = {s.commodity_code: s for s in cfg.supply_demand}
+
+    for code in ("CORN", "WHEAT", "SOYBEAN"):
+        spec = by_code[code]
+        assert spec.country_code == "US" and spec.region_code == "US"
+        for m in spec.metrics:
+            assert spec.country_for(m) == "US"
+
+    rice = by_code["RICE"]
+    assert rice.country_code == "TH" and rice.region_code == "TH"
+
+    # SUGAR is per-role by design: imports=China (largest buyer), inventory=India
+    # (largest managed stockholder) — no common-country assumption.
+    sugar = by_code["SUGAR"]
+    assert sugar.country_for("import_volume") == "CH"
+    assert sugar.region_for("import_volume") == "CN"
+    assert sugar.country_for("inventory") == "IN"
+    assert sugar.region_for("inventory") == "IN"
+
+    robusta = by_code["ROBUSTA"]
+    assert robusta.country_for("production_estimate") == "VM"
+    assert robusta.region_for("production_estimate") == "VN"
+
+
+def test_load_rejects_series_without_country(tmp_path) -> None:
+    raw = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    mutated = deepcopy(raw)
+    for s in mutated["supply_demand"]["series"]:
+        if s["commodity_code"] == "CORN":
+            s.pop("country_code", None)
+            s.pop("region_code", None)
+    path = tmp_path / "sources.yaml"
+    path.write_text(yaml.safe_dump(mutated), encoding="utf-8")
+    with pytest.raises(ValueError, match="country_code is required"):
+        load_ingestion_config(path)
 
 
 def test_robusta_legacy_int_metrics_still_load() -> None:
@@ -191,51 +230,78 @@ def test_load_rejects_mutated_sources_with_duplicate_series(tmp_path) -> None:
         load_ingestion_config(path)
 
 
-def test_bulk_connector_dry_run_liquid_fixture_no_db() -> None:
-    """Dry-run collect() for liquid roles using an in-memory CSV fixture — no DB write."""
-    csv = """Commodity_Code,Commodity_Description,Country_Code,Country_Name,Market_Year,Calendar_Year,Month,Attribute_ID,Attribute_Description,Unit_ID,Unit_Description,Value
-0440000,Corn,US,United States,2024,2024,10,4,Area Harvested,8,(1000 HA),100.0
+LIQUID_FIXTURE_CSV = (
+    "Commodity_Code,Commodity_Description,Country_Code,Country_Name,Market_Year,"
+    "Calendar_Year,Month,Attribute_ID,Attribute_Description,Unit_ID,Unit_Description,Value\n"
+) + """0440000,Corn,US,United States,2024,2024,10,4,Area Harvested,8,(1000 HA),100.0
 0440000,Corn,US,United States,2024,2024,10,57,Imports,8,(1000 MT),10.0
 0440000,Corn,US,United States,2024,2024,10,176,Ending Stocks,8,(1000 MT),20.0
+0440000,Corn,AF,Afghanistan,2024,2024,10,4,Area Harvested,8,(1000 HA),9999.0
 0410000,Wheat,US,United States,2024,2024,10,4,Area Harvested,8,(1000 HA),50.0
 0410000,Wheat,US,United States,2024,2024,10,57,Imports,8,(1000 MT),5.0
 0410000,Wheat,US,United States,2024,2024,10,176,Ending Stocks,8,(1000 MT),8.0
 2222000,"Oilseed, Soybean",US,United States,2024,2024,10,4,Area Harvested,8,(1000 HA),40.0
 2222000,"Oilseed, Soybean",US,United States,2024,2024,10,57,Imports,8,(1000 MT),3.0
 2222000,"Oilseed, Soybean",US,United States,2024,2024,10,176,Ending Stocks,8,(1000 MT),7.0
-0612000,"Sugar, Centrifugal",BR,Brazil,2024,2024,10,57,Imports,8,(1000 MT),1.0
-0612000,"Sugar, Centrifugal",BR,Brazil,2024,2024,10,176,Ending Stocks,8,(1000 MT),2.0
-0422110,"Rice, Milled",VN,Vietnam,2024,2024,10,4,Area Harvested,8,(1000 HA),9.0
-0422110,"Rice, Milled",VN,Vietnam,2024,2024,10,57,Imports,8,(1000 MT),0.5
-0422110,"Rice, Milled",VN,Vietnam,2024,2024,10,176,Ending Stocks,8,(1000 MT),1.5
+0612000,"Sugar, Centrifugal",CH,China,2024,2024,10,57,Imports,8,(1000 MT),1.0
+0612000,"Sugar, Centrifugal",IN,India,2024,2024,10,176,Ending Stocks,8,(1000 MT),2.0
+0612000,"Sugar, Centrifugal",BR,Brazil,2024,2024,10,57,Imports,8,(1000 MT),8888.0
+0422110,"Rice, Milled",TH,Thailand,2024,2024,10,4,Area Harvested,8,(1000 HA),9.0
+0422110,"Rice, Milled",TH,Thailand,2024,2024,10,57,Imports,8,(1000 MT),0.5
+0422110,"Rice, Milled",TH,Thailand,2024,2024,10,176,Ending Stocks,8,(1000 MT),1.5
+0422110,"Rice, Milled",VM,Vietnam,2024,2024,10,4,Area Harvested,8,(1000 HA),7777.0
 9999999,Other,XX,Somewhere,2024,2024,10,4,Area Harvested,8,(1000 HA),1.0
 """
+
+
+def test_bulk_connector_dry_run_liquid_fixture_no_db() -> None:
+    """Dry-run collect() for liquid roles using an in-memory CSV fixture — no DB write."""
     cfg = load_ingestion_config()
     liquids = [
         s
         for s in cfg.supply_demand
         if s.commodity_code in (*LIQUID_FULL_TRIAD, *LIQUID_PARTIAL)
     ]
-    records = list(UsdaPsdBulkSource(liquids, fetch=lambda: csv).collect())
-    by_pair = {(r.commodity_code, r.metric_code) for r in records}
+    records = list(UsdaPsdBulkSource(liquids, fetch=lambda: LIQUID_FIXTURE_CSV).collect())
+    by_pair = {(r.commodity_code, r.metric_code, r.region_code) for r in records}
     expected = {
-        ("CORN", "planted_area"),
-        ("CORN", "import_volume"),
-        ("CORN", "inventory"),
-        ("WHEAT", "planted_area"),
-        ("WHEAT", "import_volume"),
-        ("WHEAT", "inventory"),
-        ("SOYBEAN", "planted_area"),
-        ("SOYBEAN", "import_volume"),
-        ("SOYBEAN", "inventory"),
-        ("SUGAR", "import_volume"),
-        ("SUGAR", "inventory"),
-        ("RICE", "planted_area"),
-        ("RICE", "import_volume"),
-        ("RICE", "inventory"),
+        ("CORN", "planted_area", "US"),
+        ("CORN", "import_volume", "US"),
+        ("CORN", "inventory", "US"),
+        ("WHEAT", "planted_area", "US"),
+        ("WHEAT", "import_volume", "US"),
+        ("WHEAT", "inventory", "US"),
+        ("SOYBEAN", "planted_area", "US"),
+        ("SOYBEAN", "import_volume", "US"),
+        ("SOYBEAN", "inventory", "US"),
+        ("SUGAR", "import_volume", "CN"),
+        ("SUGAR", "inventory", "IN"),
+        ("RICE", "planted_area", "TH"),
+        ("RICE", "import_volume", "TH"),
+        ("RICE", "inventory", "TH"),
     }
     assert by_pair == expected
     assert all(r.unit in {"(1000 HA)", "(1000 MT)"} for r in records)
+    # Decoy countries (AF corn 9999, BR sugar 8888, VM rice 7777) must be excluded.
+    assert all(r.value not in (9999.0, 8888.0, 7777.0) for r in records)
+
+
+def test_bulk_connector_grain_and_provenance_collision_zero() -> None:
+    """Hardened contract: one country per series ⇒ 0 grain / provenance collisions."""
+    cfg = load_ingestion_config()
+    liquids = [
+        s
+        for s in cfg.supply_demand
+        if s.commodity_code in (*LIQUID_FULL_TRIAD, *LIQUID_PARTIAL)
+    ]
+    records = list(UsdaPsdBulkSource(liquids, fetch=lambda: LIQUID_FIXTURE_CSV).collect())
+    grains = [(r.commodity_code, r.metric_code, r.region_code, r.period_start) for r in records]
+    assert len(grains) == len(set(grains))
+    ids = [r.source_record_id for r in records]
+    assert len(ids) == len(set(ids))
+    # Writer-visible grain (region now populated): also collision-free.
+    writer_grain = [(r.commodity_code, r.region_code, r.metric_code, r.period_start) for r in records]
+    assert len(writer_grain) == len(set(writer_grain))
 
 
 def test_catalog_file_exists_next_to_sources() -> None:

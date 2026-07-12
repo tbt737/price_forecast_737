@@ -57,36 +57,60 @@ supply_demand:
   release_lag_days: 0
   # Attribute_IDs for liquid roles are verified against psd_alldata_csv.zip
   # (see configs/ingestion/usda_psd_attribute_catalog.yaml). Do not invent IDs.
+  #
+  # country_code is REQUIRED (PSD Country_Code): PSD bulk has NO world-aggregate row,
+  # so one series = one benchmark country. The connector filters exactly that country
+  # and writes it into the record region + provenance id (no cross-country merging).
+  # region_code is OUR dim_region code (differs from PSD code for CH->CN, VM->VN).
+  # Per-metric country_code/region_code override the series default (used by SUGAR).
   series:
-    # Coffee (legacy metric names — not the mechanistic triad).
-    - { commodity_code: ROBUSTA, usda_commodity_id: "0711100", metrics: { "production_estimate": 28, "exportable_surplus": 88, "certified_stocks": 178 } }
+    # Coffee (legacy metric names — not the mechanistic triad). Vietnam = the
+    # profile's robusta origin; VM verified 66/66 positive MYs for 28/88/178.
+    - { commodity_code: ROBUSTA, usda_commodity_id: "0711100", country_code: VM, region_code: VN,
+        metrics: { "production_estimate": 28, "exportable_surplus": 88, "certified_stocks": 178 } }
     # Liquid ag — roles planted_area / import_volume / inventory (mechanistic aliases).
+    # US benchmark: 67/67 (CORN, WHEAT) / 63/63 (SOYBEAN) positive MYs on all 3 roles.
     - commodity_code: CORN
       usda_commodity_id: "0440000"
+      country_code: US
+      region_code: US
       metrics:
         planted_area: { attribute_id: 4, unit: "(1000 HA)", usda_attribute: "Area Harvested" }
         import_volume: { attribute_id: 57, unit: "(1000 MT)", usda_attribute: "Imports" }
         inventory: { attribute_id: 176, unit: "(1000 MT)", usda_attribute: "Ending Stocks" }
     - commodity_code: WHEAT
       usda_commodity_id: "0410000"
+      country_code: US
+      region_code: US
       metrics:
         planted_area: { attribute_id: 4, unit: "(1000 HA)", usda_attribute: "Area Harvested" }
         import_volume: { attribute_id: 57, unit: "(1000 MT)", usda_attribute: "Imports" }
         inventory: { attribute_id: 176, unit: "(1000 MT)", usda_attribute: "Ending Stocks" }
     - commodity_code: SOYBEAN
       usda_commodity_id: "2222000"  # Oilseed, Soybean
+      country_code: US
+      region_code: US
       metrics:
         planted_area: { attribute_id: 4, unit: "(1000 HA)", usda_attribute: "Area Harvested" }
         import_volume: { attribute_id: 57, unit: "(1000 MT)", usda_attribute: "Imports" }
         inventory: { attribute_id: 176, unit: "(1000 MT)", usda_attribute: "Ending Stocks" }
     # Sugar: PSD publishes Imports + Ending Stocks only (no Area Harvested/Planted).
+    # Per-role countries (audited): imports signal = China (largest buyer, 66/67 npos);
+    # inventory signal = India (largest managed stockholder, 67/67 npos). Brazil is the
+    # export anchor but imports ~0 (npos 5/67) — a single common country has no signal.
     - commodity_code: SUGAR
       usda_commodity_id: "0612000"  # Sugar, Centrifugal
       metrics:
-        import_volume: { attribute_id: 57, unit: "(1000 MT)", usda_attribute: "Imports" }
-        inventory: { attribute_id: 176, unit: "(1000 MT)", usda_attribute: "Ending Stocks" }
+        import_volume: { attribute_id: 57, unit: "(1000 MT)", usda_attribute: "Imports",
+                         country_code: CH, region_code: CN }
+        inventory: { attribute_id: 176, unit: "(1000 MT)", usda_attribute: "Ending Stocks",
+                     country_code: IN, region_code: IN }
+    # Rice: Thailand benchmark exporter — 67/67 positive MYs on planted_area + inventory
+    # (Vietnam inventory only 32/67 positive; US is a minor producer).
     - commodity_code: RICE
       usda_commodity_id: "0422110"  # Rice, Milled
+      country_code: TH
+      region_code: TH
       metrics:
         planted_area: { attribute_id: 4, unit: "(1000 HA)", usda_attribute: "Area Harvested" }
         import_volume: { attribute_id: 57, unit: "(1000 MT)", usda_attribute: "Imports" }

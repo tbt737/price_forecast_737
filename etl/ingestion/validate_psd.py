@@ -6,6 +6,7 @@ never invent IDs. Validation is pure config (no network, no DB).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -20,10 +21,20 @@ STANDARD_ROLES: tuple[str, ...] = ("planted_area", "import_volume", "inventory")
 
 
 class _SupplyDemandSeries(Protocol):
-    commodity_code: str
-    usda_commodity_id: str
-    metrics: dict[str, int]
-    metric_details: tuple[Any, ...]
+    # Properties (not plain attributes) so frozen dataclasses match structurally.
+    @property
+    def commodity_code(self) -> str: ...
+
+    @property
+    def usda_commodity_id(self) -> str: ...
+
+    @property
+    def metrics(self) -> dict[str, int]: ...
+
+    @property
+    def metric_details(self) -> tuple[Any, ...]: ...
+
+    def country_for(self, metric_code: str) -> str: ...
 
 
 def load_psd_attribute_catalog(path: Path = CATALOG_PATH) -> dict[str, Any]:
@@ -35,7 +46,7 @@ def load_psd_attribute_catalog(path: Path = CATALOG_PATH) -> dict[str, Any]:
 
 
 def validate_supply_demand_config(
-    series: list[_SupplyDemandSeries],
+    series: Sequence[_SupplyDemandSeries],
     *,
     catalog: dict[str, Any] | None = None,
     catalog_path: Path = CATALOG_PATH,
@@ -45,7 +56,7 @@ def validate_supply_demand_config(
     cat = catalog if catalog is not None else load_psd_attribute_catalog(catalog_path)
 
     seen_commodity: dict[str, int] = {}
-    seen_usda_id: dict[str, int] = {}
+    seen_metric_country: dict[tuple[str, int, str], int] = {}
 
     for idx, spec in enumerate(series):
         label = f"series[{idx}] {spec.commodity_code}"
@@ -58,13 +69,23 @@ def validate_supply_demand_config(
             )
         else:
             seen_commodity[spec.commodity_code] = idx
-        if spec.usda_commodity_id in seen_usda_id:
-            errors.append(
-                f"{label}: duplicate usda_commodity_id {spec.usda_commodity_id!r} "
-                f"(also series[{seen_usda_id[spec.usda_commodity_id]}])"
-            )
-        else:
-            seen_usda_id[spec.usda_commodity_id] = idx
+
+        # Country is REQUIRED per metric (PSD bulk has no world aggregate); a
+        # duplicate (usda_id, attribute, country) across series is a grain collision.
+        for metric_code, attr_id in spec.metrics.items():
+            try:
+                country = spec.country_for(metric_code)
+            except ValueError as exc:
+                errors.append(f"{label}: {exc}")
+                continue
+            mc_key = (spec.usda_commodity_id, attr_id, country)
+            if mc_key in seen_metric_country:
+                errors.append(
+                    f"{label}: duplicate (usda_commodity_id, attribute_id, country) "
+                    f"{mc_key!r} (also series[{seen_metric_country[mc_key]}])"
+                )
+            else:
+                seen_metric_country[mc_key] = idx
 
         attr_owners: dict[int, str] = {}
         for metric_code, attr_id in spec.metrics.items():
@@ -86,7 +107,7 @@ def validate_supply_demand_config(
 
         entry = cat.get(spec.commodity_code)
         if entry is None:
-            # Legacy series (e.g. ROBUSTA) are allowed without catalog roles.
+            # Legacy series (not in the liquid catalog) are allowed without roles.
             continue
 
         usda_id = entry.get("usda_commodity_id")
@@ -135,8 +156,8 @@ def validate_supply_demand_config(
                             f"{role_spec.get('usda_attribute')!r}"
                         )
             elif role_spec is not None:
-                # Catalog has the role but series omitted it — warn as error for
-                # full-triad commodities; SUGAR omits planted_area intentionally.
+                # Catalog publishes the role but the series omitted it — allowed
+                # (partial-role commodities omit unpublished-signal roles on purpose).
                 pass
 
         # Any configured metric that is a standard role must be catalog-backed (above).
@@ -149,10 +170,12 @@ def validate_supply_demand_config(
                 f"(only {list(STANDARD_ROLES)} allowed)"
             )
 
-    # Catalogued commodities with a PSD id should appear in sources when they have
-    # at least one published role — except we allow intentional omission only for
-    # fully-null commodities (COCOA). Soft check: COCOA must not be present.
-    if "COCOA" in seen_commodity:
-        errors.append("COCOA must not appear in supply_demand.series (absent from PSD bulk)")
+    # Catalog entries with a null usda_commodity_id mark commodities absent from the
+    # PSD bulk entirely — they must never be configured as a series (config-driven guard).
+    for code, entry in cat.items():
+        if entry.get("usda_commodity_id") is None and code in seen_commodity:
+            errors.append(
+                f"{code} must not appear in supply_demand.series (absent from PSD bulk)"
+            )
 
     return errors

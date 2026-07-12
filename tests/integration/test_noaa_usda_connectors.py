@@ -19,10 +19,11 @@ NOAA_SAMPLE = """ YEAR   SEAS   TOTAL   ANOM
 """
 
 USDA_CSV_SAMPLE = """Commodity_Code,Country_Code,Market_Year,Month,Attribute_ID,Value,Unit_Description
-0711100,00,2024,10,28,1500.0,1000 MT
-0711100,00,2024,10,88,500.0,1000 MT
-0711100,00,2024,10,178,200.0,1000 MT
-9999999,00,2024,10,28,999.0,1000 MT
+0711100,VM,2024,10,28,1500.0,1000 MT
+0711100,VM,2024,10,88,500.0,1000 MT
+0711100,VM,2024,10,178,200.0,1000 MT
+0711100,BR,2024,10,28,7777.0,1000 MT
+9999999,VM,2024,10,28,999.0,1000 MT
 """
 
 
@@ -34,6 +35,7 @@ def test_ingestion_config_includes_noaa_and_usda_sources() -> None:
     assert oni.source_code == "NOAA"
     robusta = next(s for s in cfg.supply_demand if s.commodity_code == "ROBUSTA")
     assert robusta.usda_commodity_id == "0711100"
+    assert robusta.country_code == "VM" and robusta.region_code == "VN"
 
 
 def test_parse_oni_lines_maps_season_end_dates() -> None:
@@ -99,37 +101,82 @@ def test_daily_prices_path_excludes_noaa() -> None:
     assert "NoaaOniSource" not in names
 
 
-def test_usda_bulk_connector_filters_and_attaches_provenance() -> None:
+def test_usda_bulk_connector_filters_one_country_and_attaches_provenance() -> None:
     spec = SupplyDemandSpec(
         "ROBUSTA",
         "0711100",
         "manual",
         release_lag_days=0,
         metrics={"production_estimate": 28, "exportable_surplus": 88, "certified_stocks": 178},
+        country_code="VM",
+        region_code="VN",
     )
     records = list(UsdaPsdBulkSource([spec], fetch=lambda: USDA_CSV_SAMPLE).collect())
     metrics = {r.metric_code for r in records}
     assert metrics == {"production_estimate", "exportable_surplus", "certified_stocks"}
     assert all(r.commodity_code == "ROBUSTA" for r in records)
+    assert all(r.region_code == "VN" for r in records)  # BR row (7777.0) must be excluded
+    assert all(r.value != 7777.0 for r in records)
     assert all(r.data_source_code == "manual" for r in records)
     assert all(gate_record(r) == [] for r in records)
+    ids = [r.source_record_id for r in records]
+    assert len(ids) == len(set(ids))  # provenance collision = 0
     prod = next(r for r in records if r.metric_code == "production_estimate")
     assert prod.period_start == date(2024, 10, 1)
     assert prod.value == 1500.0
-    assert prod.source_record_id == "manual:0711100:2024-10-01_28"
+    assert prod.source_record_id == "manual:0711100:2024-10-01_28_VM"
 
 
 def test_usda_bulk_connector_fails_closed_on_empty_csv() -> None:
-    spec = SupplyDemandSpec("ROBUSTA", "0711100", "manual", 0, {"production_estimate": 28})
+    spec = SupplyDemandSpec(
+        "ROBUSTA", "0711100", "manual", 0, {"production_estimate": 28}, country_code="VM"
+    )
     with pytest.raises(RuntimeError, match="empty"):
         list(UsdaPsdBulkSource([spec], fetch=lambda: "").collect())
 
 
 def test_usda_bulk_connector_fails_closed_on_no_matching_rows() -> None:
-    spec = SupplyDemandSpec("ROBUSTA", "0711100", "manual", 0, {"production_estimate": 28})
-    csv = "Commodity_Code,Market_Year,Month,Attribute_ID,Value\n9999999,2024,10,28,1.0\n"
+    spec = SupplyDemandSpec(
+        "ROBUSTA", "0711100", "manual", 0, {"production_estimate": 28}, country_code="VM"
+    )
+    csv = "Commodity_Code,Country_Code,Market_Year,Month,Attribute_ID,Value\n9999999,VM,2024,10,28,1.0\n"
     with pytest.raises(RuntimeError, match="no rows matching"):
         list(UsdaPsdBulkSource([spec], fetch=lambda: csv).collect())
+
+
+def test_usda_bulk_connector_fails_closed_on_missing_country() -> None:
+    """Configured country absent from the CSV must raise, not silently emit nothing."""
+    spec = SupplyDemandSpec(
+        "ROBUSTA",
+        "0711100",
+        "manual",
+        0,
+        {"production_estimate": 28, "exportable_surplus": 88},
+        country_code="ID",  # sample has VM/BR only
+    )
+    both = SupplyDemandSpec(
+        "ROBUSTA_VM", "0711100", "manual", 0, {"production_estimate": 28}, country_code="VM"
+    )
+    with pytest.raises(RuntimeError, match=r"NO rows.*ROBUSTA.*@ID"):
+        list(UsdaPsdBulkSource([spec, both], fetch=lambda: USDA_CSV_SAMPLE).collect())
+
+
+def test_usda_bulk_connector_fails_closed_on_unconfigured_country() -> None:
+    spec = SupplyDemandSpec("ROBUSTA", "0711100", "manual", 0, {"production_estimate": 28})
+    with pytest.raises(ValueError, match="country_code is required"):
+        list(UsdaPsdBulkSource([spec], fetch=lambda: USDA_CSV_SAMPLE).collect())
+
+
+def test_usda_bulk_connector_fails_closed_on_duplicate_grain() -> None:
+    dup_csv = """Commodity_Code,Country_Code,Market_Year,Month,Attribute_ID,Value,Unit_Description
+0711100,VM,2024,10,28,1.0,1000 MT
+0711100,VM,2024,10,28,2.0,1000 MT
+"""
+    spec = SupplyDemandSpec(
+        "ROBUSTA", "0711100", "manual", 0, {"production_estimate": 28}, country_code="VM"
+    )
+    with pytest.raises(RuntimeError, match="duplicate grain"):
+        list(UsdaPsdBulkSource([spec], fetch=lambda: dup_csv).collect())
 
 
 def test_usda_api_connector_builds_records_with_mock_fetch() -> None:

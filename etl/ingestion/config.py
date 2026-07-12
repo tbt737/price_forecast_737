@@ -124,12 +124,16 @@ class EventRiskSpec:
 @dataclass(frozen=True)
 class SupplyDemandMetricDetail:
     """One PSD metric mapping. ``attribute_id`` is required; unit / usda_attribute
-    are optional metadata (required for liquid role series validated against the catalog)."""
+    are optional metadata (required for liquid role series validated against the
+    catalog). ``country_code``/``region_code`` override the series default (PSD bulk
+    has no world aggregate — one metric series is always exactly one country)."""
 
     metric_code: str
     attribute_id: int
     unit: str | None = None
     usda_attribute: str | None = None
+    country_code: str | None = None
+    region_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -140,6 +144,30 @@ class SupplyDemandSpec:
     release_lag_days: int
     metrics: dict[str, int]  # metric_code -> usda attribute ID (connector view)
     metric_details: tuple[SupplyDemandMetricDetail, ...] = ()
+    country_code: str | None = None  # series default PSD Country_Code
+    region_code: str | None = None  # series default dim_region code
+
+    def country_for(self, metric_code: str) -> str:
+        """PSD Country_Code for a metric — metric override, else series default.
+        Fail-closed: raises if neither is configured."""
+        for d in self.metric_details:
+            if d.metric_code == metric_code and d.country_code:
+                return d.country_code
+        if self.country_code:
+            return self.country_code
+        raise ValueError(
+            f"supply_demand {self.commodity_code}/{metric_code}: country_code is required "
+            "(series-level or metric-level) — PSD bulk has no world aggregate"
+        )
+
+    def region_for(self, metric_code: str) -> str:
+        """Our dim_region code for a metric — falls back to the (PSD) country code."""
+        for d in self.metric_details:
+            if d.metric_code == metric_code and d.region_code:
+                return d.region_code
+        if self.region_code:
+            return self.region_code
+        return self.country_for(metric_code)
 
 @dataclass(frozen=True)
 class IngestionConfig:
@@ -215,6 +243,12 @@ def parse_supply_demand_metrics(
                 usda_attribute=(
                     str(val["usda_attribute"]) if val.get("usda_attribute") is not None else None
                 ),
+                country_code=(
+                    str(val["country_code"]) if val.get("country_code") is not None else None
+                ),
+                region_code=(
+                    str(val["region_code"]) if val.get("region_code") is not None else None
+                ),
             )
         )
     return ids, tuple(details)
@@ -224,14 +258,19 @@ def _build_supply_demand_spec(
     raw: dict[str, Any], *, source_code: str, release_lag_days: int
 ) -> SupplyDemandSpec:
     metrics, details = parse_supply_demand_metrics(raw.get("metrics"))
-    return SupplyDemandSpec(
+    spec = SupplyDemandSpec(
         commodity_code=str(raw["commodity_code"]),
         usda_commodity_id=str(raw["usda_commodity_id"]),
         source_code=source_code,
         release_lag_days=release_lag_days,
         metrics=metrics,
         metric_details=details,
+        country_code=(str(raw["country_code"]) if raw.get("country_code") is not None else None),
+        region_code=(str(raw["region_code"]) if raw.get("region_code") is not None else None),
     )
+    for metric_code in spec.metrics:
+        spec.country_for(metric_code)  # fail-closed at load: every metric needs a country
+    return spec
 
 
 def load_csv_imports(path: Path = CSV_IMPORTS_PATH) -> dict[str, CsvImportSpec]:
