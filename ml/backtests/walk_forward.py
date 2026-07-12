@@ -16,7 +16,9 @@ import numpy as np
 
 from ml.features.cycles import select_cycles
 from ml.models.baseline import FourierTrendForecaster, naive_last
+from ml.models.cash_flow_predictor import SupplyConfig
 from ml.models.gbm_forecaster import GBMForecaster
+from ml.models.mechanistic_fourier import MechanisticFourierForecaster
 from ml.models.ou_forecaster import OUForecaster
 from ml.models.ridge_forecaster import RidgeARForecaster
 from ml.models.vdp_forecaster import VdPForecaster
@@ -269,4 +271,52 @@ def walk_forward_vdp(
             trend_damping=trend_damping,
             drift_lookback=drift_lookback,
         ).fit(logy, None, end=cut),
+    )
+
+
+def walk_forward_mechanistic(
+    dates: list[date],
+    values: np.ndarray,
+    supply_daily: Any,
+    *,
+    horizon: int,
+    folds: int = 5,
+    min_train: int = 252,
+    config: SupplyConfig | None = None,
+) -> BacktestResult:
+    """Walk-forward for ``mechanistic_fourier_supply`` (cash-flow + Fourier).
+
+    Each fold fits only on ``[:cut]`` with supply drivers truncated to the same
+    cut (no future inventory/plantings). Forecast carry-forwards last known
+    drivers — honest for lagged harvest, conservative for inventory.
+    """
+    yv = np.asarray(values, dtype=float)
+    n = len(yv)
+    logy = np.log(yv)
+    cfg = config if config is not None else SupplyConfig()
+
+    model_mapes: list[float] = []
+    model_rmses: list[float] = []
+    naive_mapes: list[float] = []
+
+    last_cut = n - horizon
+    if last_cut > min_train:
+        for cut in np.unique(np.linspace(min_train, last_cut, folds).astype(int)):
+            if cut < min_train or cut + horizon > n:
+                continue
+            model = MechanisticFourierForecaster(horizon=horizon, config=cfg).fit(
+                logy, None, end=int(cut), dates=dates, supply_daily=supply_daily
+            )
+            actual = yv[cut : cut + horizon]
+            pred = model.forecast(logy, None, int(cut) - 1, float(yv[cut - 1]), horizon)
+            model_mapes.append(_mape(actual, pred))
+            model_rmses.append(_rmse(actual, pred))
+            naive_mapes.append(_mape(actual, naive_last(yv[:cut], horizon)))
+
+    return BacktestResult(
+        horizon=horizon,
+        folds=len(model_mapes),
+        model_mape=float(np.mean(model_mapes)) if model_mapes else float("nan"),
+        model_rmse=float(np.mean(model_rmses)) if model_rmses else float("nan"),
+        naive_mape=float(np.mean(naive_mapes)) if naive_mapes else float("nan"),
     )
