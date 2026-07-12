@@ -65,11 +65,12 @@ SELECT pg_get_userbyid(d.defaclrole) AS grantor, d.defaclobjtype, d.defaclacl::t
 FROM pg_default_acl d JOIN pg_namespace n ON n.oid = d.defaclnamespace
 WHERE n.nspname='public' AND d.defaclacl::text ~ '(anon|authenticated)';  -- kỳ vọng: 0 dòng
 ```
-**Ngoại lệ đã biết ở query 1:** `mv_ml_daily_features_wide` — nếu đã được
-`ml/build_pandas_mv.py` rebuild thành **bảng thường** thì bảng mới tạo sau apply sẽ có
-`relrowsecurity = f`. Không phải lỗ hổng (anon bị chặn bởi revoke + default privileges —
-query 2/3 mới là bằng chứng đóng lỗ), nhưng bảng đó chỉ còn 1 lớp bảo vệ thay vì 2.
-Tùy chọn tương lai (ngoài scope SEC): builder tự `ENABLE RLS` trên staging table.
+**Ngoại lệ đã biết ở query 1 (lịch sử):** `mv_ml_daily_features_wide` từng bị
+`ml/build_pandas_mv.py` rebuild thành **bảng thường** → `relrowsecurity = f`.
+Direction A (`docs/ml/feature_view_refresh_runbook.md`) chuẩn hóa lại thành
+MATERIALIZED VIEW; pandas builder chỉ còn ghi `offline_ml_daily_features_wide_pandas`.
+Không phải lỗ hổng Data API (anon vẫn bị revoke — query 2/3), nhưng table-drift
+phá `REFRESH MATERIALIZED VIEW` cho tới khi canonicalize được duyệt apply.
 
 **Bằng chứng đóng đúng attack-path (tùy chọn, làm tay):** từ máy ngoài, gọi
 `https://<project>.supabase.co/rest/v1/fact_price_daily?select=*&limit=1` với header

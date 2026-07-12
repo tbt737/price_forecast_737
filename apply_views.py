@@ -49,10 +49,39 @@ def main() -> None:
             status = "found" if path.exists() else "MISSING"
             print(f"  [{status}] {path.relative_to(views_dir.parent.parent)}")
         print("Re-run with --apply to execute against the database.")
+        print(
+            "NOTE: if public.mv_ml_daily_features_wide is already a TABLE, "
+            "--apply cannot replace it (IF NOT EXISTS no-op). "
+            "Use db/migrations/005_mv_ml_canonicalize_preamble.sql first "
+            "(owner-approved apply pack)."
+        )
         return
 
     session_factory = get_session_factory()
     with session_factory() as session:
+        bind = session.get_bind()
+        if bind.dialect.name == "postgresql":
+            relkind = session.execute(
+                text(
+                    """
+                    SELECT c.relkind
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public'
+                      AND c.relname = 'mv_ml_daily_features_wide'
+                    """
+                )
+            ).scalar_one_or_none()
+            if relkind == "r":
+                print(
+                    "REFUSE: public.mv_ml_daily_features_wide is a TABLE. "
+                    "CREATE MATERIALIZED VIEW IF NOT EXISTS would no-op. "
+                    "Run the owner-approved canonicalize preamble "
+                    "(db/migrations/005_mv_ml_canonicalize_preamble.sql) first.",
+                    file=sys.stderr,
+                )
+                raise SystemExit(1)
+
         for path in files:
             print(f"Executing {path.name}...")
             if not path.exists():
