@@ -1,0 +1,104 @@
+# Verified USDA FAS PSD attribute catalog (read-only probe of psd_alldata_csv.zip).
+# Source: https://apps.fas.usda.gov/psdonline/downloads/psd_alldata_csv.zip
+# Probe date: 2026-07-12. Do NOT invent Attribute_IDs — re-verify against bulk if unsure.
+#
+# Role metric_codes match mechanistic drivers:
+#   planted_area  <- PSD "Area Harvested" (alias of area_harvested)
+#   import_volume <- PSD "Imports"
+#   inventory     <- PSD "Ending Stocks"
+#
+# null role = attribute not published for that PSD commodity (do not map).
+# usda_commodity_id null = commodity absent from PSD bulk entirely.
+
+commodities:
+  CORN:
+    usda_commodity_id: "0440000"
+    usda_commodity_description: "Corn"
+    roles:
+      planted_area:
+        attribute_id: 4
+        usda_attribute: "Area Harvested"
+        unit: "(1000 HA)"
+      import_volume:
+        attribute_id: 57
+        usda_attribute: "Imports"
+        unit: "(1000 MT)"
+      inventory:
+        attribute_id: 176
+        usda_attribute: "Ending Stocks"
+        unit: "(1000 MT)"
+
+  WHEAT:
+    usda_commodity_id: "0410000"
+    usda_commodity_description: "Wheat"
+    roles:
+      planted_area:
+        attribute_id: 4
+        usda_attribute: "Area Harvested"
+        unit: "(1000 HA)"
+      import_volume:
+        attribute_id: 57
+        usda_attribute: "Imports"
+        unit: "(1000 MT)"
+      inventory:
+        attribute_id: 176
+        usda_attribute: "Ending Stocks"
+        unit: "(1000 MT)"
+
+  SOYBEAN:
+    usda_commodity_id: "2222000"
+    usda_commodity_description: "Oilseed, Soybean"
+    roles:
+      planted_area:
+        attribute_id: 4
+        usda_attribute: "Area Harvested"
+        unit: "(1000 HA)"
+      import_volume:
+        attribute_id: 57
+        usda_attribute: "Imports"
+        unit: "(1000 MT)"
+      inventory:
+        attribute_id: 176
+        usda_attribute: "Ending Stocks"
+        unit: "(1000 MT)"
+
+  SUGAR:
+    usda_commodity_id: "0612000"
+    usda_commodity_description: "Sugar, Centrifugal"
+    roles:
+      # PSD has no Area Harvested / Area Planted for centrifugal sugar.
+      planted_area: null
+      import_volume:
+        attribute_id: 57
+        usda_attribute: "Imports"
+        unit: "(1000 MT)"
+      inventory:
+        attribute_id: 176
+        usda_attribute: "Ending Stocks"
+        unit: "(1000 MT)"
+
+  RICE:
+    usda_commodity_id: "0422110"
+    usda_commodity_description: "Rice, Milled"
+    roles:
+      planted_area:
+        attribute_id: 4
+        usda_attribute: "Area Harvested"
+        unit: "(1000 HA)"
+      import_volume:
+        attribute_id: 57
+        usda_attribute: "Imports"
+        unit: "(1000 MT)"
+      inventory:
+        attribute_id: 176
+        usda_attribute: "Ending Stocks"
+        unit: "(1000 MT)"
+
+  COCOA:
+    usda_commodity_id: null
+    usda_commodity_description: null
+    note: "No Cocoa/Cacao commodity exists in USDA PSD bulk — do not invent a series."
+    roles:
+      planted_area: null
+      import_volume: null
+      inventory: null

@@ -8,8 +8,13 @@ from typing import Any
 
 import yaml
 
+from etl.ingestion.validate_psd import validate_supply_demand_config
+
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "ingestion" / "sources.yaml"
 CSV_IMPORTS_PATH = Path(__file__).resolve().parents[2] / "configs" / "ingestion" / "csv_imports.yaml"
+PSD_ATTRIBUTE_CATALOG_PATH = (
+    Path(__file__).resolve().parents[2] / "configs" / "ingestion" / "usda_psd_attribute_catalog.yaml"
+)
 
 
 @dataclass(frozen=True)
@@ -117,12 +122,24 @@ class EventRiskSpec:
     description: str | None = None
 
 @dataclass(frozen=True)
+class SupplyDemandMetricDetail:
+    """One PSD metric mapping. ``attribute_id`` is required; unit / usda_attribute
+    are optional metadata (required for liquid role series validated against the catalog)."""
+
+    metric_code: str
+    attribute_id: int
+    unit: str | None = None
+    usda_attribute: str | None = None
+
+
+@dataclass(frozen=True)
 class SupplyDemandSpec:
     commodity_code: str
     usda_commodity_id: str
     source_code: str
     release_lag_days: int
-    metrics: dict[str, int] # metric_code -> usda attribute ID
+    metrics: dict[str, int]  # metric_code -> usda attribute ID (connector view)
+    metric_details: tuple[SupplyDemandMetricDetail, ...] = ()
 
 @dataclass(frozen=True)
 class IngestionConfig:
@@ -167,6 +184,54 @@ class CsvImportSpec:
     aggregate: str = "median"
     market_column: str | None = None
     market_filter: str | None = None
+
+
+def parse_supply_demand_metrics(
+    raw: dict[str, Any] | None,
+) -> tuple[dict[str, int], tuple[SupplyDemandMetricDetail, ...]]:
+    """Accept legacy ``{metric: attribute_id}`` or rich ``{metric: {attribute_id, unit, ...}}``."""
+    ids: dict[str, int] = {}
+    details: list[SupplyDemandMetricDetail] = []
+    for metric_code, val in (raw or {}).items():
+        if isinstance(val, bool) or not isinstance(val, (int, dict)):
+            raise ValueError(
+                f"supply_demand metric {metric_code!r} must be an int attribute_id "
+                f"or a mapping with attribute_id, got {type(val).__name__}"
+            )
+        if isinstance(val, int):
+            attribute_id = int(val)
+            ids[metric_code] = attribute_id
+            details.append(SupplyDemandMetricDetail(metric_code, attribute_id))
+            continue
+        if "attribute_id" not in val:
+            raise ValueError(f"supply_demand metric {metric_code!r} missing attribute_id")
+        attribute_id = int(val["attribute_id"])
+        ids[metric_code] = attribute_id
+        details.append(
+            SupplyDemandMetricDetail(
+                metric_code=metric_code,
+                attribute_id=attribute_id,
+                unit=(str(val["unit"]) if val.get("unit") is not None else None),
+                usda_attribute=(
+                    str(val["usda_attribute"]) if val.get("usda_attribute") is not None else None
+                ),
+            )
+        )
+    return ids, tuple(details)
+
+
+def _build_supply_demand_spec(
+    raw: dict[str, Any], *, source_code: str, release_lag_days: int
+) -> SupplyDemandSpec:
+    metrics, details = parse_supply_demand_metrics(raw.get("metrics"))
+    return SupplyDemandSpec(
+        commodity_code=str(raw["commodity_code"]),
+        usda_commodity_id=str(raw["usda_commodity_id"]),
+        source_code=source_code,
+        release_lag_days=release_lag_days,
+        metrics=metrics,
+        metric_details=details,
+    )
 
 
 def load_csv_imports(path: Path = CSV_IMPORTS_PATH) -> dict[str, CsvImportSpec]:
@@ -259,15 +324,12 @@ def load_ingestion_config(path: Path = CONFIG_PATH) -> IngestionConfig:
     sd_source = sd.get("source_code", "USDA_FAS")
     sd_lag = int(sd.get("release_lag_days", 0))
     supply_demand = [
-        SupplyDemandSpec(
-            commodity_code=s["commodity_code"],
-            usda_commodity_id=s["usda_commodity_id"],
-            source_code=sd_source,
-            release_lag_days=sd_lag,
-            metrics=s.get("metrics", {}),
-        )
+        _build_supply_demand_spec(s, source_code=sd_source, release_lag_days=sd_lag)
         for s in sd.get("series", [])
     ]
+    sd_errors = validate_supply_demand_config(supply_demand)
+    if sd_errors:
+        raise ValueError("Invalid supply_demand config:\n- " + "\n- ".join(sd_errors))
 
     vp = data.get("vn_prices", {}) or {}
     vp_lag = int(vp.get("release_lag_days", 0))

@@ -55,10 +55,43 @@ events:
 supply_demand:
   source_code: USDA_FAS
   release_lag_days: 0
+  # Attribute_IDs for liquid roles are verified against psd_alldata_csv.zip
+  # (see configs/ingestion/usda_psd_attribute_catalog.yaml). Do not invent IDs.
   series:
-    # PSD parameters are identified by their 'attributeId'. We map them to our metric_code.
-    # Coffee PSD commodity code is '0711100'
+    # Coffee (legacy metric names — not the mechanistic triad).
     - { commodity_code: ROBUSTA, usda_commodity_id: "0711100", metrics: { "production_estimate": 28, "exportable_surplus": 88, "certified_stocks": 178 } }
+    # Liquid ag — roles planted_area / import_volume / inventory (mechanistic aliases).
+    - commodity_code: CORN
+      usda_commodity_id: "0440000"
+      metrics:
+        planted_area: { attribute_id: 4, unit: "(1000 HA)", usda_attribute: "Area Harvested" }
+        import_volume: { attribute_id: 57, unit: "(1000 MT)", usda_attribute: "Imports" }
+        inventory: { attribute_id: 176, unit: "(1000 MT)", usda_attribute: "Ending Stocks" }
+    - commodity_code: WHEAT
+      usda_commodity_id: "0410000"
+      metrics:
+        planted_area: { attribute_id: 4, unit: "(1000 HA)", usda_attribute: "Area Harvested" }
+        import_volume: { attribute_id: 57, unit: "(1000 MT)", usda_attribute: "Imports" }
+        inventory: { attribute_id: 176, unit: "(1000 MT)", usda_attribute: "Ending Stocks" }
+    - commodity_code: SOYBEAN
+      usda_commodity_id: "2222000"  # Oilseed, Soybean
+      metrics:
+        planted_area: { attribute_id: 4, unit: "(1000 HA)", usda_attribute: "Area Harvested" }
+        import_volume: { attribute_id: 57, unit: "(1000 MT)", usda_attribute: "Imports" }
+        inventory: { attribute_id: 176, unit: "(1000 MT)", usda_attribute: "Ending Stocks" }
+    # Sugar: PSD publishes Imports + Ending Stocks only (no Area Harvested/Planted).
+    - commodity_code: SUGAR
+      usda_commodity_id: "0612000"  # Sugar, Centrifugal
+      metrics:
+        import_volume: { attribute_id: 57, unit: "(1000 MT)", usda_attribute: "Imports" }
+        inventory: { attribute_id: 176, unit: "(1000 MT)", usda_attribute: "Ending Stocks" }
+    - commodity_code: RICE
+      usda_commodity_id: "0422110"  # Rice, Milled
+      metrics:
+        planted_area: { attribute_id: 4, unit: "(1000 HA)", usda_attribute: "Area Harvested" }
+        import_volume: { attribute_id: 57, unit: "(1000 MT)", usda_attribute: "Imports" }
+        inventory: { attribute_id: 176, unit: "(1000 MT)", usda_attribute: "Ending Stocks" }
+    # COCOA omitted: no Cocoa/Cacao commodity in USDA PSD bulk (catalog note).
 
 vn_prices:
   # Vietnam DOMESTIC spot prices (VND). Each endpoint names a parser FORMAT handled by
