@@ -1,0 +1,76 @@
+=== 1. FAS OpenData API surface (official swagger) ===
+  /api/psd/commodities
+  /api/psd/commodity/{commodityCode}/country/all/year/{marketYear}
+  /api/psd/commodity/{commodityCode}/country/{countryCode}/year/{marketYear}
+  /api/psd/commodity/{commodityCode}/dataReleaseDates
+  /api/psd/commodity/{commodityCode}/world/year/{marketYear}
+  /api/psd/commodityAttributes
+  /api/psd/countries
+  /api/psd/regions
+  /api/psd/unitsOfMeasure
+  documented vintage-data endpoints (releaseYear/releaseMonth): NONE
+  dataReleaseDates metadata endpoint present: True
+  USDA_FAS_API_KEY present in environment: False
+
+# bulk rows: 2090920
+
+=== 2. Bulk vintage structure ===
+  grains with >1 row in one bulk file (stored vintages): 0
+  Calendar_Year/Month behaves as a LAST-REVISION stamp (empirical: CY-MY spans decades, recent rows carry the latest release month).
+
+=== 3. Vintage-stamp coverage per commodity x country x attribute ===
+  CORN     import_volume       @US stamped= 67 unstamped(Month=0)=  0 first=2006-07-01 last=2026-07-01 decades={'2000s': 35, '2010s': 20, '2020s': 12}
+  CORN     inventory           @US stamped= 67 unstamped(Month=0)=  0 first=2006-07-01 last=2026-07-01 decades={'2000s': 35, '2010s': 20, '2020s': 12}
+  CORN     planted_area        @US stamped= 67 unstamped(Month=0)=  0 first=2006-07-01 last=2026-07-01 decades={'2000s': 35, '2010s': 20, '2020s': 12}
+  RICE     import_volume       @TH stamped= 67 unstamped(Month=0)=  0 first=2006-07-01 last=2026-07-01 decades={'2000s': 47, '2010s': 7, '2020s': 13}
+  RICE     inventory           @TH stamped= 67 unstamped(Month=0)=  0 first=2006-07-01 last=2026-07-01 decades={'2000s': 47, '2010s': 7, '2020s': 13}
+  RICE     planted_area        @TH stamped= 67 unstamped(Month=0)=  0 first=2006-07-01 last=2026-07-01 decades={'2000s': 47, '2010s': 7, '2020s': 13}
+  ROBUSTA  certified_stocks    @VM stamped= 23 unstamped(Month=0)= 43 first=2010-06-01 last=2025-12-01 decades={'2010s': 11, '2020s': 12}
+  ROBUSTA  exportable_surplus  @VM stamped= 23 unstamped(Month=0)= 43 first=2010-06-01 last=2025-12-01 decades={'2010s': 11, '2020s': 12}
+  ROBUSTA  production_estimate @VM stamped= 23 unstamped(Month=0)= 43 first=2010-06-01 last=2025-12-01 decades={'2010s': 11, '2020s': 12}
+  SOYBEAN  import_volume       @US stamped= 63 unstamped(Month=0)=  0 first=2006-06-01 last=2026-07-01 decades={'2000s': 26, '2010s': 26, '2020s': 11}
+  SOYBEAN  inventory           @US stamped= 63 unstamped(Month=0)=  0 first=2006-06-01 last=2026-07-01 decades={'2000s': 26, '2010s': 26, '2020s': 11}
+  SOYBEAN  planted_area        @US stamped= 63 unstamped(Month=0)=  0 first=2006-06-01 last=2026-07-01 decades={'2000s': 26, '2010s': 26, '2020s': 11}
+  SUGAR    import_volume       @CH stamped= 28 unstamped(Month=0)= 39 first=2006-05-01 last=2026-05-01 decades={'2000s': 4, '2010s': 15, '2020s': 9}
+  SUGAR    inventory           @IN stamped= 26 unstamped(Month=0)= 41 first=2008-05-01 last=2026-05-01 decades={'2000s': 3, '2010s': 11, '2020s': 12}
+  WHEAT    import_volume       @US stamped= 67 unstamped(Month=0)=  0 first=2006-07-01 last=2026-07-01 decades={'2000s': 42, '2010s': 7, '2020s': 18}
+  WHEAT    inventory           @US stamped= 67 unstamped(Month=0)=  0 first=2006-07-01 last=2026-07-01 decades={'2000s': 42, '2010s': 7, '2020s': 18}
+  WHEAT    planted_area        @US stamped= 67 unstamped(Month=0)=  0 first=2006-07-01 last=2026-07-01 decades={'2000s': 42, '2010s': 7, '2020s': 18}
+
+=== 4. Walk-forward fold visibility (folds=5, min_train=252, horizon=90) ===
+  Scenario A: release_date = ingest day (forward-only status quo)
+  Scenario B: release_date = bulk last-revision stamp (only vintage info bulk has)
+  CORN     ZC=F   prices 2000-07-17..2026-07-10 n=6500 | A=0/5 B=4/5 folds see full triad
+           cuts [date:seen(min MY records per role)]: 2001-08-29:-(0) 2007-10-15:T(35) 2013-11-25:T(35) 2020-01-14:T(55) 2026-03-02:T(64)
+  WHEAT    ZW=F   prices 2000-07-17..2026-07-10 n=6512 | A=0/5 B=4/5 folds see full triad
+           cuts [date:seen(min MY records per role)]: 2001-08-13:-(0) 2007-10-04:T(42) 2013-11-19:T(48) 2020-01-09:T(49) 2026-03-02:T(60)
+  SOYBEAN  ZS=F   prices 2000-09-15..2026-07-10 n=6492 | A=0/5 B=4/5 folds see full triad
+           cuts [date:seen(min MY records per role)]: 2001-09-20:-(0) 2007-10-25:T(26) 2013-12-04:T(26) 2020-01-16:T(52) 2026-03-02:T(57)
+  RICE     ZR=F   prices 1999-09-14..2026-07-10 n=6722 | A=0/5 B=4/5 folds see full triad
+           cuts [date:seen(min MY records per role)]: 2000-09-26:-(0) 2007-02-02:T(44) 2013-06-21:T(48) 2019-10-24:T(54) 2026-03-02:T(60)
+
+  CAVEAT on Scenario B: the stamp is when the LATEST revision was published.
+  A record revised recently is invisible at old cuts even though a preliminary
+  value existed then. B is leak-free but SPARSE and is NOT a true as-of vintage:
+  min-records-per-role at early cuts shows whether a mechanistic fit (which
+  needs lagged history) would actually have enough driver rows.
+
+=== 5. Revision identity ===
+  Bulk keeps one row per grain (section 2): the revision SERIES is not
+  recoverable ù we cannot assign revision=0,1,2,... for past releases.
+  Forward-only accumulation works: each future monthly ingest gets a new
+  release_date; the writer grain (à, release_date, revision) stays unique
+  without inventing history.
+
+=== 6. Wayback Machine snapshot census (best effort) ===
+  CDX unavailable (HTTPError: HTTP Error 429: Too Many Requests)
+
+=== VERDICT ===
+  NOTE: API: swagger documents NO releaseYear/releaseMonth data endpoint; an undocumented one is rumoured (StackOverflow/community) but cannot be confirmed without an API key
+  NOTE: API: every /api/psd/* request (even nonexistent paths) returns 403 without an API key, so endpoint existence cannot be probed unauthenticated; no key is configured in this environment
+  NOTE: bulk stores exactly ONE row per (commodity,country,MY,attribute) ù only the latest revision survives; historical vintages are NOT in the current file
+  NOTE: revision identity: past revision chains unrecoverable from current bulk; forward ingests accumulate true vintages via distinct release_date
+  NOTE: wayback: CDX API rate-limited/unavailable during audit ù snapshot census unknown; do not assume archive coverage
+
+FEASIBILITY_FAIL_FORWARD_ONLY: a trustworthy historical vintage CANNOT be built from the PSD API/bulk as available to this environment. PIT stance stays FORWARD-ONLY; historical mechanistic evaluation remains locked.
+summary json: reports\psd_pit_vintage_feasibility.json

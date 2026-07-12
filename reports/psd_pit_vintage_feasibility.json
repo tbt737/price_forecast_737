@@ -1,0 +1,33 @@
+{
+  "verdict": "FEASIBILITY_FAIL_FORWARD_ONLY",
+  "notes": [
+    "API: swagger documents NO releaseYear/releaseMonth data endpoint; an undocumented one is rumoured (StackOverflow/community) but cannot be confirmed without an API key",
+    "API: every /api/psd/* request (even nonexistent paths) returns 403 without an API key, so endpoint existence cannot be probed unauthenticated; no key is configured in this environment",
+    "bulk stores exactly ONE row per (commodity,country,MY,attribute) \u2014 only the latest revision survives; historical vintages are NOT in the current file",
+    "revision identity: past revision chains unrecoverable from current bulk; forward ingests accumulate true vintages via distinct release_date",
+    "wayback: CDX API rate-limited/unavailable during audit \u2014 snapshot census unknown; do not assume archive coverage"
+  ],
+  "failures": [],
+  "fold_visibility": {
+    "CORN": {
+      "folds": 5,
+      "scenario_a": 0,
+      "scenario_b": 4
+    },
+    "WHEAT": {
+      "folds": 5,
+      "scenario_a": 0,
+      "scenario_b": 4
+    },
+    "SOYBEAN": {
+      "folds": 5,
+      "scenario_a": 0,
+      "scenario_b": 4
+    },
+    "RICE": {
+      "folds": 5,
+      "scenario_a": 0,
+      "scenario_b": 4
+    }
+  }
+}
