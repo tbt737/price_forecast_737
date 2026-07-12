@@ -352,22 +352,24 @@ def main(argv: list[str] | None = None) -> int:
         pass
 
     try:
-        from app.db.session import SessionLocal
+        from app.db.session import get_session_factory
     except Exception as exc:  # noqa: BLE001
-        print(f"ERROR: cannot import SessionLocal: {exc}", file=sys.stderr)
+        print(f"ERROR: cannot import session factory: {exc}", file=sys.stderr)
         return 2
 
     codes = tuple(args.commodities) if args.commodities else DEFAULT_COMMODITY_CODES
+    session = get_session_factory()()
     try:
-        with SessionLocal() as session:
-            try:
-                session.execute(text("SET TRANSACTION READ ONLY"))
-            except Exception:  # noqa: BLE001
-                pass
-            audits = run_audit(session, commodity_codes=codes)
+        try:
+            session.execute(text("SET TRANSACTION READ ONLY"))
+        except Exception:  # noqa: BLE001
+            pass
+        audits = run_audit(session, commodity_codes=codes)
     except Exception as exc:  # noqa: BLE001
         print(f"ERROR: audit query failed: {exc}", file=sys.stderr)
         return 2
+    finally:
+        session.close()
 
     if args.json:
         print(json.dumps([asdict(a) for a in audits], indent=2, default=str))
