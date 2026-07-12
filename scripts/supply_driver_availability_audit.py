@@ -26,6 +26,7 @@ from typing import Any
 
 import numpy as np
 from sqlalchemy import text
+from sqlalchemy.engine.url import make_url
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _API_DIR = _REPO_ROOT / "apps" / "api"
@@ -296,6 +297,41 @@ def run_audit(
     return out
 
 
+AUDIT_UNAVAILABLE = "AUDIT_UNAVAILABLE"
+EXIT_UNAVAILABLE = 2
+EXIT_OK = 0
+
+
+def classify_database_host(url: str) -> str:
+    """Return host kind without logging credentials.
+
+    ``supabase_direct`` is the IPv6-only ``db.<ref>.supabase.co`` host that often
+    fails on IPv4-only networks; prefer Session pooler (``*.pooler.supabase.com``).
+    """
+    host = (make_url(url).host or "").lower()
+    if "pooler.supabase.com" in host:
+        return "supabase_session_pooler"
+    if host.startswith("db.") and host.endswith(".supabase.co"):
+        return "supabase_direct"
+    return "other"
+
+
+def emit_audit_unavailable(reason: str, *, host_kind: str | None = None) -> int:
+    """Fail closed: connection/DNS errors are not empty-coverage findings."""
+    print(f"verdict: {AUDIT_UNAVAILABLE}", flush=True)
+    print(f"reason: {reason}", file=sys.stderr)
+    if host_kind == "supabase_direct":
+        print(
+            "hint: DATABASE_URL uses db.*.supabase.co (often IPv6-only). "
+            "Use Supabase Session Pooler IPv4 (*.pooler.supabase.com:5432) — see DEPLOY.md §0.",
+            file=sys.stderr,
+        )
+    elif host_kind is not None:
+        print(f"host_kind: {host_kind}", file=sys.stderr)
+    # Never emit a CommodityAudit payload here — that would look like mechanistic_ready=false.
+    return EXIT_UNAVAILABLE
+
+
 def format_report(audits: list[CommodityAudit]) -> str:
     lines: list[str] = [
         "SUPPLY_DRIVER_AVAILABILITY_AUDIT (read-only)",
@@ -351,31 +387,54 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError:
         pass
 
+    host_kind: str | None = None
     try:
+        from app.core.config import get_settings
         from app.db.session import get_session_factory
+
+        db_url = get_settings().resolved_database_url()
+        host_kind = classify_database_host(db_url)
     except Exception as exc:  # noqa: BLE001
-        print(f"ERROR: cannot import session factory: {exc}", file=sys.stderr)
-        return 2
+        return emit_audit_unavailable(f"cannot resolve DATABASE_URL / session factory: {exc}")
+
+    if host_kind == "supabase_direct":
+        # Soft warning only — still attempt connect (some networks have IPv6).
+        print(
+            "warning: DATABASE_URL looks like Supabase direct (db.*.supabase.co). "
+            "Prefer Session Pooler IPv4 if connect fails — DEPLOY.md §0.",
+            file=sys.stderr,
+        )
 
     codes = tuple(args.commodities) if args.commodities else DEFAULT_COMMODITY_CODES
-    session = get_session_factory()()
+    try:
+        session = get_session_factory()()
+    except Exception as exc:  # noqa: BLE001
+        return emit_audit_unavailable(f"session open failed: {exc}", host_kind=host_kind)
+
     try:
         try:
             session.execute(text("SET TRANSACTION READ ONLY"))
         except Exception:  # noqa: BLE001
             pass
+        # Cheap connectivity probe before the multi-commodity scan.
+        session.execute(text("SELECT 1"))
         audits = run_audit(session, commodity_codes=codes)
     except Exception as exc:  # noqa: BLE001
-        print(f"ERROR: audit query failed: {exc}", file=sys.stderr)
-        return 2
+        return emit_audit_unavailable(f"database unreachable or query failed: {exc}", host_kind=host_kind)
     finally:
         session.close()
 
     if args.json:
-        print(json.dumps([asdict(a) for a in audits], indent=2, default=str))
+        payload = {
+            "verdict": "AUDIT_OK",
+            "host_kind": host_kind,
+            "commodities": [asdict(a) for a in audits],
+        }
+        print(json.dumps(payload, indent=2, default=str))
     else:
+        print(f"verdict: AUDIT_OK  (host_kind={host_kind})")
         print(format_report(audits))
-    return 0
+    return EXIT_OK
 
 
 if __name__ == "__main__":
