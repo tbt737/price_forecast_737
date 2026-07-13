@@ -6,7 +6,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from etl.ingest import build_connectors
+from etl.ingest import PSD_INGEST_FLAG, build_connectors
 from etl.ingestion.config import (
     EventRiskSpec,
     SupplyDemandMetricDetail,
@@ -198,10 +198,13 @@ def test_usda_api_connector_is_disabled_fail_closed() -> None:
         UsdaPsdSource([spec], fetch=lambda _cid: [])
 
 
-def test_build_connectors_psd_path_is_bulk_only_with_full_country_grain() -> None:
+def test_build_connectors_psd_path_is_bulk_only_with_full_country_grain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """No path in build_connectors may create a PSD record lacking a country: the
     only supply_demand connector is the hardened bulk source, and every configured
     metric resolves a country + region before any fetch happens."""
+    monkeypatch.setenv(PSD_INGEST_FLAG, "true")
     cfg = load_ingestion_config()
     connectors = build_connectors(
         cfg, which="supply_demand", period="5d", weather_days=7, today=date(2026, 7, 12)
@@ -212,6 +215,47 @@ def test_build_connectors_psd_path_is_bulk_only_with_full_country_grain() -> Non
         for metric in spec.metrics:
             assert spec.country_for(metric)
             assert spec.region_for(metric)
+
+
+def test_psd_ingest_gate_is_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PSD_PUSH_ACTIVATION_PREFLIGHT gate: with the flag unset (the default after a
+    push), the `all` bucket must NOT pick up supply_demand, and an explicit request
+    must fail closed loudly rather than silently collect nothing."""
+    monkeypatch.delenv(PSD_INGEST_FLAG, raising=False)
+    cfg = load_ingestion_config()
+    everything = build_connectors(
+        cfg, which="all", period="5d", weather_days=7, today=date(2026, 7, 13)
+    )
+    assert not any(type(c) is UsdaPsdBulkSource for c in everything)
+    with pytest.raises(RuntimeError, match="gated OFF"):
+        build_connectors(
+            cfg, which="supply_demand", period="5d", weather_days=7, today=date(2026, 7, 13)
+        )
+    # Non-"true" values do not enable either.
+    monkeypatch.setenv(PSD_INGEST_FLAG, "1")
+    with pytest.raises(RuntimeError, match="gated OFF"):
+        build_connectors(
+            cfg, which="supply_demand", period="5d", weather_days=7, today=date(2026, 7, 13)
+        )
+
+
+def test_psd_ingest_gate_on_preserves_robusta_and_liquids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the gate is explicitly enabled, the connector carries the FULL configured
+    series set — the pre-existing ROBUSTA series is preserved alongside the liquids."""
+    monkeypatch.setenv(PSD_INGEST_FLAG, "true")
+    cfg = load_ingestion_config()
+    (connector,) = build_connectors(
+        cfg, which="supply_demand", period="5d", weather_days=7, today=date(2026, 7, 13)
+    )
+    codes = {s.commodity_code for s in connector._specs}
+    assert "ROBUSTA" in codes
+    assert {"CORN", "WHEAT", "SOYBEAN", "RICE", "SUGAR"} <= codes
+    everything = build_connectors(
+        cfg, which="all", period="5d", weather_days=7, today=date(2026, 7, 13)
+    )
+    assert any(type(c) is UsdaPsdBulkSource for c in everything)
 
 
 def test_usda_bulk_connector_fails_closed_on_unit_drift() -> None:

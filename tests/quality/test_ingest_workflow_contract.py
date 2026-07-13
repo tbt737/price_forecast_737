@@ -84,6 +84,31 @@ def test_freshness_gate_still_present() -> None:
     assert "vn_prices" not in gate[0]["run"]
 
 
+def test_no_workflow_step_can_activate_psd_supply_demand() -> None:
+    """PSD_PUSH_ACTIVATION_PREFLIGHT contract: pushing the new liquid supply_demand
+    config must not be auto-collected by the scheduled workflow. Every etl.ingest
+    invocation must name an explicit source, and neither `--sources all` (which would
+    sweep supply_demand in once its env gate is on) nor `--sources supply_demand`
+    may appear without the default-OFF gate variable."""
+    steps = _steps()
+    ingest_cmds = [
+        line.strip()
+        for s in steps
+        if isinstance(s.get("run"), str)
+        for line in s["run"].splitlines()
+        if "etl.ingest" in line
+    ]
+    assert ingest_cmds, "expected etl.ingest invocations in the workflow"
+    for cmd in ingest_cmds:
+        assert "--sources" in cmd, f"implicit default sources (=all) is banned: {cmd}"
+        assert "--sources all" not in cmd, f"the all-bucket is banned in workflows: {cmd}"
+    sd_steps = _with_run(steps, "--sources supply_demand")
+    for step in sd_steps:  # if a future pack adds the step, it must be flag-gated
+        assert "vars.ENABLE_PSD_SUPPLY_DEMAND_INGEST == 'true'" in str(step.get("if"))
+    # Today there must be no supply_demand step at all (activation pack not approved).
+    assert sd_steps == []
+
+
 def test_ml_feature_refresh_step_present_and_non_blocking() -> None:
     steps = _steps()
     refresh = _with_run(steps, "refresh_ml_features.py")

@@ -14,6 +14,7 @@ Usage (reads DATABASE_URL from .env):
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -37,6 +38,10 @@ from etl.sources.market.yahoo import YahooPriceSource  # noqa: E402
 from etl.sources.supply_demand.usda_psd_bulk import UsdaPsdBulkSource  # noqa: E402
 from etl.sources.weather.nasa_power import NasaPowerSource  # noqa: E402
 from etl.writer import write_batch  # noqa: E402
+
+#: env flag (CI: repository variable of the same name) gating PSD supply_demand
+#: ingestion. Default OFF — see build_connectors.
+PSD_INGEST_FLAG = "ENABLE_PSD_SUPPLY_DEMAND_INGEST"
 
 
 def build_connectors(
@@ -71,8 +76,20 @@ def build_connectors(
         connectors.append(MacroFxSource(config.macro, period=period))
     if which in ("events", "all") and config.events:
         connectors.append(NoaaOniSource(config.events))
+    # 🔒 PSD supply_demand is GATED OFF BY DEFAULT (PSD_PUSH_ACTIVATION_PREFLIGHT):
+    # the liquid country-grain series are approved config-only — no scheduled or
+    # accidental `--sources all` run may start collecting/writing them. Enabling
+    # requires the env flag (in CI: repo variable of the same name) to be exactly
+    # "true". An explicit `--sources supply_demand` without the flag fails closed
+    # loudly instead of silently doing nothing; the "all" bucket just skips it.
     if which in ("supply_demand", "all") and config.supply_demand:
-        connectors.append(UsdaPsdBulkSource(config.supply_demand))
+        if os.environ.get(PSD_INGEST_FLAG, "").strip().lower() == "true":
+            connectors.append(UsdaPsdBulkSource(config.supply_demand))
+        elif which == "supply_demand":
+            raise RuntimeError(
+                f"supply_demand ingest is gated OFF by default; set {PSD_INGEST_FLAG}=true "
+                "to enable (approved activation pack required before production use)"
+            )
     return connectors
 
 
