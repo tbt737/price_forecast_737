@@ -351,17 +351,15 @@ class CashFlowFourierPredictor:
                 f"commodity-named lag keys {sorted(bad)} are not allowed; "
                 "use harvest_months / import_months (or set SupplyConfig from the YAML profile)"
             )
-        updates: dict[str, float] = {}
-        if "harvest_months" in lags:
-            updates["harvest_lag_months"] = float(lags["harvest_months"])
-        if "import_months" in lags:
-            updates["import_lag_months"] = float(lags["import_months"])
-        # Also accept the explicit config field names.
-        if "harvest_lag_months" in lags:
-            updates["harvest_lag_months"] = float(lags["harvest_lag_months"])
-        if "import_lag_months" in lags:
-            updates["import_lag_months"] = float(lags["import_lag_months"])
-        return replace(self.config, **updates) if updates else self.config
+        # Explicit config field names take precedence over the short aliases.
+        harvest_lag = lags.get("harvest_lag_months", lags.get("harvest_months"))
+        import_lag = lags.get("import_lag_months", lags.get("import_months"))
+        cfg = self.config
+        if harvest_lag is not None:
+            cfg = replace(cfg, harvest_lag_months=float(harvest_lag))
+        if import_lag is not None:
+            cfg = replace(cfg, import_lag_months=float(import_lag))
+        return cfg
 
     def _normalize_frame(self, df: pd.DataFrame, *, require_price: bool = True) -> pd.DataFrame:
         if df is None or df.empty:
