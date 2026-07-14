@@ -49,13 +49,13 @@ def test_create_all_and_load_all_profiles() -> None:
     with sessionmaker(bind=eng, future=True)() as session:
         summary = load_profiles(session)
         session.commit()
-        assert summary["profile:loaded"] == 51  # 21 commodities + 30 VN30 equities
-        assert session.scalar(select(func.count()).select_from(DimCommodity)) == 51
-        assert session.scalar(select(func.count()).select_from(CommodityProfileRegistry)) == 51
+        assert summary["profile:loaded"] == 52  # 22 commodities + 30 VN30 equities
+        assert session.scalar(select(func.count()).select_from(DimCommodity)) == 52
+        assert session.scalar(select(func.count()).select_from(CommodityProfileRegistry)) == 52
         assert session.scalar(select(func.count()).select_from(CommodityRegionMap)) > 0
         # 52 baseline + 6 (2 dehydrated profiles) + 5 IN_NATIONAL_MEDIAN
         # (onion/chilli/garlic/peanuts/robusta national series) + 4 VN
         # (2 GOLD_VN PNJ, 1 SILVER_VN, 1 GOLD_VN VNAppMob SJC 1L) + 1 PEPPER_VN (giá tiêu average)
-        # + 30 HOSE_* (one per VN30 equity)
-        assert session.scalar(select(func.count()).select_from(DimMarketInstrument)) == 98
+        # + 30 HOSE_* (one per VN30 equity) + 2 Petrolimex diesel (DIESEL_VN)
+        assert session.scalar(select(func.count()).select_from(DimMarketInstrument)) == 100
     eng.dispose()

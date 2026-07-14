@@ -12,6 +12,7 @@ never touch the network; per-endpoint failures are fail-soft (skip, don't crash)
 
 from __future__ import annotations
 
+import hashlib
 import html
 import json
 import re
@@ -109,11 +110,44 @@ def parse_giatieu_html(raw: str, product_key: str) -> float | None:
     return _to_float(m.group(1)) if m else None
 
 
+def parse_petrolimex_json(raw: str, product_key: str) -> float | None:
+    """A CMS search API returning ``{"Objects":[{"Title":..,"Zone1Price":..,
+    "Zone2Price":..}]}`` (retail fuel board, full VND per litre). Return the Zone 1
+    price of the item whose ``Title`` (or ``EnglishTitle``) equals ``product_key``
+    (whitespace-normalized, case-insensitive)."""
+    data = json.loads(raw)
+    key = _norm(product_key)
+    for item in data.get("Objects", []) or []:
+        titles = (_norm(str(item.get("Title", ""))), _norm(str(item.get("EnglishTitle", ""))))
+        if key not in titles:
+            continue
+        v = item.get("Zone1Price")
+        try:
+            return float(v) if v not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+#: endpoints whose URL fits within this many chars keep the raw URL in their
+#: provenance origin (backwards-compatible with already-written record ids); longer
+#: URLs (e.g. a base64-encoded API query) are replaced by a deterministic sha256
+#: prefix so ``source_record_id`` stays within the DB's 200-char provenance column.
+_ORIGIN_URL_MAX = 120
+
+
+def _origin_url(url: str) -> str:
+    if len(url) <= _ORIGIN_URL_MAX:
+        return url
+    return "sha256:" + hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
+
+
 #: parser FORMAT name -> implementation. Keyed on format, never on commodity.
 PARSERS: dict[str, Callable[[str, str], float | None]] = {
     "pnj_json": parse_pnj_json,
     "phuquy_silver_html": parse_phuquy_silver_html,
     "giatieu_html": parse_giatieu_html,
+    "petrolimex_json": parse_petrolimex_json,
 }
 
 
@@ -162,7 +196,7 @@ class VnDomesticPriceSource(BaseSource):
             records.append(
                 attach_provenance(
                     record, payload, source_code=spec.source_code,
-                    origin=f"{spec.url}#{spec.product_key}", key=obs.isoformat(),
+                    origin=f"{_origin_url(spec.url)}#{spec.product_key}", key=obs.isoformat(),
                 )
             )
         return records

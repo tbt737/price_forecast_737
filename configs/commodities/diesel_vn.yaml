@@ -1,0 +1,55 @@
+commodity_code: "DIESEL_VN"
+commodity_name: "Diesel fuel (Vietnam retail)"
+commodity_group: "energy"
+base_unit: "litre"
+default_currency: "VND"
+
+market_instruments:
+  - { instrument_code: "PLX_DO_005S", exchange: "Petrolimex (domestic retail, Zone 1)", symbol: "DO_0.05S_II", description: "Dầu Điêzen DO 0,05S-II — Petrolimex retail sell price, Zone 1 (giá vùng 1), VNĐ/lít", contract_unit: "litre", currency: "VND" }
+  - { instrument_code: "PLX_DO_0001S", exchange: "Petrolimex (domestic retail, Zone 1)", symbol: "DO_0.001S_V", description: "Dầu Điêzen DO 0,001S-V (Euro 5) — Petrolimex retail sell price, Zone 1 (giá vùng 1), VNĐ/lít", contract_unit: "litre", currency: "VND" }
+
+weather_regions:
+  - { region_code: "GLOBAL_NA", name: "Not a price driver — refined fuel; weather has negligible direct price impact", country: "" }
+
+production_regions:
+  - { region_code: "VN", name: "Vietnam refineries (Nghi Sơn, Dung Quất — ~70% of domestic supply)", role: "production" }
+  - { region_code: "GLOBAL", name: "Singapore / regional refining hub (import supply, Platts MOPS pricing)", role: "production" }
+
+consumption_regions:
+  - { region_code: "VN", name: "Vietnam transport / logistics / agriculture / industry diesel demand", role: "consumption" }
+
+export_regions:
+  - { region_code: "GLOBAL", name: "Regional refined-product exporters (Singapore, Korea, China)", role: "export" }
+
+import_regions:
+  - { region_code: "VN", name: "Vietnam (net importer of refined diesel; quota-licensed importers)", role: "import" }
+
+physical_drivers:
+  - { metric_code: "mops_gasoil_usd", description: "Platts MOPS Singapore gasoil price — the formula input for the base price" }
+  - { metric_code: "world_crude_usd", description: "Brent/WTI crude price (upstream anchor of refined-product cracks)" }
+  - { metric_code: "domestic_refinery_supply", description: "Nghi Sơn / Dung Quất run rates and maintenance outages" }
+
+macro_drivers:
+  - { metric_code: "usd_vnd", description: "USD/VND exchange rate (import parity → VND retail base price)" }
+  - { metric_code: "fuel_tax_policy", description: "Environmental-protection tax, excise, VAT — large administered wedge in the retail price" }
+  - { metric_code: "stabilization_fund", description: "Bình ổn giá fund draw/contribution set at each adjustment period" }
+
+logistics_drivers:
+  - { metric_code: "import_freight", description: "Product-tanker freight + port costs into Vietnam" }
+  - { metric_code: "distribution_margin", description: "Regulated wholesale/retail margin (chi phí định mức, lợi nhuận định mức)" }
+
+event_risk_drivers:
+  - { metric_code: "admin_price_decision", description: "MoIT/MoF periodic price-adjustment decisions (điều hành giá ~weekly)" }
+  - { metric_code: "geopolitics_oil", description: "OPEC+ / geopolitical shocks moving crude and gasoil cracks" }
+  - { metric_code: "refinery_outage", description: "Unplanned domestic refinery shutdown tightening supply" }
+
+data_sources:
+  - { source_code: "PETROLIMEX", name: "Petrolimex public retail-price CMS API (portals.petrolimex.com.vn)", access: "public", url: "https://www.petrolimex.com.vn" }
+  - { source_code: "csv_import", name: "Adjustment-period history 2018-2026 (public fuel-price data API; forward-filled daily; cross-checked vs Petrolimex/MoIT)", access: "public", url: "https://cafef.vn/du-lieu/hang-hoa/gia-xang-dau.chn" }
+
+models:
+  - { model_code: "naive_rw", family: "baseline", horizon: "daily", description: "Random-walk baseline (best-of pool)" }
+  - { model_code: "ridge_ar", family: "scikit-learn", horizon: "daily", description: "Ridge autoregression on lagged domestic price" }
+  - { model_code: "xgb_gbm", family: "xgboost", horizon: "daily", description: "Gradient boosting once history accumulates" }
+
+notes: "Vietnam DOMESTIC retail diesel (Petrolimex-listed DO 0,05S-II and DO 0,001S-V, Zone 1 price) in VNĐ/lít — an ADMINISTERED price: the state (MoIT/MoF) resets it at periodic adjustment sessions (~weekly) from a formula on Platts MOPS gasoil × USD/VND plus taxes and the stabilization fund, so the daily series is a step function between adjustment days. Two feeds: (1) daily spot from the public Petrolimex CMS endpoint (today's listed price), and (2) a one-off CSV backfill derived from the adjustment-period history (DO 0,05S-II from 2018-08, DO 0,001S-V from 2024-09; forward-filled between kỳ điều hành, values verified against Petrolimex Zone 1 and MoIT announcements). Recorded value is the source-published Zone 1 sell price as-is (full VND per litre)."

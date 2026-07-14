@@ -14,6 +14,7 @@ from etl.ingestion.config import VnPriceSpec
 from etl.sources.market.vn_domestic import (
     VnDomesticPriceSource,
     parse_giatieu_html,
+    parse_petrolimex_json,
     parse_phuquy_silver_html,
     parse_pnj_json,
 )
@@ -22,10 +23,12 @@ _FIX = Path(__file__).resolve().parents[2] / "etl" / "tests" / "fixtures" / "vn"
 PNJ_JSON = (_FIX / "pnj_gold.json").read_text(encoding="utf-8")
 PHUQUY_HTML = (_FIX / "phuquy_silver.html").read_text(encoding="utf-8")
 GIATIEU_HTML = (_FIX / "giatieu_pepper.html").read_text(encoding="utf-8")
+PETROLIMEX_JSON = (_FIX / "petrolimex_prices.json").read_text(encoding="utf-8")
 
 GOLD_URL = "https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price"
 SILVER_URL = "https://giabac.phuquygroup.vn/PhuQuyPrice/SilverPricePartial"
 PEPPER_URL = "https://giatieu.com/gia-tieu-hom-nay/"
+FUEL_URL = "https://portals.petrolimex.com.vn/~apis/portals/cms.item/search?x-request=..."
 TODAY = date(2026, 6, 29)
 
 
@@ -79,6 +82,25 @@ def test_giatieu_html_real_fixture() -> None:
     assert parse_giatieu_html(GIATIEU_HTML, "Đắk Nông") == 141000.0
 
 
+# ── parser: Petrolimex retail fuel-board JSON ────────────────────────────────
+def test_petrolimex_json_exact_value_synthetic() -> None:
+    raw = (
+        '{"Objects":[{"Title":"DO 0,05S-II","EnglishTitle":"DO 0.05S-II",'
+        '"Zone1Price":21740,"Zone2Price":22170}]}'
+    )
+    assert parse_petrolimex_json(raw, "DO 0,05S-II") == 21740.0  # Zone 1, not Zone 2
+    assert parse_petrolimex_json(raw, "do 0,05s-ii") == 21740.0  # case-insensitive title
+    assert parse_petrolimex_json(raw, "DO 0.05S-II") == 21740.0  # EnglishTitle also matches
+    assert parse_petrolimex_json(raw, "DO 0,001S-V") is None  # absent product
+    assert parse_petrolimex_json('{"Objects":[{"Title":"X","Zone1Price":null}]}', "X") is None
+
+
+def test_petrolimex_json_real_fixture() -> None:
+    assert parse_petrolimex_json(PETROLIMEX_JSON, "DO 0,05S-II") == 21740.0
+    assert parse_petrolimex_json(PETROLIMEX_JSON, "DO 0,001S-V") == 23840.0
+    assert parse_petrolimex_json(PETROLIMEX_JSON, "KHÔNG TỒN TẠI") is None
+
+
 # ── connector: collect() with injected fetch ─────────────────────────────────
 def _specs() -> list[VnPriceSpec]:
     return [
@@ -123,6 +145,46 @@ def test_collect_is_fail_soft_on_fetch_error() -> None:
 def test_collect_skips_unknown_parser_format() -> None:
     bad = [VnPriceSpec("X_VN", "X", "PNJ", "no_such_format", GOLD_URL, "SJC", "VND", 0)]
     assert list(VnDomesticPriceSource(bad, today=TODAY, fetch=_fetch).collect()) == []
+
+
+def test_collect_diesel_zone1_prices() -> None:
+    specs = [
+        VnPriceSpec("DIESEL_VN", "PLX_DO_005S", "PETROLIMEX", "petrolimex_json", FUEL_URL, "DO 0,05S-II", "VND", 0),
+        VnPriceSpec("DIESEL_VN", "PLX_DO_0001S", "PETROLIMEX", "petrolimex_json", FUEL_URL, "DO 0,001S-V", "VND", 0),
+    ]
+    recs = list(VnDomesticPriceSource(specs, today=TODAY, fetch=lambda _u: PETROLIMEX_JSON).collect())
+    assert len(recs) == 2
+    by_inst = {r.instrument_code: r for r in recs}
+    assert by_inst["PLX_DO_005S"].value == 21740.0  # Zone 1 sell price, VNĐ/lít
+    assert by_inst["PLX_DO_0001S"].value == 23840.0
+    for r in recs:
+        assert r.commodity_code == "DIESEL_VN" and r.family == FactFamily.price_daily
+        assert r.currency == "VND" and r.observation_date == TODAY
+        assert r.data_source_code == "PETROLIMEX"
+
+
+def test_source_record_id_fits_provenance_column() -> None:
+    """A very long endpoint URL (e.g. a base64-encoded API query) must not blow the
+    200-char ``source_record_id`` column; short URLs keep the raw-URL format so
+    already-written record ids stay stable (idempotent re-runs)."""
+    long_url = FUEL_URL[:-3] + "x-request=" + "e" * 500
+    specs = [
+        VnPriceSpec("DIESEL_VN", "PLX_DO_005S", "PETROLIMEX", "petrolimex_json", long_url, "DO 0,05S-II", "VND", 0),
+        VnPriceSpec("GOLD_VN", "PNJ_SJC", "PNJ", "pnj_json", GOLD_URL, "SJC", "VND", 0),
+    ]
+
+    def fetch(url: str) -> str:
+        return PNJ_JSON if url == GOLD_URL else PETROLIMEX_JSON
+
+    recs = {r.instrument_code: r for r in VnDomesticPriceSource(specs, today=TODAY, fetch=fetch).collect()}
+    diesel_id, gold_id = recs["PLX_DO_005S"].source_record_id, recs["PNJ_SJC"].source_record_id
+    assert diesel_id is not None and len(diesel_id) <= 200
+    assert "sha256:" in diesel_id and long_url not in diesel_id
+    # deterministic: same spec ⇒ same id on every run
+    rerun = {r.instrument_code: r for r in VnDomesticPriceSource(specs, today=TODAY, fetch=fetch).collect()}
+    assert rerun["PLX_DO_005S"].source_record_id == diesel_id
+    # short URLs keep the legacy raw-URL origin format
+    assert gold_id == f"PNJ:{GOLD_URL}#SJC:{TODAY.isoformat()}"
 
 
 def test_collect_pepper_domestic_average() -> None:

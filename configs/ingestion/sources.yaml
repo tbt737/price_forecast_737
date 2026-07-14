@@ -131,6 +131,16 @@ vn_prices:
         url: "https://giabac.phuquygroup.vn/PhuQuyPrice/SilverPricePartial", product_key: "BẠC MIẾNG PHÚ QUÝ 999 1 LƯỢNG", currency: VND }
     - { commodity_code: PEPPER_VN, instrument_code: GIATIEU_TB, source_code: GIATIEU, parser: giatieu_html,
         url: "https://giatieu.com/gia-tieu-hom-nay/", product_key: "TRUNG_BINH", currency: VND }
+    # Petrolimex retail fuel board (administered price, VNĐ/lít, Zone 1). The CMS search
+    # API takes a base64 "x-request" query (filter = the published price items); the
+    # response is {"Objects":[{"Title","Zone1Price","Zone2Price",...}]} — product_key
+    # matches Title. Price steps only on MoIT adjustment days (~weekly).
+    - { commodity_code: DIESEL_VN, instrument_code: PLX_DO_005S, source_code: PETROLIMEX, parser: petrolimex_json,
+        url: "https://portals.petrolimex.com.vn/~apis/portals/cms.item/search?x-request=eyJGaWx0ZXJCeSI6eyJBbmQiOlt7IlN5c3RlbUlEIjp7IkVxdWFscyI6IjY3ODNkYzEyNzFmZjQ0OWU5NWI3NGE5NTIwOTY0MTY5In19LHsiUmVwb3NpdG9yeUlEIjp7IkVxdWFscyI6ImE5NTQ1MWUyM2I0NzRmZTU4ODZiZmI3Y2Y4NDNmNTNjIn19LHsiUmVwb3NpdG9yeUVudGl0eUlEIjp7IkVxdWFscyI6IjM4MDEzNzhmZTFlMDQ1YjFhZmExMGRlN2M1Nzc2MTI0In19LHsiU3RhdHVzIjp7IkVxdWFscyI6IlB1Ymxpc2hlZCJ9fV19LCJTb3J0QnkiOnsiTGFzdE1vZGlmaWVkIjoiRGVzY2VuZGluZyJ9LCJQYWdpbmF0aW9uIjp7IlRvdGFsUmVjb3JkcyI6LTEsIlRvdGFsUGFnZXMiOjAsIlBhZ2VTaXplIjowLCJQYWdlTnVtYmVyIjowfX0%3D",
+        product_key: "DO 0,05S-II", currency: VND }
+    - { commodity_code: DIESEL_VN, instrument_code: PLX_DO_0001S, source_code: PETROLIMEX, parser: petrolimex_json,
+        url: "https://portals.petrolimex.com.vn/~apis/portals/cms.item/search?x-request=eyJGaWx0ZXJCeSI6eyJBbmQiOlt7IlN5c3RlbUlEIjp7IkVxdWFscyI6IjY3ODNkYzEyNzFmZjQ0OWU5NWI3NGE5NTIwOTY0MTY5In19LHsiUmVwb3NpdG9yeUlEIjp7IkVxdWFscyI6ImE5NTQ1MWUyM2I0NzRmZTU4ODZiZmI3Y2Y4NDNmNTNjIn19LHsiUmVwb3NpdG9yeUVudGl0eUlEIjp7IkVxdWFscyI6IjM4MDEzNzhmZTFlMDQ1YjFhZmExMGRlN2M1Nzc2MTI0In19LHsiU3RhdHVzIjp7IkVxdWFscyI6IlB1Ymxpc2hlZCJ9fV19LCJTb3J0QnkiOnsiTGFzdE1vZGlmaWVkIjoiRGVzY2VuZGluZyJ9LCJQYWdpbmF0aW9uIjp7IlRvdGFsUmVjb3JkcyI6LTEsIlRvdGFsUGFnZXMiOjAsIlBhZ2VTaXplIjowLCJQYWdlTnVtYmVyIjowfX0%3D",
+        product_key: "DO 0,001S-V", currency: VND }
 
 vn_history:
   # Vietnam domestic HISTORICAL prices via a date-range API (VNAppMob). ADDITIVE — a new

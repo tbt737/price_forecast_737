@@ -176,6 +176,35 @@ imports:
     date_format: "%Y-%m-%d"
     aggregate: median
 
+  # ── Vietnam retail diesel backfill (DIESEL_VN) ──────────────────────────────
+  # Derived from the adjustment-period table pulled from a public fuel-price data
+  # API (data/raw/cafef_gasoline_periods.jsonl, one row per kỳ điều hành with
+  # provenance). Daily CSVs are a deterministic step-function forward-fill built by
+  # scripts/build_vn_diesel_backfill_csv.py. Values verified == Petrolimex Zone 1
+  # (giá vùng 1): 28/28 recent-period cross-checks vs giaxanghomnay exact, sample
+  # old periods (2022) match MoIT/press reports. Load BEFORE starting the daily
+  # PETROLIMEX connector writes (same grain; idempotent on conflict).
+  diesel_vn_do005s_history:
+    path: data/vn_diesel_do005s_daily.csv
+    commodity_code: DIESEL_VN
+    instrument_code: PLX_DO_005S
+    currency: VND
+    source_code: csv_import
+    value_column: price_vnd
+    date_column: date
+    date_format: "%Y-%m-%d"
+    aggregate: median # one row per day already; median is a no-op
+  diesel_vn_do0001s_history:
+    path: data/vn_diesel_do0001s_daily.csv
+    commodity_code: DIESEL_VN
+    instrument_code: PLX_DO_0001S
+    currency: VND
+    source_code: csv_import
+    value_column: price_vnd
+    date_column: date
+    date_format: "%Y-%m-%d"
+    aggregate: median
+
   # Indian coffee national median -> ROBUSTA (PROXY: India is ~70% robusta; this is
   # mandi coffee price, not ICE Robusta futures). 2001-2026, same stitch pattern.
   robusta_national_hist:
