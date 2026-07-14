@@ -229,7 +229,7 @@ monitoring:
     - name: vn_domestic
       critical: false
       max_gap_days: 4 # scraped spot; a dead PNJ/Phú Quý/VNAppMob endpoint is surfaced
-      commodities: [GOLD_VN, SILVER_VN]
+      commodities: [GOLD_VN, SILVER_VN, PEPPER_VN, DIESEL_VN]
     - name: vn_stocks
       critical: false
       max_gap_days: 5 # daily bars incl. long holiday weekends (Tết gaps stay WARNING-only)
