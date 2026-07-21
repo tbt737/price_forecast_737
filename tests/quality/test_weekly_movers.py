@@ -113,8 +113,11 @@ def test_notifier_telegram_send_uses_token_in_url_not_in_payload() -> None:
     env = {"TELEGRAM_BOT_TOKEN": "SECRET-TOKEN", "TELEGRAM_CHAT_ID": "42"}
     n = Notifier(AlertConfig(email_enabled=False), env=env,
                  telegram_post=lambda url, payload: calls.append((url, payload)))
-    delivered, failed = n.send("hello bulletin")
-    assert delivered == ["telegram"] and failed == []
+    delivered, failed, skipped = n.send("hello bulletin")
+    assert delivered == ["telegram"] and failed == [] and skipped == []
+    # plain-text delivery on purpose: no parse_mode ⇒ Telegram cannot interpret any
+    # asset name/HTML fragment as markup (content-escaping by construction)
+    assert "parse_mode" not in calls[0][1]
     (url, payload), = calls
     assert url == "https://api.telegram.org/botSECRET-TOKEN/sendMessage"
     assert payload == {"chat_id": "42", "text": "hello bulletin"}
@@ -155,8 +158,8 @@ _EMAIL_ENV = {
 def test_notifier_email_branch_sends_via_injected_smtp() -> None:
     _FakeSMTP.sent, _FakeSMTP.logins = [], []
     n = Notifier(AlertConfig(telegram_enabled=False), env=dict(_EMAIL_ENV), smtp_factory=_FakeSMTP)
-    delivered, failed = n.send("bulletin body")
-    assert delivered == ["email"] and failed == []
+    delivered, failed, skipped = n.send("bulletin body")
+    assert delivered == ["email"] and failed == [] and skipped == []
     assert len(_FakeSMTP.sent) == 1 and _FakeSMTP.logins == [("u", "SECRET-PW")]
     assert "SECRET-PW" not in str(_FakeSMTP.sent[0])  # password never in the message
 
@@ -173,7 +176,7 @@ def test_notifier_one_channel_failure_does_not_abort_the_other() -> None:
     _FakeSMTP.sent = []
     env = {"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_ID": "c", **_EMAIL_ENV}
     n = Notifier(AlertConfig(), env=env, telegram_post=boom, smtp_factory=_FakeSMTP)
-    delivered, failed = n.send("x")
+    delivered, failed, _skipped = n.send("x")
     assert failed == ["telegram"] and delivered == ["email"]  # email still went out
     assert len(_FakeSMTP.sent) == 1
 
@@ -297,6 +300,192 @@ def test_main_exit_codes(monkeypatch, capsys) -> None:
     assert "systemic" in out or "refusing" in out
 
 
+# ── freshness gate (trading-day aware) ───────────────────────────────────────
+def test_trading_days_weekend_boundary() -> None:
+    from datetime import date
+
+    from scripts.weekly_movers_alert import trading_days_between
+
+    fri, mon, thu = date(2026, 7, 17), date(2026, 7, 20), date(2026, 7, 23)
+    assert trading_days_between(fri, mon) == 1  # Fri→Mon = ONE trading day, not 3
+    assert trading_days_between(fri, thu) == 4
+    assert trading_days_between(mon, mon) == 0
+    assert trading_days_between(mon, fri) == 0  # end before start
+
+
+def test_apply_freshness_excludes_skewed_assets() -> None:
+    from datetime import date
+
+    from scripts.weekly_movers_alert import apply_freshness
+
+    cfg = AlertConfig(max_asset_skew_trading_days=5)
+    fresh_m = _mover("FRESH", 1.0, equity=False)
+    laggard = Mover(**{**fresh_m.__dict__, "commodity_code": "LAG", "last_date": "2026-07-01"})
+    fresh, stale, lag = apply_freshness([fresh_m, laggard], cfg, today=date(2026, 7, 22))
+    assert [m.commodity_code for m in fresh] == ["FRESH"]
+    assert [m.commodity_code for m in stale] == ["LAG"]  # 14 trading days behind ⇒ out
+    assert lag == 1  # freshest is 2026-07-21 (Tue), today Wed ⇒ 1 trading day
+
+
+def test_main_refuses_stale_global_data(monkeypatch, capsys) -> None:
+    import ml.forecast as mlf
+    import scripts.weekly_movers_alert as wm
+
+    session = _FakeSession([_FakeRow("EQ_VN", "equity")])
+    monkeypatch.setattr("app.db.session.get_session_factory", lambda: (lambda: session))
+
+    def stub(s, code, *, horizons):
+        out = _forecast_stub(+3.0)(s, code, horizons=horizons)
+        out["last_date"] = "2026-06-01"  # weeks-old data ⇒ ingest broken
+        return out
+
+    monkeypatch.setattr(mlf, "forecast_commodity", stub)
+    assert wm.main([]) == 1  # red even in dry-run — never a bulletin off dead data
+    assert "refusing to send" in capsys.readouterr().out
+
+
+# ── idempotency / delivery log ───────────────────────────────────────────────
+def _sqlite_session():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    return sessionmaker(bind=create_engine("sqlite://", future=True), future=True)()
+
+
+def test_period_key_stable_within_week_and_config_sensitive() -> None:
+    from scripts.weekly_movers_alert import period_key
+
+    cfg = AlertConfig()
+    mon = datetime(2026, 7, 27, 2, 5, tzinfo=UTC)  # Monday 09:05 ICT
+    fri = datetime(2026, 7, 31, 8, 0, tzinfo=UTC)  # same ISO week
+    next_mon = datetime(2026, 8, 3, 2, 5, tzinfo=UTC)
+    assert period_key(cfg, now_utc=mon) == period_key(cfg, now_utc=fri)  # rerun = same bulletin
+    assert period_key(cfg, now_utc=mon) != period_key(cfg, now_utc=next_mon)
+    assert "2026-W31" in period_key(cfg, now_utc=mon)
+    assert period_key(AlertConfig(horizon_days=90), now_utc=mon) != period_key(cfg, now_utc=mon)
+
+
+def test_delivery_log_claim_send_rerun_and_retry() -> None:
+    from scripts.weekly_movers_alert import DeliveryLog
+
+    s = _sqlite_session()
+    log = DeliveryLog(s)
+    log.ensure_table()
+    key, fp = "weekly-movers:2026-W31:abc", "deadbeef"
+
+    assert log.claim(key, "telegram", fp) is True  # first claim wins
+    log.mark(key, "telegram", fp, "delivered")
+    assert log.claim(key, "telegram", fp) is False  # delivered ⇒ NEVER again
+    assert log.status(key, "telegram", fp) == "delivered"
+
+    assert log.claim(key, "email", fp) is True  # channels are independent records
+    log.mark(key, "email", fp, "failed", "SMTPException")
+    assert log.status(key, "email", fp) == "failed"
+    assert log.claim(key, "email", fp) is True  # failed ⇒ per-channel retry allowed
+
+    assert log.claim(key, "sms", fp) is True  # pending (crashed in-flight)…
+    assert log.claim(key, "sms", fp) is False  # …is ambiguous ⇒ fail-closed skip
+    s.close()
+
+
+def test_delivery_log_insert_race_loser_does_not_send(monkeypatch) -> None:
+    # Two runs pass the status() pre-check simultaneously; the PK must make the
+    # loser's INSERT fail and claim() must answer False (kills the mutant that
+    # drops the IntegrityError catch — without it this raises instead).
+    from scripts.weekly_movers_alert import DeliveryLog
+
+    s = _sqlite_session()
+    winner, loser = DeliveryLog(s), DeliveryLog(s)
+    winner.ensure_table()
+    key, fp = "weekly-movers:2026-W31:race", "cafe1234"
+    assert winner.claim(key, "telegram", fp) is True
+    # simulate the race window: the loser's pre-check saw no row yet
+    monkeypatch.setattr(loser, "status", lambda *a: None)
+    assert loser.claim(key, "telegram", fp) is False  # PK collision ⇒ no send
+    s.close()
+
+
+def test_delivery_log_rearm_race_compare_and_set(monkeypatch) -> None:
+    # Both racers READ 'failed', but only the UPDATE that actually flips the row
+    # may claim — the loser's stale-read UPDATE matches 0 rows and must not send.
+    from scripts.weekly_movers_alert import DeliveryLog
+
+    s = _sqlite_session()
+    log = DeliveryLog(s)
+    log.ensure_table()
+    key, fp = "weekly-movers:2026-W31:cas", "beef5678"
+    assert log.claim(key, "telegram", fp) is True
+    log.mark(key, "telegram", fp, "failed", "boom")
+    racer = DeliveryLog(s)
+    monkeypatch.setattr(racer, "status", lambda *a: "failed")  # stale read
+    assert log.claim(key, "telegram", fp) is True  # winner re-arms (failed→pending)
+    assert racer.claim(key, "telegram", fp) is False  # CAS matches 0 rows ⇒ skip
+    s.close()
+
+
+def test_send_marks_pending_during_flight_not_delivered_early() -> None:
+    # Kills the "mark delivered before the send" mutant: AT TRANSPORT TIME the
+    # record must still read 'pending' — delivered is only written afterwards.
+    from scripts.weekly_movers_alert import DeliveryLog, period_key
+
+    s = _sqlite_session()
+    log = DeliveryLog(s)
+    log.ensure_table()
+    cfg = AlertConfig(email_enabled=False)
+    key = period_key(cfg, now_utc=datetime(2026, 7, 27, 2, 0, tzinfo=UTC))
+    env = {"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_ID": "42"}
+    seen: list[str | None] = []
+    n = Notifier(cfg, env=env)
+    n.telegram_post = lambda u, p: seen.append(log.status(key, "telegram", n.destination_fp("telegram")))
+    delivered, _, _ = n.send("x", log=log, key=key)
+    assert delivered == ["telegram"]
+    assert seen == ["pending"]  # in-flight state is pending, never delivered-early
+    assert log.status(key, "telegram", n.destination_fp("telegram")) == "delivered"
+    s.close()
+
+
+def test_period_key_sunday_ict_rolls_into_next_week() -> None:
+    from scripts.weekly_movers_alert import period_key
+
+    cfg = AlertConfig()
+    sun_evening = datetime(2026, 7, 26, 16, 30, tzinfo=UTC)  # Sunday 23:30 ICT
+    mon_morning = datetime(2026, 7, 27, 2, 0, tzinfo=UTC)  # Monday 09:00 ICT
+    assert period_key(cfg, now_utc=sun_evening) == period_key(cfg, now_utc=mon_morning)
+    assert "2026-W31" in period_key(cfg, now_utc=sun_evening)
+
+
+def test_send_with_log_dedupes_and_marks_correctly() -> None:
+    from scripts.weekly_movers_alert import DeliveryLog, period_key
+
+    s = _sqlite_session()
+    log = DeliveryLog(s)
+    log.ensure_table()
+    cfg = AlertConfig(email_enabled=False)
+    key = period_key(cfg, now_utc=datetime(2026, 7, 27, 2, 0, tzinfo=UTC))
+    env = {"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_ID": "42"}
+    calls: list[object] = []
+    n = Notifier(cfg, env=env, telegram_post=lambda u, p: calls.append(p))
+
+    d1 = n.send("bulletin", log=log, key=key)
+    assert d1 == (["telegram"], [], []) and len(calls) == 1
+    # rerun of the SAME period: mutant that drops dedupe would call the API again
+    d2 = n.send("bulletin", log=log, key=key)
+    assert d2 == ([], [], ["telegram"]) and len(calls) == 1  # exactly one message ever
+
+    # mutant "mark delivered too early": a FAILING send must record failed, not delivered
+    def boom(u: object, p: object) -> None:
+        raise RuntimeError("api down")
+
+    key2 = key + ":second"
+    n_fail = Notifier(cfg, env=env, telegram_post=boom)
+    assert n_fail.send("x", log=log, key=key2) == ([], ["telegram"], [])
+    assert log.status(key2, "telegram", n_fail.destination_fp("telegram")) == "failed"
+    # and the retry then succeeds on the same period key
+    assert n.send("x", log=log, key=key2) == (["telegram"], [], [])
+    assert log.status(key2, "telegram", n.destination_fp("telegram")) == "delivered"
+    s.close()
+
+
 # ── workflow contract (mirror of the repo's ingest-workflow pinning pattern) ──
 _WF = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "weekly-movers.yml"
 
@@ -306,6 +495,7 @@ def test_weekly_movers_workflow_contract() -> None:
     on = wf.get("on") or wf.get(True)  # PyYAML may parse bare `on:` as boolean True
     assert on["schedule"] == [{"cron": "0 2 * * 1"}]  # Monday 02:00 UTC = 09:00 ICT
     assert on["workflow_dispatch"]["inputs"]["dry_run"]["default"] is True  # manual = dry-run
+    assert wf.get("permissions") == {"contents": "read"}  # least privilege
     job = wf["jobs"]["alert"]
     assert job["timeout-minutes"] == 30
     steps = job["steps"]

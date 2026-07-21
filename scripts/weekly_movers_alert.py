@@ -24,7 +24,7 @@ import smtplib
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Any
@@ -55,6 +55,12 @@ class AlertConfig:
     email_enabled: bool = True
     timezone_note: str = "giờ Việt Nam (ICT)"
     disclaimer: str = "Dự báo thống kê trên chuỗi giá lịch sử — KHÔNG phải lời khuyên đầu tư."
+    # Freshness gate (trading days, NOT calendar days — weekends/holidays must not
+    # trip it): refuse to send when the freshest data lags "now" by more than
+    # max_lag_trading_days; exclude any asset whose own data lags the freshest
+    # asset by more than max_asset_skew_trading_days (mixed-as-of guard).
+    max_lag_trading_days: int = 3
+    max_asset_skew_trading_days: int = 5
 
 
 def load_alert_config(path: Path = CONFIG_PATH) -> AlertConfig:
@@ -72,6 +78,10 @@ def load_alert_config(path: Path = CONFIG_PATH) -> AlertConfig:
         email_enabled=bool((ch.get("email") or {}).get("enabled", True)),
         timezone_note=str(data.get("timezone_note", "giờ Việt Nam (ICT)")),
         disclaimer=str(data.get("disclaimer", AlertConfig.disclaimer)),
+        max_lag_trading_days=int((data.get("freshness") or {}).get("max_lag_trading_days", 3)),
+        max_asset_skew_trading_days=int(
+            (data.get("freshness") or {}).get("max_asset_skew_trading_days", 5)
+        ),
     )
 
 
@@ -131,14 +141,16 @@ TELEGRAM_LIMIT = 4096
 
 
 def format_message(sections: dict[str, list[Mover]], cfg: AlertConfig, *,
-                   generated_at_utc: datetime, scanned: int, unavailable: int) -> str:
+                   generated_at_utc: datetime, scanned: int, unavailable: int,
+                   stale: int = 0) -> str:
     """Plain-text weekly bulletin (Vietnamese). Hard-truncated under Telegram's 4096-char
     limit so a pure-YAML count increase can never turn delivery red."""
     ict = generated_at_utc + timedelta(hours=7)
     data_through = max((m.last_date for rows in sections.values() for m in rows), default="?")
+    stale_note = f", {stale} mã bị loại vì dữ liệu cũ" if stale else ""
     lines = [
         f"📊 BẢN TIN DỰ BÁO TUẦN — {ict.strftime('%d/%m/%Y %H:%M')} {cfg.timezone_note}",
-        f"(quét {scanned} mã, {unavailable} mã không dự báo được; chân trời "
+        f"(quét {scanned} mã, {unavailable} mã không dự báo được{stale_note}; chân trời "
         f"{cfg.horizon_days} phiên; dữ liệu đến {data_through})",
         "",
     ]
@@ -162,6 +174,156 @@ def format_message(sections: dict[str, list[Mover]], cfg: AlertConfig, *,
         tail = f"\n… (rút gọn vì vượt giới hạn tin nhắn)\n⚠️ {cfg.disclaimer}"
         message = message[: TELEGRAM_LIMIT - len(tail)] + tail
     return message
+
+
+# ── freshness (trading days, not calendar days) ──────────────────────────────
+def trading_days_between(start: date, end: date) -> int:
+    """Weekdays strictly after ``start`` up to and including ``end`` (0 if end<=start).
+    Weekend-aware so Friday→Monday is 1 trading day, never 3 stale days. (Exchange
+    holidays are counted as trading days — the gate is deliberately conservative:
+    a long holiday can only make it stricter, never let stale data through.)"""
+    if end <= start:
+        return 0
+    n, d = 0, start
+    while d < end:
+        d += timedelta(days=1)
+        if d.weekday() < 5:
+            n += 1
+    return n
+
+
+def apply_freshness(
+    movers: list[Mover], cfg: AlertConfig, *, today: date
+) -> tuple[list[Mover], list[Mover], int]:
+    """(fresh_movers, stale_skipped, global_lag_trading_days). Global staleness is
+    decided by the CALLER (refuse when lag > cfg.max_lag_trading_days); per-asset
+    skew is filtered here so one lagging feed cannot mix old as-of into the ranking."""
+    if not movers:
+        return [], [], 0
+    dates = [date.fromisoformat(m.last_date) for m in movers if m.last_date]
+    if not dates:  # engine-contract violation: no mover carries a data date
+        return [], list(movers), 999
+    latest = max(dates)
+    global_lag = trading_days_between(latest, today)
+    fresh, stale = [], []
+    for m in movers:
+        skew = trading_days_between(date.fromisoformat(m.last_date), latest) if m.last_date else 999
+        (fresh if skew <= cfg.max_asset_skew_trading_days else stale).append(m)
+    return fresh, stale, global_lag
+
+
+# ── idempotency / delivery record (isolated ops table; never touches market data) ──
+DELIVERY_DDL = """CREATE TABLE IF NOT EXISTS alert_delivery_log (
+    period_key     VARCHAR(80)  NOT NULL,
+    channel        VARCHAR(20)  NOT NULL,
+    destination_fp VARCHAR(16)  NOT NULL,
+    status         VARCHAR(12)  NOT NULL,
+    detail         VARCHAR(200),
+    created_at     TIMESTAMP    NOT NULL,
+    updated_at     TIMESTAMP    NOT NULL,
+    PRIMARY KEY (period_key, channel, destination_fp)
+)"""
+
+
+def _fp(value: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+
+def period_key(cfg: AlertConfig, *, now_utc: datetime) -> str:
+    """Stable per-bulletin-period key: ISO year+week (in ICT — the audience's week)
+    plus a config fingerprint. Reruns/retries of the same week share the key; a
+    config change (different bulletin) legitimately gets a new one. Never derived
+    from workflow_run_id (a rerun is a NEW run but the SAME bulletin)."""
+    ict = now_utc + timedelta(hours=7)
+    ict_date = ict.date()
+    if ict_date.weekday() == 6:  # Sunday ICT rolls FORWARD: the bulletin is a
+        ict_date += timedelta(days=1)  # Monday-anchored product — a Sunday-evening
+        # manual send belongs to the coming week, closing the Sun/Mon double-send window.
+    iso = ict_date.isocalendar()
+    cfg_fp = _fp(
+        f"{cfg.horizon_days}:{cfg.up_commodities}:{cfg.up_equities}"
+        f":{cfg.down_commodities}:{cfg.down_equities}"
+    )[:8]
+    return f"weekly-movers:{iso.year}-W{iso.week:02d}:{cfg_fp}"
+
+
+class DeliveryLog:
+    """Claim-first delivery record on the isolated ``alert_delivery_log`` table.
+
+    Rerun semantics (the anti-duplicate invariant):
+      * delivered → SKIP (a subscriber never gets the same weekly bulletin twice)
+      * pending   → SKIP + warn (a crashed in-flight send is ambiguous — the message
+                    may have reached the provider; a human decides, we never guess)
+      * failed    → RETRY (per-channel retry without re-sending the healthy channel)
+      * no row    → claim (INSERT pending); a concurrent claimer loses on the PK
+                    and is treated as SKIP — two near-simultaneous runs cannot both send.
+    Dry-runs never touch the table, so they cannot burn a live period key."""
+
+    def __init__(self, session: Any) -> None:
+        self._s = session
+
+    def ensure_table(self) -> None:
+        from sqlalchemy import text
+
+        self._s.execute(text(DELIVERY_DDL))
+        self._s.commit()
+
+    def status(self, key: str, channel: str, dest_fp: str) -> str | None:
+        from sqlalchemy import text
+
+        row = self._s.execute(
+            text("SELECT status FROM alert_delivery_log WHERE period_key = :k "
+                 "AND channel = :c AND destination_fp = :d"),
+            {"k": key, "c": channel, "d": dest_fp},
+        ).first()
+        return None if row is None else str(row[0])
+
+    def claim(self, key: str, channel: str, dest_fp: str) -> bool:
+        """True iff WE claimed it (row inserted as pending). A lost race or an
+        existing non-failed row means the caller must not send."""
+        from sqlalchemy import text
+        from sqlalchemy.exc import IntegrityError
+
+        existing = self.status(key, channel, dest_fp)
+        now = datetime.now(UTC).replace(tzinfo=None)
+        if existing == "failed":  # per-channel retry: re-arm via compare-and-set —
+            # two racers may both READ 'failed', but only the one whose UPDATE actually
+            # flips the row (rowcount 1) wins the claim; the loser must not send.
+            result = self._s.execute(
+                text("UPDATE alert_delivery_log SET status = 'pending', updated_at = :t "
+                     "WHERE period_key = :k AND channel = :c AND destination_fp = :d "
+                     "AND status = 'failed'"),
+                {"t": now, "k": key, "c": channel, "d": dest_fp},
+            )
+            self._s.commit()
+            return bool(getattr(result, "rowcount", 0) == 1)
+        if existing is not None:
+            return False  # delivered or pending ⇒ never double-send
+        try:
+            self._s.execute(
+                text("INSERT INTO alert_delivery_log "
+                     "(period_key, channel, destination_fp, status, detail, created_at, updated_at) "
+                     "VALUES (:k, :c, :d, 'pending', NULL, :t, :t)"),
+                {"k": key, "c": channel, "d": dest_fp, "t": now},
+            )
+            self._s.commit()
+            return True
+        except IntegrityError:  # concurrent run claimed first
+            self._s.rollback()
+            return False
+
+    def mark(self, key: str, channel: str, dest_fp: str, status: str, detail: str = "") -> None:
+        from sqlalchemy import text
+
+        self._s.execute(
+            text("UPDATE alert_delivery_log SET status = :s, detail = :dt, updated_at = :t "
+                 "WHERE period_key = :k AND channel = :c AND destination_fp = :d"),
+            {"s": status, "dt": detail[:200], "t": datetime.now(UTC).replace(tzinfo=None),
+             "k": key, "c": channel, "d": dest_fp},
+        )
+        self._s.commit()
 
 
 # ── delivery (credentials from env only; transports injectable for tests) ────
@@ -205,14 +367,32 @@ class Notifier:
             out.append("email")
         return out
 
-    def send(self, message: str) -> tuple[list[str], list[str]]:
+    def destination_fp(self, channel: str) -> str:
+        """Truncated hash of the destination — safe to store/log, never reversible."""
+        raw = self.env.get("TELEGRAM_CHAT_ID", "") if channel == "telegram" else self.env.get("ALERT_EMAIL_TO", "")
+        return _fp(raw)
+
+    def send(
+        self, message: str, *, log: DeliveryLog | None = None, key: str = ""
+    ) -> tuple[list[str], list[str], list[str]]:
         """Deliver to ALL usable channels independently — one channel failing must not
-        abort the others (dual-channel redundancy) and the partial-delivery record must
-        survive. Returns (delivered, failed) channel names; failures are reported by
-        exception CLASS only, so no credential can leak into logs."""
+        abort the others, and the partial-delivery record must survive. With a
+        DeliveryLog, each channel is CLAIMED before sending (rerun of the same period
+        skips already-delivered/in-flight channels and retries only failed ones).
+        Returns (delivered, failed, skipped); failures are reported by exception CLASS
+        only, so no credential can leak into logs."""
         delivered: list[str] = []
         failed: list[str] = []
+        skipped: list[str] = []
         for channel in self.usable_channels():
+            dest = self.destination_fp(channel)
+            if log is not None and not log.claim(key, channel, dest):
+                state = log.status(key, channel, dest) or "unknown"
+                print(f"[weekly-movers] {channel}: dedupe skip for {key} (record: {state}"
+                      + ("; a stuck 'pending' means a crashed in-flight send — see "
+                         "db/migrations/006 for the un-stick procedure)" if state == "pending" else ")"))
+                skipped.append(channel)
+                continue
             try:
                 if channel == "telegram":
                     token = self.env["TELEGRAM_BOT_TOKEN"]
@@ -231,10 +411,14 @@ class Notifier:
                         s.send_message(msg)
             except Exception as exc:  # noqa: BLE001 — isolate channels; class name only
                 print(f"[weekly-movers] channel {channel} FAILED: {type(exc).__name__}")
+                if log is not None:
+                    log.mark(key, channel, dest, "failed", type(exc).__name__)
                 failed.append(channel)
             else:
+                if log is not None:
+                    log.mark(key, channel, dest, "delivered")
                 delivered.append(channel)
-        return delivered, failed
+        return delivered, failed, skipped
 
 
 # ── compute (read-only against the platform DB) ──────────────────────────────
@@ -315,19 +499,38 @@ def main(argv: list[str] | None = None) -> int:
     if not movers:
         print(f"[weekly-movers] no forecastable assets (scanned={scanned}); refusing to send an empty bulletin")
         return 1
-    if scanned and unavailable / scanned > 0.5:
-        # More than half the universe failing to forecast is systemic (engine or data
+
+    # Freshness gate (trading-day aware): stale global data or a >50% failure/stale
+    # ratio means the bulletin would mislead — fail closed, red run, nothing sent.
+    now_utc = datetime.now(UTC)
+    today_ict = (now_utc + timedelta(hours=7)).date()
+    movers, stale_movers, global_lag = apply_freshness(movers, cfg, today=today_ict)
+    if global_lag > cfg.max_lag_trading_days:
+        print(f"[weekly-movers] freshest data lags {global_lag} trading days "
+              f"(> {cfg.max_lag_trading_days}) — ingest looks broken, refusing to send")
+        return 1
+    if stale_movers:
+        print("[weekly-movers] stale (excluded): "
+              + ", ".join(m.commodity_code for m in stale_movers))
+    if scanned and (unavailable + len(stale_movers)) / scanned > 0.5:
+        # More than half the universe failing/stale is systemic (engine or data
         # regression), not per-asset noise — refuse to publish a misleading ranking.
-        print(f"[weekly-movers] {unavailable}/{scanned} assets unforecastable — systemic failure, refusing to send")
+        print(f"[weekly-movers] {unavailable} unforecastable + {len(stale_movers)} stale "
+              f"of {scanned} — systemic failure, refusing to send")
+        return 1
+    if not movers:
+        print("[weekly-movers] all assets stale — refusing to send")
         return 1
 
     sections = rank_movers(movers, cfg)
     message = format_message(
-        sections, cfg, generated_at_utc=datetime.now(UTC), scanned=scanned, unavailable=unavailable
+        sections, cfg, generated_at_utc=now_utc, scanned=scanned,
+        unavailable=unavailable, stale=len(stale_movers),
     )
     print(message)
 
     if not args.send:
+        # Dry-run never touches the delivery log — it cannot burn a live period key.
         print("\n[weekly-movers] DRY-RUN — nothing sent (pass --send to deliver)")
         return 0
 
@@ -335,10 +538,24 @@ def main(argv: list[str] | None = None) -> int:
     if not notifier.usable_channels():
         print("[weekly-movers] --send but NO channel has complete credentials — failing closed")
         return 1
-    delivered, failed = notifier.send(message)
-    print(f"[weekly-movers] delivered via: {', '.join(delivered) or '(none)'}"
-          + (f" | FAILED: {', '.join(failed)}" if failed else ""))
-    return 1 if failed or not delivered else 0
+
+    key = period_key(cfg, now_utc=now_utc)
+    log_session = get_session_factory()()
+    try:
+        log = DeliveryLog(log_session)
+        log.ensure_table()
+        delivered, failed, skipped = notifier.send(message, log=log, key=key)
+    finally:
+        log_session.close()
+    print(f"[weekly-movers] {key} | delivered: {', '.join(delivered) or '(none)'}"
+          + (f" | FAILED: {', '.join(failed)}" if failed else "")
+          + (f" | deduped: {', '.join(skipped)}" if skipped else ""))
+    if failed:
+        return 1
+    if delivered:
+        return 0
+    # nothing delivered: pure dedupe rerun is SUCCESS; anything else is a failure
+    return 0 if skipped else 1
 
 
 if __name__ == "__main__":

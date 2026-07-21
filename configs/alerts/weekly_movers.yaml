@@ -22,6 +22,15 @@ channels:
   email: # needs ALERT_SMTP_HOST/PORT/USER/PASSWORD + ALERT_EMAIL_FROM/TO
     enabled: true
 
+# Freshness gate — TRADING days (weekend-aware; Friday data on Monday morning = 1
+# trading day, never 3 calendar days). Bulletin is refused (red run, nothing sent)
+# when the freshest asset lags now by more than max_lag_trading_days; an asset
+# lagging the freshest one by more than max_asset_skew_trading_days is excluded
+# and reported (mixed-as-of guard).
+freshness:
+  max_lag_trading_days: 3
+  max_asset_skew_trading_days: 5
+
 # Presentation
 timezone_note: "giờ Việt Nam (ICT)"
 disclaimer: "Dự báo thống kê trên chuỗi giá lịch sử — KHÔNG phải lời khuyên đầu tư."

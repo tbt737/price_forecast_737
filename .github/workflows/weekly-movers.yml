@@ -25,6 +25,9 @@ concurrency:
   group: weekly-movers
   cancel-in-progress: false
 
+permissions:
+  contents: read # least privilege — the job only checks out and reads
+
 jobs:
   alert:
     runs-on: ubuntu-latest
