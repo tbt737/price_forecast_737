@@ -73,6 +73,15 @@ Highest-value next actions, in order:
   cache revision-aware; backfill via provenance gate; MV refresh after ingest) →
   canary backfill 1–2 tickers → repeat canary (convergence/
   idempotency) → full 30-ticker backfill → row-count/dup/range/discontinuity checks →
+  **[2026-07-22] CANARY_PASS (FPT_VN + VCB_VN, prod):** reconcile run-1 appended
+  exactly the 2 missing sessions each (07-20, 07-21) at rev 0; run-2 converged
+  `fresh` with byte-identical store; deep re-backfill inserted 0/7,154 (idempotent);
+  blast radius clean (total 242,199 = baseline+4; 0 duplicate grains globally);
+  ML/API serve unique-date latest-revision series; scoped gates 64/64 + ruff/mypy
+  green; independently audited read-only → AUDIT_VERDICT: CANARY_CONFIRMED.
+  (Data reality: all 44 equity tickers already carry full history from owner
+  sessions 07-13→07-17; scheduled equity reconcile still OFF — equity tail was
+  3 sessions stale until this canary topped up FPT/VCB only.) →
   deploy API + smoke → deploy web + smoke `/stocks` → re-enable scheduled top-up
   (`ENABLE_VN_STOCKS_INGEST=true`) → watch ≥1 ingest cycle.
   ⚠ Interim side effects until deploy: the LIVE explorer (old web build) shows the 30
