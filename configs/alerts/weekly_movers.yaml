@@ -1,0 +1,27 @@
+# Weekly movers alert — config-over-code. The ranking script reads THIS file;
+# changing counts/horizon/channels never touches code. Sent Mondays 02:00 UTC
+# (= 09:00 Việt Nam) by .github/workflows/weekly-movers.yml.
+
+horizon_days: 30 # trading-day forecast horizon used for the expected-move ranking
+
+# How many assets per section. "commodities" = every non-equity commodity_group
+# (agriculture / metal / energy / logistics); "equities" = commodity_group == equity.
+top_up:
+  commodities: 5
+  equities: 5
+top_down:
+  commodities: 3
+  equities: 3
+
+# Delivery channels. Credentials come ONLY from environment secrets — never from
+# this file. A channel with incomplete credentials is skipped; --send with ZERO
+# usable channels exits non-zero (fail closed) so a mis-secreted cron turns red.
+channels:
+  telegram: # needs TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
+    enabled: true
+  email: # needs ALERT_SMTP_HOST/PORT/USER/PASSWORD + ALERT_EMAIL_FROM/TO
+    enabled: true
+
+# Presentation
+timezone_note: "giờ Việt Nam (ICT)"
+disclaimer: "Dự báo thống kê trên chuỗi giá lịch sử — KHÔNG phải lời khuyên đầu tư."

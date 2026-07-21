@@ -1,0 +1,59 @@
+name: Weekly movers alert
+
+# Ranks every forecastable asset by expected 30-session move and delivers the
+# weekly bulletin (top-up commodities/equities, top-down likewise) via Telegram
+# and/or email. Read-only against the DB. Config: configs/alerts/weekly_movers.yaml.
+#
+# Secrets needed (Settings → Secrets and variables → Actions):
+#   DATABASE_URL                          — Supabase Session-pooler URL (already exists)
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID  — for Telegram delivery, and/or
+#   ALERT_SMTP_HOST/PORT/USER/PASSWORD, ALERT_EMAIL_FROM/TO — for email delivery.
+# The script fails closed (exit 1 ⇒ RED run) when --send finds no usable channel,
+# so a missing/rotated secret is visible instead of silently printing to a log.
+
+on:
+  schedule:
+    - cron: "0 2 * * 1" # Monday 02:00 UTC = 09:00 Việt Nam (ICT)
+  workflow_dispatch: # manual runs are DRY-RUN unless dry_run is unchecked
+    inputs:
+      dry_run:
+        description: "Dry-run (print only, do not deliver)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: weekly-movers
+  cancel-in-progress: false
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      # This job's entire purpose is the notification — no continue-on-error:
+      # a compute or delivery failure must turn the run red. Scheduled runs always
+      # deliver; a manual dispatch delivers only when dry_run was unchecked.
+      - name: Compute ranking and send bulletin
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ALERT_SMTP_HOST: ${{ secrets.ALERT_SMTP_HOST }}
+          ALERT_SMTP_PORT: ${{ secrets.ALERT_SMTP_PORT }}
+          ALERT_SMTP_USER: ${{ secrets.ALERT_SMTP_USER }}
+          ALERT_SMTP_PASSWORD: ${{ secrets.ALERT_SMTP_PASSWORD }}
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.dry_run }}" = "false" ]; then
+            python scripts/weekly_movers_alert.py --send
+          else
+            python scripts/weekly_movers_alert.py
+          fi
