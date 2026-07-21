@@ -4,6 +4,26 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-07-22 WEEKLY-MOVERS-1 — WEEKLY_MOVERS_1_PASS (local commit da81691; push + secrets = owner)
+Shipped: weekly Monday-09:00-ICT bulletin (cron 0 2 * * 1) ranking every forecastable
+asset by expected 30-session move via the production forecaster (read-only): top 5/5 up
+(commodities/equities), 3/3 down — `configs/alerts/weekly_movers.yaml` +
+`scripts/weekly_movers_alert.py` (dry-run default, --send opt-in) +
+`.github/workflows/weekly-movers.yml` (no continue-on-error; manual dispatch = dry-run
+mặc định) + 17 offline tests (stubbed forecaster, exit codes, channel isolation,
+truncation, workflow contract). Notifier: Telegram + SMTP, env-secrets only, per-channel
+isolation, (delivered, failed) record; urllib GIỮ NGUYÊN (HTTPError không nhúng URL/token
+— requests thì có, đừng "hiện đại hóa"). Fail-closed: DBAPIError giữa scan abort loudly
+(không bao giờ gửi bản tin cụt gắn nhãn sai); >50% mã không dự báo được ⇒ từ chối gửi;
+--send không có kênh ⇒ exit 1. Smoke thật trên prod: 66 mã quét, 6 không dự báo được,
+bản tin thật in đúng (VIB +16.2% dẫn đầu equity). Suite 579→596 (+1 PG skip); tree bẩn
+là workstream 14-mã của owner — pack không đụng, chỉ 4 file mới.
+**Rules distilled:** (1) bare `except Exception` quanh vòng lặp DB biến sự cố hạ tầng
+thành "unavailable" và gửi báo cáo sai — luôn tách DBAPIError ra propagate. (2) Windows
+console cp1252 chết vì emoji — mọi script in tiếng Việt/emoji cần
+`sys.stdout.reconfigure(encoding="utf-8")`. (3) Manual workflow_dispatch phải dry-run
+mặc định khi hành động là gửi tin thật.
+
 ## 2026-07-11 RESTATE-1 + HOTFIX — RESTATE_1_PASS (prod API/web redeployed; VN30 data canary still gated)
 Shipped (commit `9f10657`): `etl/restatement.py` + `--reconcile` CLI (dry-run default,
 INV-7) + `vn_stocks.reconcile` YAML; single-basis latest-revision reads in
