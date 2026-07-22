@@ -454,6 +454,23 @@ def test_period_key_sunday_ict_rolls_into_next_week() -> None:
     assert "2026-W31" in period_key(cfg, now_utc=sun_evening)
 
 
+def test_period_key_sunday_rollover_year_boundaries() -> None:
+    # BUSINESS rule (not pure ISO): Sunday ICT belongs to the COMING Monday's bulletin.
+    # Year boundaries must follow the rolled date's ISO calendar exactly.
+    from scripts.weekly_movers_alert import period_key
+
+    cfg = AlertConfig()
+    # Sunday 2026-12-27 ICT → Monday 2026-12-28 = ISO 2026-W53
+    sun_w53 = datetime(2026, 12, 27, 15, 0, tzinfo=UTC)  # 22:00 ICT Sunday
+    assert "2026-W53" in period_key(cfg, now_utc=sun_w53)
+    # Sunday 2027-01-03 ICT → Monday 2027-01-04 = ISO 2027-W01
+    sun_w01 = datetime(2027, 1, 3, 15, 0, tzinfo=UTC)
+    assert "2027-W01" in period_key(cfg, now_utc=sun_w01)
+    # Sunday 2028-12-31 ICT → Monday 2029-01-01 = ISO 2029-W01 (year flips at the roll)
+    sun_ny = datetime(2028, 12, 31, 15, 0, tzinfo=UTC)
+    assert "2029-W01" in period_key(cfg, now_utc=sun_ny)
+
+
 def test_send_with_log_dedupes_and_marks_correctly() -> None:
     from scripts.weekly_movers_alert import DeliveryLog, period_key
 

@@ -14,11 +14,14 @@
 -- destination_fp is a truncated SHA-256 of the destination (chat id / email) —
 -- never the raw destination, so the table leaks nothing if dumped.
 
--- Un-stick procedure (crashed in-flight send left status='pending'): decide
--- whether the message actually reached subscribers, then either
+-- Un-stick procedure (crashed in-flight send left status='pending'):
+-- ⚠ MANDATORY: VERIFY THE REAL CHANNEL FIRST (open the Telegram chat / recipient
+-- mailbox and check whether that period's bulletin actually arrived). Only then:
 --   UPDATE alert_delivery_log SET status='delivered' ...  (it arrived), or
---   UPDATE alert_delivery_log SET status='failed'    ...  (re-arm for retry).
--- The script never guesses on 'pending' — it fails closed and skips.
+--   UPDATE alert_delivery_log SET status='failed'    ...  (confirmed absent ⇒ re-arm).
+-- NEVER re-arm blindly — a blind pending→failed flip converts the fail-closed skip
+-- into a possible duplicate send. The script itself never guesses on 'pending'.
+-- Full runbook: docs/alerts/weekly-movers-runbook.md
 
 CREATE TABLE IF NOT EXISTS alert_delivery_log (
     period_key     VARCHAR(80)  NOT NULL,
