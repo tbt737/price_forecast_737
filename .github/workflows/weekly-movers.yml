@@ -5,7 +5,10 @@ name: Weekly movers alert
 # and/or email. Read-only against the DB. Config: configs/alerts/weekly_movers.yaml.
 #
 # Secrets needed (Settings → Secrets and variables → Actions):
-#   DATABASE_URL                          — Supabase Session-pooler URL (already exists)
+#   WEEKLY_ALERT_DATABASE_URL — pooler URL for the LEAST-PRIVILEGE role
+#       weekly_alert_runner (migration 007): read-only forecast/price allowlist +
+#       delivery log via SECURITY DEFINER functions. This workflow deliberately
+#       does NOT use the owner-level DATABASE_URL secret.
 #   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID  — for Telegram delivery, and/or
 #   ALERT_SMTP_HOST/PORT/USER/PASSWORD, ALERT_EMAIL_FROM/TO — for email delivery.
 # The script fails closed (exit 1 ⇒ RED run) when --send finds no usable channel,
@@ -45,7 +48,7 @@ jobs:
       # deliver; a manual dispatch delivers only when dry_run was unchecked.
       - name: Compute ranking and send bulletin
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.WEEKLY_ALERT_DATABASE_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           ALERT_SMTP_HOST: ${{ secrets.ALERT_SMTP_HOST }}

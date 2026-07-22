@@ -522,5 +522,9 @@ def test_weekly_movers_workflow_contract() -> None:
     run = run_step["run"]
     assert "--send" in run and "github.event_name" in run  # scheduled path delivers
     env = run_step.get("env") or {}
-    assert "${{ secrets.DATABASE_URL }}" in env.get("DATABASE_URL", "")
+    # Least privilege (1D): the bulletin runs as weekly_alert_runner via its OWN
+    # secret — the owner-level DATABASE_URL secret must never be referenced here.
+    assert "${{ secrets.WEEKLY_ALERT_DATABASE_URL }}" in env.get("DATABASE_URL", "")
+    raw = _WF.read_text(encoding="utf-8")
+    assert "secrets.DATABASE_URL }}" not in raw  # owner credential fully absent
     assert "TELEGRAM_BOT_TOKEN" in env and "ALERT_SMTP_HOST" in env

@@ -264,15 +264,43 @@ class DeliveryLog:
     def __init__(self, session: Any) -> None:
         self._s = session
 
+    def _pg(self) -> bool:
+        """On PostgreSQL the runner has NO direct table rights — every access goes
+        through the SECURITY DEFINER functions of migration 007 (least privilege).
+        The direct-SQL path below exists for SQLite (offline tests) only."""
+        try:
+            return str(self._s.get_bind().dialect.name) == "postgresql"
+        except Exception:  # noqa: BLE001 — fakes in tests may lack get_bind
+            return False
+
     def ensure_table(self) -> None:
         from sqlalchemy import text
 
+        if self._pg():
+            # Probe the 007 interface instead of running DDL (the runner cannot and
+            # must not CREATE): a missing function is a clear, actionable failure.
+            try:
+                self._s.execute(text("SELECT alert_status('probe', 'telegram', 'probe')"))
+                self._s.rollback()
+            except Exception as exc:
+                self._s.rollback()
+                raise RuntimeError(
+                    "alert delivery interface missing — apply db/migrations/006 and 007"
+                ) from exc
+            return
         self._s.execute(text(DELIVERY_DDL))
         self._s.commit()
 
     def status(self, key: str, channel: str, dest_fp: str) -> str | None:
         from sqlalchemy import text
 
+        if self._pg():
+            row = self._s.execute(
+                text("SELECT alert_status(:k, :c, :d)"),
+                {"k": key, "c": channel, "d": dest_fp},
+            ).scalar_one_or_none()
+            self._s.rollback()
+            return None if row is None else str(row)
         row = self._s.execute(
             text("SELECT status FROM alert_delivery_log WHERE period_key = :k "
                  "AND channel = :c AND destination_fp = :d"),
@@ -285,6 +313,14 @@ class DeliveryLog:
         existing non-failed row means the caller must not send."""
         from sqlalchemy import text
         from sqlalchemy.exc import IntegrityError
+
+        if self._pg():  # atomic CAS + race-safe insert live INSIDE alert_claim()
+            claimed = bool(self._s.execute(
+                text("SELECT alert_claim(:k, :c, :d)"),
+                {"k": key, "c": channel, "d": dest_fp},
+            ).scalar_one())
+            self._s.commit()
+            return claimed
 
         existing = self.status(key, channel, dest_fp)
         now = datetime.now(UTC).replace(tzinfo=None)
@@ -317,6 +353,13 @@ class DeliveryLog:
     def mark(self, key: str, channel: str, dest_fp: str, status: str, detail: str = "") -> None:
         from sqlalchemy import text
 
+        if self._pg():  # only pending→delivered|failed exists server-side
+            self._s.execute(
+                text("SELECT alert_mark(:k, :c, :d, :s, :dt)"),
+                {"k": key, "c": channel, "d": dest_fp, "s": status, "dt": detail[:200]},
+            )
+            self._s.commit()
+            return
         self._s.execute(
             text("UPDATE alert_delivery_log SET status = :s, detail = :dt, updated_at = :t "
                  "WHERE period_key = :k AND channel = :c AND destination_fp = :d"),
