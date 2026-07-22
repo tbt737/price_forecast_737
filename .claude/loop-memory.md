@@ -4,6 +4,25 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-07-22 EMAIL-ACTIVATION — WEEKLY_MOVERS_EMAIL_ACTIVATION_PASS (kênh email LIVE)
+E1-E7 hoàn tất trên SHA 18099c3: contract email xác minh từ code (6 secrets ALERT_*,
+STARTTLS-only 587, plain-text, fingerprint-grain); vá header-injection guard + test
+(suite 608). Sự cố thật đã tôi luyện hệ thống: (a) owner ghi đè nhầm
+WEEKLY_ALERT_DATABASE_URL khi tạo secrets UI → run chết 'Could not parse URL' → chẩn
+đoán qua updated_at timestamps → rotate password + re-set secret (probe-connect trước
+khi lưu); (b) SMTPAuthenticationError (password thường thay vì App Password) → record
+'failed' đúng thiết kế → owner sửa secret → rerun CAS re-arm CHÍNH record cũ → delivered
+(created_at giữ nguyên = không duplicate). Dedupe rerun cùng kỳ: 'dedupe skip (record:
+delivered)', 0 SMTP refs, DB bất biến từng micro-giây timestamp, owner xác nhận đúng 1
+email. Bản tin W30 thật: 66 quét/6 unavailable/19 stale; hàng hóa tăng chỉ 2 mã (không
+độn — by design, đã giải thích owner). Runs: dry 29921260094, live-fail 29921607786,
+live-ok 29924159105, dedupe 29926350534.
+**Rules distilled:** (1) Secret bị ghi đè nhầm chẩn đoán nhanh nhất bằng updated_at
+trong API listing. (2) Luôn probe-connect credential TRƯỚC khi gh secret set — đừng lưu
+URL chưa thử. (3) Sự cố SMTP auth thật là bài test miễn phí cho failed→CAS-re-arm→
+delivered: một record duy nhất xuyên suốt fail/fix/retry là bằng chứng mạnh nhất của
+idempotency grain.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
