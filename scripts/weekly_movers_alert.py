@@ -444,10 +444,16 @@ class Notifier:
                         {"chat_id": self.env["TELEGRAM_CHAT_ID"], "text": message},
                     )
                 elif channel == "email":
+                    sender = self.env["ALERT_EMAIL_FROM"]
+                    recipient = self.env["ALERT_EMAIL_TO"]
+                    # header-injection guard: a mis-pasted secret must never smuggle
+                    # extra headers (Bcc:, etc.) via embedded line breaks
+                    if any(c in v for v in (sender, recipient) for c in "\r\n"):
+                        raise ValueError("email address contains a line break")
                     msg = MIMEText(message, _charset="utf-8")
                     msg["Subject"] = "Bản tin dự báo tuần — Multi-Commodity Quant Forecasting"
-                    msg["From"] = self.env["ALERT_EMAIL_FROM"]
-                    msg["To"] = self.env["ALERT_EMAIL_TO"]
+                    msg["From"] = sender
+                    msg["To"] = recipient
                     with self.smtp_factory(self.env["ALERT_SMTP_HOST"], int(self.env["ALERT_SMTP_PORT"])) as s:
                         s.starttls()
                         s.login(self.env["ALERT_SMTP_USER"], self.env["ALERT_SMTP_PASSWORD"])

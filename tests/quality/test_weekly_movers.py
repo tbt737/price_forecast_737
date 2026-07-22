@@ -169,6 +169,17 @@ def test_notifier_email_disabled_is_skipped_even_with_credentials() -> None:
     assert n.usable_channels() == []
 
 
+def test_notifier_email_header_injection_is_refused() -> None:
+    # A recipient secret with an embedded newline ("...\nBcc: evil@x") must be
+    # refused BEFORE any SMTP contact — status failed, nothing sent, no leak.
+    _FakeSMTP.sent = []
+    env = dict(_EMAIL_ENV, ALERT_EMAIL_TO="owner@example.com\nBcc: evil@attacker.example")
+    n = Notifier(AlertConfig(telegram_enabled=False), env=env, smtp_factory=_FakeSMTP)
+    delivered, failed, skipped = n.send("bulletin")
+    assert delivered == [] and failed == ["email"] and skipped == []
+    assert _FakeSMTP.sent == []  # SMTP never touched
+
+
 def test_notifier_one_channel_failure_does_not_abort_the_other() -> None:
     def boom(url: str, payload: dict[str, str]) -> None:
         raise RuntimeError("telegram down")

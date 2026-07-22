@@ -48,8 +48,10 @@ Mỗi (kỳ, kênh, destination-fingerprint) có một record: `pending` → `de
 - Telegram (kích hoạt trước): `TELEGRAM_BOT_TOKEN` (@BotFather → /newbot),
   `TELEGRAM_CHAT_ID` (nhắn bot 1 tin rồi lấy `chat.id` từ `getUpdates`). Bot PHẢI được
   người dùng nhắn trước thì mới gửi chủ động được. Destination thử nghiệm = chat riêng.
-- Email (sau khi Telegram ổn): `ALERT_SMTP_HOST/PORT/USER/PASSWORD`,
-  `ALERT_EMAIL_FROM/TO` (Gmail dùng App Password).
+- Email: `ALERT_SMTP_HOST/PORT/USER/PASSWORD`, `ALERT_EMAIL_FROM/TO` (Gmail dùng App
+  Password). **STARTTLS-only** — dùng port 587; KHÔNG dùng port 465 (implicit TLS,
+  không hỗ trợ). `ALERT_EMAIL_TO` có thể là danh sách phẩy, nhưng fingerprint tính
+  trên nguyên chuỗi — đổi danh sách ⇒ kỳ đó được coi là destination mới (gửi lại).
 - Thiếu kênh hoàn chỉnh ⇒ run scheduled ĐỎ có chủ đích (fail-closed, không im lặng).
 
 ## 5. Live smoke lần đầu (sau khi 006 đã áp lên prod — xem §6)
