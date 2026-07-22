@@ -45,9 +45,10 @@ BEGIN
             WHERE schemaname = 'public' AND tablename = t
               AND policyname = 'weekly_alert_read'
         ) THEN
-            EXECUTE format(
-                'CREATE POLICY weekly_alert_read ON public.%I FOR SELECT
-                 TO weekly_alert_runner USING (true)', t);
+            -- string concat + quote_ident (no '%' characters: some drivers'
+            -- client-side parameter parsers choke on format()'s %I in DO blocks)
+            EXECUTE 'CREATE POLICY weekly_alert_read ON public.' || quote_ident(t)
+                 || ' FOR SELECT TO weekly_alert_runner USING (true)';
         END IF;
     END LOOP;
 END $$;
@@ -64,7 +65,7 @@ CREATE OR REPLACE FUNCTION public.alert_claim(
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 BEGIN
     IF p_channel NOT IN ('telegram', 'email') THEN
-        RAISE EXCEPTION 'invalid channel %', p_channel;
+        RAISE EXCEPTION 'invalid channel';
     END IF;
     UPDATE alert_delivery_log
        SET status = 'pending', updated_at = now()
@@ -92,7 +93,7 @@ CREATE OR REPLACE FUNCTION public.alert_mark(
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 BEGIN
     IF p_status NOT IN ('delivered', 'failed') THEN
-        RAISE EXCEPTION 'invalid status %', p_status;
+        RAISE EXCEPTION 'invalid status';
     END IF;
     UPDATE alert_delivery_log
        SET status = p_status, detail = left(p_detail, 200), updated_at = now()
