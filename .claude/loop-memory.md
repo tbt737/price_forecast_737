@@ -4,6 +4,26 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-07-22 WEEKLY-MOVERS-1B + ACTIVATION — PUSHED_PENDING_CHANNEL_CONFIG (3f7a56a pushed)
+1B shipped: idempotency (bảng ops cô lập `alert_delivery_log`, migration 006 RLS-enabled,
+claim-first theo `period_key` ISO-week ICT + config-fp + destination-fp; delivered=never
+resend, pending=fail-closed skip + un-stick doc, failed=retry qua compare-and-set race-safe;
+Sunday-ICT rolls vào tuần tới; dry-run không đụng bảng) + freshness gate (trading-day aware:
+global lag >3 ⇒ refuse; per-asset skew >5 ⇒ loại + hiển thị; unavailable+stale >50% ⇒ refuse)
++ `permissions: contents: read`. Review độc lập bắt MAJOR CAS-race thật (UPDATE re-arm thiếu
+`AND status='failed'`) + 2 mutant sống → đã vá + test race/CAS/pending-in-flight. Suite
+**606+1skip** (27 test pack). Push `9247157..3f7a56a` (đúng 4 commit đã duyệt, không lẫn
+workstream 14-mã). Dispatch dry-run trên Actions: run #1 id 29874353020, SHA 3f7a56a,
+SUCCESS 4m03s (compute 3m28s ≈ full 66-mã scan); GREEN + zero channel secrets ⇒ chứng minh
+logic đường dry-run (send-no-channel tất yếu exit 1 đỏ). Secrets: chỉ DATABASE_URL —
+**chưa có kênh** ⇒ chưa live-send. Freshness gate lập tức chặn CHINESE_GARLIC (stale) khỏi
+bản tin — mã từng top GIẢM −11.1% trên dữ liệu cũ.
+**Rules distilled:** (1) UPDATE re-arm trạng thái phải compare-and-set (`AND status=cũ` +
+rowcount) — pre-check status() không race-safe. (2) Actions log viewer ảo hóa chống
+get_page_text; logs API cần admin — thiết kế bằng chứng CI theo exit-code semantics được
+test ghim thay vì trông vào đọc log. (3) Bảng public mới sau 004 phải ENABLE RLS trong
+migration (script CREATE IF NOT EXISTS portable không làm được).
+
 ## 2026-07-22 WEEKLY-MOVERS-1 — WEEKLY_MOVERS_1_PASS (local commit da81691; push + secrets = owner)
 Shipped: weekly Monday-09:00-ICT bulletin (cron 0 2 * * 1) ranking every forecastable
 asset by expected 30-session move via the production forecaster (read-only): top 5/5 up
