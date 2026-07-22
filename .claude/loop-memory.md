@@ -4,6 +4,25 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
+Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
++ migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
+dim_market_instrument, fact_price_daily qua RLS policy + mv_wide grant); delivery log CHỈ
+qua 3 SECURITY DEFINER functions (search_path pinned, PUBLIC revoked, CAS server-side,
+delivered immutable, pending không re-arm, PK bất khả xâm phạm). DeliveryLog dual-path
+(PG=functions / SQLite=SQL test). Workflow đổi secret `WEEKLY_ALERT_DATABASE_URL`
+(contract test pin owner-secret vắng mặt). Auditor độc lập KẾT NỐI BẰNG RUNNER: 14/14 PASS
+(anon/authenticated denied; DDL/DELETE denied; race 1-winner; rollback sạch; hijack fail).
+Credential runner: file `d:\Downloads\cqp-prod-snapshots\WEEKLY_ALERT_DATABASE_URL.txt`
+— owner tự dán vào GitHub secret (Claude bị cấm nhập secret vào form). Chờ owner:
+WEEKLY_ALERT_DATABASE_URL + TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID → rồi Pack F/G
+(dry-run Actions bằng role mới, live smoke 1 lần + rerun dedupe).
+**Rules distilled:** (1) psycopg3 parse `%I` trong DO-block như placeholder — migration
+dùng quote_ident||concat, không dùng format('%I'); apply qua raw cursor không params.
+(2) 004 deny-by-default nghĩa là GRANT SELECT chưa đủ cho role thường — cần RLS policy
+FOR SELECT đích danh. (3) Bảng do table-swap tạo lại sẽ mất grant — kiểm tra vòng đời
+relation trước khi cấp quyền (ở đây builder mới hard-refuse đụng tên prod nên grant bền).
+
 ## 2026-07-22 WEEKLY-MOVERS-1B + ACTIVATION — PUSHED_PENDING_CHANNEL_CONFIG (3f7a56a pushed)
 1B shipped: idempotency (bảng ops cô lập `alert_delivery_log`, migration 006 RLS-enabled,
 claim-first theo `period_key` ISO-week ICT + config-fp + destination-fp; delivered=never
