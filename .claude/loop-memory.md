@@ -4,6 +4,28 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-07 WEEKLY-MOVERS-TESTFIX-1 — WEEKLY_MOVERS_TESTFIX_1_PASS
+Scheduled autonomous review found `tests/quality/test_weekly_movers.py::test_main_exit_codes`
+red on a clean baseline (ruff/mypy/compileall all clean). Root cause: the offline stub's
+`last_date: "2026-07-21"` is fixed, but `wm.main()` compares it against the REAL wall clock
+(`datetime.now(UTC)`) via the freshness gate — as real time passed the 16 days since the
+fixture was authored, trading-day lag grew past `max_lag_trading_days=3` and the (correct,
+fail-closed) freshness gate started refusing to send, failing the assertion. Not a production
+bug — the gate did exactly what WEEKLY-MOVERS-1B designed it to do; the *test* had no time
+control. Fix (`tests/quality/test_weekly_movers.py` only): monkeypatch `wm.datetime` with a
+`_FixedDatetime.now()` frozen at 2026-07-22 12:00 (1 trading day after the stub's last_date,
+matching the sibling `test_apply_freshness_excludes_skewed_assets` fixture) for the duration
+of the test, so all three `wm.main()` calls exercise the intended branch (fresh/channel-fail/
+systemic-unavailable) instead of accidentally short-circuiting on gate drift. Confirmed the
+other 9 production modules that call `datetime.now(UTC)`/`date.today()` have no test invoking
+them un-mocked with a hardcoded near-`now` fixture — this was an isolated instance, not a
+repo-wide pattern; no further changes made. Gates: pytest 588 passed + 1 skipped (was 587
+passed + 1 failed + 1 skipped) · ruff 0 · mypy 0 (28+34) · workflows OK · apps/web untouched.
+**Rule distilled:** any test that calls a production entrypoint using real wall-clock time
+(`datetime.now()`/`date.today()`) against a hardcoded fixture date must freeze "now" via
+monkeypatch — otherwise the test is a time bomb that goes red purely from calendar drift,
+independent of any code change.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,

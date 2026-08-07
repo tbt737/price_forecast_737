@@ -296,6 +296,16 @@ def test_main_exit_codes(monkeypatch, capsys) -> None:
     # main() imports get_session_factory at call time — patch the source module
     monkeypatch.setattr("app.db.session.get_session_factory", lambda: (lambda: session))
 
+    # Freeze "now" next to the stubbed last_date (2026-07-21, a Tue) so the
+    # freshness gate (real wall-clock otherwise) doesn't drift stale as real
+    # time passes — it must fire only on the explicit stale-forecast case below.
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # noqa: D102 - trivial override
+            return datetime(2026, 7, 22, 12, 0, tzinfo=tz)
+
+    monkeypatch.setattr(wm, "datetime", _FixedDatetime)
+
     # dry-run with data ⇒ 0
     monkeypatch.setattr(mlf, "forecast_commodity", _forecast_stub(+3.0))
     assert wm.main([]) == 0
