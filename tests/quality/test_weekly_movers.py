@@ -296,6 +296,17 @@ def test_main_exit_codes(monkeypatch, capsys) -> None:
     # main() imports get_session_factory at call time — patch the source module
     monkeypatch.setattr("app.db.session.get_session_factory", lambda: (lambda: session))
 
+    # main()'s freshness gate compares the stub's fixed last_date ("2026-07-21")
+    # against the REAL wall clock (datetime.now(UTC)) — freeze it here so this test
+    # stays deterministic instead of silently going stale (and red) a few trading
+    # days after 2026-07-21, same as test_apply_freshness_excludes_skewed_assets.
+    class _FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 7, 22, 8, 0, tzinfo=tz)
+
+    monkeypatch.setattr(wm, "datetime", _FrozenDatetime)
+
     # dry-run with data ⇒ 0
     monkeypatch.setattr(mlf, "forecast_commodity", _forecast_stub(+3.0))
     assert wm.main([]) == 0
