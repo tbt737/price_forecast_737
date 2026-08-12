@@ -95,6 +95,10 @@ export interface ProviderRequest {
 
 const MAX_TOKENS = 1024;
 
+function assertNever(x: never): never {
+  throw new Error(`Unhandled provider kind: ${String(x)}`);
+}
+
 /** Build the provider-specific HTTP request for a normalised thread. */
 export function buildProviderRequest(
   provider: Provider,
@@ -106,44 +110,46 @@ export function buildProviderRequest(
   const info = BY_ID.get(provider);
   if (!info) throw new Error(`Unknown provider: ${provider}`);
 
-  if (info.kind === "claude") {
-    return {
-      url: "https://api.anthropic.com/v1/messages",
-      init: {
-        method: "POST",
-        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model, max_tokens: MAX_TOKENS, ...(system ? { system } : {}), messages }),
-      },
-    };
+  switch (info.kind) {
+    case "claude":
+      return {
+        url: "https://api.anthropic.com/v1/messages",
+        init: {
+          method: "POST",
+          headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+          body: JSON.stringify({ model, max_tokens: MAX_TOKENS, ...(system ? { system } : {}), messages }),
+        },
+      };
+    case "gemini": {
+      const contents = messages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
+      return {
+        url:
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}` +
+          `:generateContent?key=${encodeURIComponent(apiKey)}`,
+        init: {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents }),
+        },
+      };
+    }
+    case "openai": {
+      const msgs = system ? [{ role: "system", content: system }, ...messages] : messages;
+      return {
+        url: info.baseUrl as string,
+        init: {
+          method: "POST",
+          headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+          body: JSON.stringify({ model, messages: msgs, max_tokens: MAX_TOKENS }),
+        },
+      };
+    }
+    default:
+      return assertNever(info.kind);
   }
-
-  if (info.kind === "gemini") {
-    const contents = messages.map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    }));
-    return {
-      url:
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}` +
-        `:generateContent?key=${encodeURIComponent(apiKey)}`,
-      init: {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), contents }),
-      },
-    };
-  }
-
-  // OpenAI-compatible (OpenAI, Grok, Groq, OpenRouter, DeepSeek)
-  const msgs = system ? [{ role: "system", content: system }, ...messages] : messages;
-  return {
-    url: info.baseUrl as string,
-    init: {
-      method: "POST",
-      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify({ model, messages: msgs, max_tokens: MAX_TOKENS }),
-    },
-  };
 }
 
 interface ClaudeResp {
@@ -162,9 +168,17 @@ interface ErrResp {
 
 export function extractReply(provider: Provider, data: unknown): string | null {
   const kind = BY_ID.get(provider)?.kind;
-  if (kind === "claude") return (data as ClaudeResp).content?.[0]?.text ?? null;
-  if (kind === "gemini") return (data as GeminiResp).candidates?.[0]?.content?.parts?.[0]?.text ?? null;
-  return (data as OpenAIResp).choices?.[0]?.message?.content ?? null;
+  if (!kind) return null;
+  switch (kind) {
+    case "claude":
+      return (data as ClaudeResp).content?.[0]?.text ?? null;
+    case "gemini":
+      return (data as GeminiResp).candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+    case "openai":
+      return (data as OpenAIResp).choices?.[0]?.message?.content ?? null;
+    default:
+      return assertNever(kind);
+  }
 }
 
 export function extractError(data: unknown): string | null {

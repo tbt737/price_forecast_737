@@ -1,8 +1,7 @@
 # ──────────────────────────────────────────────────────────────────────────────
-# Local development stack. Phase 1 ships only PostgreSQL; the api/web services
-# are added in later phases (see ARCHITECTURE.md). Environment values are read
-# from `.env` (copy from `.env.example`); defaults below keep `up` working even
-# before `.env` is filled in. NEVER put real secrets in this file.
+# Local development stack: PostgreSQL, FastAPI, and Next.js. Environment values
+# are read from `.env` (copy from `.env.example`); defaults below keep `up`
+# working even before `.env` is filled in. NEVER put real secrets in this file.
 # ──────────────────────────────────────────────────────────────────────────────
 
 services:
