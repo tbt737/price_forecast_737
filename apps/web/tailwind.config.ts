@@ -26,6 +26,8 @@ const config: Config = {
         "sector-agriculture": "var(--sector-agriculture)",
         "sector-energy": "var(--sector-energy)",
         "sector-metal": "var(--sector-metal)",
+        "sector-equity": "var(--sector-equity)",
+        "sector-logistics": "var(--sector-logistics)",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],

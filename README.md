@@ -5,10 +5,11 @@ A **generic, configuration-driven** AI platform for forecasting commodity prices
 New assets are onboarded by adding a YAML profile — **never** by hardcoding business logic.
 
 > **Project status: Phase 10 — Productionization & UI (live).** See `PLAN.md` for the
-> authoritative snapshot (51 profiles / 98 instruments, Cloud Run + Supabase).
+> authoritative snapshot (52 profiles / 100 instruments, Cloud Run + Supabase).
 > Companion docs: `ARCHITECTURE.md` (design), `DEPLOY.md` (hosting), `CLAUDE.md` (agent rules).
 >
-> This README may lag on inventory counts — prefer `PLAN.md` §2.
+> This README may lag on inventory counts — prefer `PLAN.md` §2 and the pin in
+> `tests/quality/test_profiles_quality.py`.
 
 ---
 
@@ -39,7 +40,7 @@ engine forecasts robusta coffee and gold because both are just *instruments + re
 ├── README.md            # This file
 ├── .env.example         # Blank environment template (copy to .env)
 ├── Makefile             # Standard developer commands
-├── docker-compose.yml   # Local PostgreSQL
+├── docker-compose.yml   # Local PostgreSQL + API + Next.js
 ├── apps/
 │   ├── api/             # FastAPI service (Phase 8)
 │   └── web/             # Next.js frontend (Phase 9)
@@ -58,7 +59,7 @@ engine forecasts robusta coffee and gold because both are just *instruments + re
 │   ├── backtests/       # Walk-forward backtesting
 │   ├── registry/        # Versioned model metadata
 │   └── tests/
-├── configs/commodities/ # 16 YAML commodity profiles (source of truth)
+├── configs/commodities/ # YAML commodity + equity profiles (source of truth; count pinned by tests)
 ├── data/{raw,processed,exports}/   # Local data artifacts (gitignored)
 ├── infra/{docker,github-actions,deployment}/
 └── tests/{integration,quality}/
@@ -88,7 +89,7 @@ docker compose up -d        # Starts Postgres, API, and Next.js Dashboard
 make lint                   # ruff
 make typecheck              # mypy
 make test                   # pytest
-make quality                # compileall + ruff + mypy + pytest + workflow check
+make quality                # compileall + ruff + mypy + pytest + workflow + whitespace
 ```
 
 ## Commodity profiles
@@ -96,7 +97,7 @@ make quality                # compileall + ruff + mypy + pytest + workflow check
 Profiles live in `configs/commodities/` (agriculture, metals, energy, logistics,
 Vietnam domestic, and VN30 equities). Count is pinned by
 `tests/quality/test_profiles_quality.py` and reported in `PLAN.md` §2 — currently
-**51** (21 commodities + 30 equities). Each profile follows the schema in
+**52** (22 commodities + 30 equities). Each profile follows the schema in
 `ARCHITECTURE.md` / `CLAUDE.md`.
 
 ## Contributing / agent sessions

@@ -20,6 +20,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -39,6 +41,11 @@ jobs:
         run: python -m pytest
       - name: Workflow YAML static check
         run: python scripts/ci_check_workflows.py
+      - name: Trailing whitespace (git diff --check)
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+        run: python scripts/ci_check_whitespace.py
 
   web:
     name: Web (lint + test + build)
@@ -60,7 +67,7 @@ jobs:
         run: npm run typecheck
       - name: Test (vitest)
         run: npm test
-      - name: Lint (next lint)
+      - name: Lint (eslint)
         run: npm run lint
       - name: Build (next build)
         run: npm run build

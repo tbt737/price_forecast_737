@@ -12,6 +12,7 @@ const SECTORS: Record<string, SectorMeta> = {
   energy: { label: "Energy", icon: "🛢️", color: "var(--sector-energy)" },
   metal: { label: "Metal", icon: "🪙", color: "var(--sector-metal)" },
   equity: { label: "Cổ phiếu", icon: "📈", color: "var(--sector-equity)" },
+  logistics: { label: "Logistics", icon: "🚢", color: "var(--sector-logistics)" },
 };
 
 const FALLBACK: SectorMeta = { label: "Other", icon: "📦", color: "var(--text-subtle)" };
