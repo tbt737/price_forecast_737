@@ -31,7 +31,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Multi-Commodity Quant Forecasting Platform API",
         version=__version__,
-        summary="Generic, configuration-driven commodity forecasting platform (Phase 2: data layer).",
+        summary="Generic, configuration-driven commodity forecasting platform (live).",
     )
     app.include_router(health.router)
     app.include_router(commodities.router)

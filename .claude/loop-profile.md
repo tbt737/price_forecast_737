@@ -13,10 +13,10 @@
 2. `python -m ruff check .`
 3. `python -m mypy -p app` then `python -m mypy etl`
 4. `python -m pytest`            ← must stay ≥ 409 passed, 0 failed (the 1 PG skip is OK)
-5. `python scripts/ci_check_workflows.py`
+5. `python scripts/ci_check_workflows.py` then `python scripts/ci_check_whitespace.py`
 6. Only when `apps/web` touched: `npm test && npm run lint && npm run build` in `apps/web`
    ← must stay ≥ 34 tests green
-(`make quality` mirrors 1+2+4+5; CI = `.github/workflows/ci.yml` runs the same.)
+(`make quality` mirrors 1–5; CI = `.github/workflows/ci.yml` runs the same.)
 
 ## Runtime smoke (sim-to-real)
 - ⚠️ Local `.env` `DATABASE_URL` points at the **LIVE Supabase production DB**

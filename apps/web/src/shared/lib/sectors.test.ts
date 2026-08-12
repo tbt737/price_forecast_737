@@ -15,6 +15,13 @@ describe("sectorMeta", () => {
     expect(m.icon).toBeTruthy();
   });
 
+  it("maps the logistics sector (freight indices)", () => {
+    const m = sectorMeta("logistics");
+    expect(m.label).toBe("Logistics");
+    expect(m.color).toContain("--sector-logistics");
+    expect(m.icon).toBeTruthy();
+  });
+
   it("falls back gracefully for unknown groups", () => {
     const m = sectorMeta("widgets");
     expect(m.label).toBe("widgets");

@@ -14,7 +14,8 @@
   (deny-by-default RLS). Real CI gate runs on every push/PR (`.github/workflows/ci.yml`).
 - Self-improving loop is bootstrapped: `.claude/loop-profile.md` + `.claude/loop-memory.md`
   (commits `a45695e`, `4682605`). Đợt-1 hardening, OPS-CLEAN-1, ETL-VN-3/4, ML-FIX-1
-  (deployed) and ACC scheduling (`4925b9d`) are DONE.
+  (deployed) and ACC scheduling (`4925b9d`) are DONE. POLISH-1 (docs/UI/lint/CI hygiene)
+  is the current idle-capacity pack — it does not unlock VN30-PROD, ACC-REVIEW, or Skills Loop.
 
 ## 2. Production baseline
 
@@ -23,8 +24,10 @@ Locked 2026-07-07 at commit `4925b9d` (details + monotonic rule in `.claude/loop
 **20 commodity profiles** (pinned by `tests/quality/test_profiles_quality.py`). Test counts
 never go down; locked invariants never weaken.
 
-> Current (2026-07-11, pack VN30-STOCKS-1): **pytest 456 + 1 skipped · vitest 39 · 51
-> profiles / 98 instruments** (21 commodities + 30 VN30 equities, `commodity_group: equity`).
+> Current (2026-08-12, pack POLISH-1): **pytest 590 + 1 skipped · vitest 40 · 52
+> profiles / 100 instruments** (22 commodities + 30 VN30 equities, `commodity_group: equity`).
+> Profile count is pinned by `tests/quality/test_profiles_quality.py`; instrument count
+> is the YAML inventory (not a hard test pin).
 
 > ⚠️ Companion docs: `README.md` / `ARCHITECTURE.md` / `DEPLOY.md` were refreshed in the
 > RESTATE-1 hardening pack (2026-07-11) for profile counts, SEC-2 smoke, and live status.
@@ -38,7 +41,7 @@ Highest-value next actions, in order:
 2. **Land RESTATE-1 gates green**, then follow the VN30-PROD canary sequence in §5
    (still needs explicit owner approval per write/deploy step).
 3. **ACC-REVIEW** when its artifact exists (§5) — first real evidence of live forecast skill.
-4. If idle capacity remains: deferred polish (§6) as a small tooling pack.
+4. If idle capacity remains: leftover polish in §6 (E2E smoke, container scan).
 
 ## 4. Manual-only tasks (owner, GitHub UI — sessions have no gh auth)
 
@@ -99,11 +102,18 @@ Highest-value next actions, in order:
 
 ## 6. Deferred polish (small, safe, anytime)
 
+POLISH-1 (2026-08-12) landed the items below. Remaining optional:
+- E2E smoke (health + one forecast via proxy) — needs network + `INTERNAL_API_KEY`.
+- Optional container image scan (Dependabot covers pip / `apps/web` npm / Actions).
+
+Shipped in POLISH-1:
 - Migrate `next lint` → ESLint CLI (deprecated in Next 16).
 - Silence the multiple-lockfiles workspace-root warning via `outputFileTracingRoot`.
-- Optional whitespace gate in CI.
-- Optional: Dependabot / container scan; parameterize web Docker `API_PROXY_TARGET`.
-- Optional: E2E smoke (health + one forecast via proxy).
+- Whitespace gate in CI / `make quality` (`git diff --check` on the PR/push range).
+- Dependabot (weekly, no auto-merge); web Docker `API_PROXY_TARGET` defaults to localhost
+  (compose/prod pass `--build-arg`).
+- Logistics sector token + explorer metadata (`commodity_group: logistics`).
+- Docs/comments aligned to the test-pinned **52** profiles (do not lower INV-4).
 
 ## 7. Locked / approval-required work
 

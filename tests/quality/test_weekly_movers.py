@@ -221,6 +221,27 @@ def _forecast_stub(pct: float, *, available: bool = True, model: str = "ridge_ar
     return stub
 
 
+def _freeze_bulletin_now(monkeypatch, when: datetime | None = None) -> None:
+    """Pin ``main()``'s freshness clock to the stub ``last_date`` window.
+
+    ``_forecast_stub`` reports ``last_date=2026-07-21``. Without a frozen clock the
+    trading-day lag grows as wall time moves past ``max_lag_trading_days`` and
+    ``test_main_exit_codes`` fails closed for the wrong reason.
+    """
+    import scripts.weekly_movers_alert as wm
+
+    frozen = when or datetime(2026, 7, 22, 2, 0, tzinfo=UTC)
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen.replace(tzinfo=None)
+            return frozen.astimezone(tz)
+
+    monkeypatch.setattr(wm, "datetime", _FrozenDateTime)
+
+
 class _FakeRow:
     def __init__(self, code: str, group: str) -> None:
         self.commodity_code = code
@@ -292,6 +313,7 @@ def test_main_exit_codes(monkeypatch, capsys) -> None:
     import ml.forecast as mlf
     import scripts.weekly_movers_alert as wm
 
+    _freeze_bulletin_now(monkeypatch)
     session = _FakeSession([_FakeRow("EQ_VN", "equity"), _FakeRow("COM", "agriculture")])
     # main() imports get_session_factory at call time — patch the source module
     monkeypatch.setattr("app.db.session.get_session_factory", lambda: (lambda: session))
@@ -342,6 +364,7 @@ def test_main_refuses_stale_global_data(monkeypatch, capsys) -> None:
     import ml.forecast as mlf
     import scripts.weekly_movers_alert as wm
 
+    _freeze_bulletin_now(monkeypatch)
     session = _FakeSession([_FakeRow("EQ_VN", "equity")])
     monkeypatch.setattr("app.db.session.get_session_factory", lambda: (lambda: session))
 
