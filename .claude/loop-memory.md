@@ -4,6 +4,23 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-12 POLISH-1 — POLISH_1_PASS
+Idle-capacity pack (PLAN §6 + logistics UI gap). Docs/comments aligned to INV-4 pin **52
+profiles / 100 instruments** (22+30); `test_sixteen_profiles_present` renamed
+`test_expected_profile_count` (assert still `== 52`). Logistics sector token+Tailwind+
+explorer meta+vitest. `next lint` → ESLint CLI; `outputFileTracingRoot` = `apps/web`;
+web Docker `API_PROXY_TARGET` defaults to localhost. AI-chat `Kind` exhaustive switch.
+CI: `git diff --check` on PR/push range + Dependabot (pip / apps/web npm / Actions,
+no automerge). Job display names unchanged. Clock-freeze in `test_main_exit_codes` —
+stub `last_date=2026-07-21` was tripping the trading-day freshness gate as wall time
+moved past max_lag (not a production-gate weaken). No prod write/deploy.
+**Gates:** compileall/ruff/mypy 0 · pytest **590 passed + 1 skipped** · vitest **40** ·
+eslint CLI + next build OK · workflows OK · whitespace OK.
+**Rules distilled:** (1) Inventory numbers in README/ARCHITECTURE/DEPLOY follow the
+test pin, never the other way around. (2) Tests that call `datetime.now` through a
+freshness gate must freeze the clock to the fixture `last_date` window. (3) Web Docker
+ARG must not bake a live Cloud Run URL — compose/prod pass `--build-arg`.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,

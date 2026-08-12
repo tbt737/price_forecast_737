@@ -24,7 +24,7 @@ Locked 2026-07-07 at commit `4925b9d` (details + monotonic rule in `.claude/loop
 **20 commodity profiles** (pinned by `tests/quality/test_profiles_quality.py`). Test counts
 never go down; locked invariants never weaken.
 
-> Current (2026-08-12, pack POLISH-1): **pytest ≥606 + 1 skipped · vitest ≥39 · 52
+> Current (2026-08-12, pack POLISH-1): **pytest 590 + 1 skipped · vitest 40 · 52
 > profiles / 100 instruments** (22 commodities + 30 VN30 equities, `commodity_group: equity`).
 > Profile count is pinned by `tests/quality/test_profiles_quality.py`; instrument count
 > is the YAML inventory (not a hard test pin).
