@@ -292,6 +292,17 @@ def test_main_exit_codes(monkeypatch, capsys) -> None:
     import ml.forecast as mlf
     import scripts.weekly_movers_alert as wm
 
+    # main()'s freshness gate compares the stub's fixed last_date ("2026-07-21")
+    # against the REAL wall clock (datetime.now(UTC)) — freeze it here so this test
+    # stays deterministic instead of going stale (and red) once real time drifts
+    # past the freshness threshold, same as test_apply_freshness_excludes_skewed_assets.
+    class _FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 7, 22, 2, 0, tzinfo=tz)
+
+    monkeypatch.setattr(wm, "datetime", _FrozenDatetime)
+
     session = _FakeSession([_FakeRow("EQ_VN", "equity"), _FakeRow("COM", "agriculture")])
     # main() imports get_session_factory at call time — patch the source module
     monkeypatch.setattr("app.db.session.get_session_factory", lambda: (lambda: session))
