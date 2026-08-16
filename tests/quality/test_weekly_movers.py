@@ -204,13 +204,20 @@ def test_format_message_truncates_over_telegram_limit() -> None:
 
 
 # ── collect_movers + main (offline: stubbed forecaster, fake session) ────────
+# "Fresh" as of whenever the suite runs, not a fixed calendar date — a hardcoded
+# past date eventually ages past the freshness gate's max_lag_trading_days and
+# turns this into a time-bomb (see test_main_refuses_stale_global_data for the
+# deliberately-stale counterpart, which stays weeks old on purpose).
+_FRESH_DATE = datetime.now(UTC).date().isoformat()
+
+
 def _forecast_stub(pct: float, *, available: bool = True, model: str = "ridge_ar"):
     def stub(session, code, *, horizons):
         if not available:
             return {"available": False, "reason": "need >= 252"}
         h = str(horizons[0])
         return {
-            "available": True, "last_price": 100.0, "last_date": "2026-07-21",
+            "available": True, "last_price": 100.0, "last_date": _FRESH_DATE,
             "horizons": {h: {
                 "model_used": model,
                 "points": [{"date": "2026-08-01", "value": 100.0 * (1 + pct / 100.0)}],
