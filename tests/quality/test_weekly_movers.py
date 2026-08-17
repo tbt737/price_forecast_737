@@ -204,13 +204,15 @@ def test_format_message_truncates_over_telegram_limit() -> None:
 
 
 # ── collect_movers + main (offline: stubbed forecaster, fake session) ────────
-def _forecast_stub(pct: float, *, available: bool = True, model: str = "ridge_ar"):
+def _forecast_stub(
+    pct: float, *, available: bool = True, model: str = "ridge_ar", last_date: str = "2026-07-21"
+):
     def stub(session, code, *, horizons):
         if not available:
             return {"available": False, "reason": "need >= 252"}
         h = str(horizons[0])
         return {
-            "available": True, "last_price": 100.0, "last_date": "2026-07-21",
+            "available": True, "last_price": 100.0, "last_date": last_date,
             "horizons": {h: {
                 "model_used": model,
                 "points": [{"date": "2026-08-01", "value": 100.0 * (1 + pct / 100.0)}],
@@ -296,8 +298,13 @@ def test_main_exit_codes(monkeypatch, capsys) -> None:
     # main() imports get_session_factory at call time — patch the source module
     monkeypatch.setattr("app.db.session.get_session_factory", lambda: (lambda: session))
 
-    # dry-run with data ⇒ 0
-    monkeypatch.setattr(mlf, "forecast_commodity", _forecast_stub(+3.0))
+    # dry-run with data ⇒ 0. last_date must track real wall-clock "today", not a
+    # fixed string — otherwise the freshness gate legitimately refuses once actual
+    # time drifts past it, and this exit-code test (not a freshness test — that's
+    # test_main_refuses_stale_global_data / test_apply_freshness_excludes_skewed_assets)
+    # starts failing for a reason unrelated to what it exercises.
+    today_iso = datetime.now(UTC).date().isoformat()
+    monkeypatch.setattr(mlf, "forecast_commodity", _forecast_stub(+3.0, last_date=today_iso))
     assert wm.main([]) == 0
 
     # --send with zero usable channels ⇒ 1 (fail closed)
