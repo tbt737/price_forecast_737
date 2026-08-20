@@ -296,6 +296,18 @@ def test_main_exit_codes(monkeypatch, capsys) -> None:
     # main() imports get_session_factory at call time — patch the source module
     monkeypatch.setattr("app.db.session.get_session_factory", lambda: (lambda: session))
 
+    # main() reads the real wall clock for the freshness gate; freeze it one
+    # trading day after the fixtures' last_date="2026-07-21" so this test stays
+    # deterministic regardless of the date it actually runs on (was: silently
+    # started failing every day once "today" drifted > max_lag_trading_days
+    # past the hardcoded fixture date).
+    class _FixedDatetime(wm.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 7, 22, 3, 0, tzinfo=tz)
+
+    monkeypatch.setattr(wm, "datetime", _FixedDatetime)
+
     # dry-run with data ⇒ 0
     monkeypatch.setattr(mlf, "forecast_commodity", _forecast_stub(+3.0))
     assert wm.main([]) == 0
