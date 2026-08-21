@@ -165,7 +165,7 @@ def get_commodity_prices(
         commodity_code=commodity.commodity_code,
         instrument_code=instrument.instrument_code if instrument else None,
         currency=currency,
-        points=points,  # type: ignore[arg-type]
+        points=points,
     )
 
 
