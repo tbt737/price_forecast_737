@@ -204,13 +204,21 @@ def test_format_message_truncates_over_telegram_limit() -> None:
 
 
 # ── collect_movers + main (offline: stubbed forecaster, fake session) ────────
+def _today_ict_iso() -> str:
+    """Same UTC+7 'today' main() uses, so the freshness gate (real wall clock)
+    never trips on this stub regardless of when the suite runs."""
+    from datetime import timedelta
+
+    return (datetime.now(UTC) + timedelta(hours=7)).date().isoformat()
+
+
 def _forecast_stub(pct: float, *, available: bool = True, model: str = "ridge_ar"):
     def stub(session, code, *, horizons):
         if not available:
             return {"available": False, "reason": "need >= 252"}
         h = str(horizons[0])
         return {
-            "available": True, "last_price": 100.0, "last_date": "2026-07-21",
+            "available": True, "last_price": 100.0, "last_date": _today_ict_iso(),
             "horizons": {h: {
                 "model_used": model,
                 "points": [{"date": "2026-08-01", "value": 100.0 * (1 + pct / 100.0)}],
