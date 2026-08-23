@@ -210,7 +210,11 @@ def _forecast_stub(pct: float, *, available: bool = True, model: str = "ridge_ar
             return {"available": False, "reason": "need >= 252"}
         h = str(horizons[0])
         return {
-            "available": True, "last_price": 100.0, "last_date": "2026-07-21",
+            # Relative to "now", not a fixed calendar date — main()'s freshness gate
+            # compares against real wall-clock time, so a hardcoded date here becomes
+            # a time bomb that fails once more than max_lag_trading_days has elapsed.
+            "available": True, "last_price": 100.0,
+            "last_date": datetime.now(UTC).date().isoformat(),
             "horizons": {h: {
                 "model_used": model,
                 "points": [{"date": "2026-08-01", "value": 100.0 * (1 + pct / 100.0)}],
