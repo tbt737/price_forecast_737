@@ -4,6 +4,36 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-25 WEEKLY-MOVERS-TIMEBOMB-FIX — PACK_PASS (not pushed — awaiting owner)
+Root-caused the lone `pytest` failure found on a routine health scan:
+`test_weekly_movers.py::test_main_exit_codes` was red because
+`scripts/weekly_movers_alert.py::main()` read `datetime.now(UTC)` directly for the
+freshness gate, while the test fixture's `last_date` was hardcoded to `2026-07-21` —
+a classic wall-clock-vs-fixture time bomb (real "now" had drifted to 2026-08-25, so
+`global_lag` (~25 trading days) tripped `max_lag_trading_days=3` and `main()` returned
+1 instead of the expected 0). Fix: made `now_utc` an injectable kwarg-only param on
+`main()` (`now_utc: datetime | None = None`, defaults to real wall-clock — CLI/cron
+behavior byte-identical when omitted), pinned the test to `now_utc=2026-07-22T02:00Z`
+(1 trading day past the fixture date, well inside the 3-day gate). No invariant
+touched (INV-1..7 unaffected — pure DI seam, no write/schema/network change).
+Gates: compileall/ruff/mypy(app+etl)/workflow-check all green; **pytest 588 passed + 1
+skipped** (new baseline, up from 456+1 in PLAN.md — PLAN.md count was stale, not a
+regression). apps/web untouched, web gate skipped per profile. 2 independent adversarial
+reviewers (fresh subagents, diff-only context) found zero bugs in the fix; confirmed
+production call path (`__main__` → `main()`, no kwarg) is unchanged, and confirmed the
+two other `wm.main()` calls in the same test are unaffected (one pins the same fixed
+`now_utc`, one short-circuits on `if not movers` before the gate is ever reached).
+**Rules distilled:** (1) A "freshness gate compares fixture-fixed dates against real
+`datetime.now()`" is a self-expiring test — any script that both (a) reads real
+wall-clock time for a business gate and (b) is tested with `main()`-level
+hardcoded-date fixtures needs an injectable `now`/`today` kwarg (mirrors the existing
+pattern in this file: `format_message(generated_at_utc=...)`, `period_key(now_utc=...)`).
+(2) **Flagged, not fixed (out of scope):** `scripts/check_freshness.py` has the same
+`date.today()`-inside-`main()` shape; currently safe only because its tests call
+`classify()`/`is_within_gap()` directly with an explicit `today` rather than exercising
+`main()` end-to-end — the moment someone adds an end-to-end fixture-dated test there,
+it will time-bomb the same way. Pre-emptive same-pattern fix is a good next small pack.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,

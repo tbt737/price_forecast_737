@@ -296,13 +296,15 @@ def test_main_exit_codes(monkeypatch, capsys) -> None:
     # main() imports get_session_factory at call time — patch the source module
     monkeypatch.setattr("app.db.session.get_session_factory", lambda: (lambda: session))
 
-    # dry-run with data ⇒ 0
+    # dry-run with data ⇒ 0. Pin "now" to the fixture's last_date (2026-07-21) so this
+    # assertion doesn't time-bomb as real wall-clock time drifts past the freshness gate.
+    fixed_now = datetime(2026, 7, 22, 2, 0, tzinfo=UTC)
     monkeypatch.setattr(mlf, "forecast_commodity", _forecast_stub(+3.0))
-    assert wm.main([]) == 0
+    assert wm.main([], now_utc=fixed_now) == 0
 
     # --send with zero usable channels ⇒ 1 (fail closed)
     monkeypatch.setattr(wm.os, "environ", {})
-    assert wm.main(["--send"]) == 1
+    assert wm.main(["--send"], now_utc=fixed_now) == 1
 
     # systemic unavailability (>50%) ⇒ 1 even in dry-run
     monkeypatch.setattr(mlf, "forecast_commodity", _forecast_stub(0.0, available=False))

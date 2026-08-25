@@ -526,7 +526,7 @@ def collect_movers(session: Any, cfg: AlertConfig, *, limit: int | None = None) 
     return movers, len(rows), unavailable
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, now_utc: datetime | None = None) -> int:
     parser = argparse.ArgumentParser(description="Weekly movers alert (dry-run by default).")
     parser.add_argument("--send", action="store_true", help="actually deliver (default: print only)")
     parser.add_argument("--limit", type=int, default=None, help="only scan the first N commodities (smoke)")
@@ -551,7 +551,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # Freshness gate (trading-day aware): stale global data or a >50% failure/stale
     # ratio means the bulletin would mislead — fail closed, red run, nothing sent.
-    now_utc = datetime.now(UTC)
+    # `now_utc` is injectable (default: real wall-clock) so callers/tests can pin
+    # "now" instead of the gate silently tripping as real time drifts from fixture dates.
+    now_utc = now_utc if now_utc is not None else datetime.now(UTC)
     today_ict = (now_utc + timedelta(hours=7)).date()
     movers, stale_movers, global_lag = apply_freshness(movers, cfg, today=today_ict)
     if global_lag > cfg.max_lag_trading_days:
