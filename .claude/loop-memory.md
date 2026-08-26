@@ -4,6 +4,36 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-26 HEALTH-CHECK-1 — HEALTH_CHECK_1_PASS (pushed 42b8633)
+Scheduled autonomous health-check pack (no live user). Ran the full gate suite cold:
+compileall/ruff/mypy clean; pytest found 1 real failure —
+`tests/quality/test_weekly_movers.py::test_main_exit_codes` stubbed a forecast
+`last_date` fixed at `"2026-07-21"` but let `main()`'s freshness gate compare it to
+real `datetime.now()`; once wall-clock time drifted >3 trading days past that date
+(today, 26-day lag) the "dry-run with data ⇒ 0" assertion started failing for real —
+a time bomb, not a regression. Fixed by freezing `wm.datetime.now()` in the test.
+Suite 587 failed/1→**588 passed + 1 skipped**; ruff/mypy/compileall clean; web
+`npm test` (39) / `npm run lint` / `npm run build` all green (untouched, sanity-checked
+only). `pip-audit -r requirements.txt`: no known vulnerabilities. Grepped for the same
+pattern elsewhere (other hardcoded-2026-date tests) — `test_forecast_writer.py`'s dates
+are pure fixture payload, never compared to real `now()`; not systemic.
+**Found but NOT fixed (needs owner decision, out of pack scope):** `apps/web` `npm audit`
+reports 4 high-severity advisories in production deps — Next.js `^15.5.19` (DoS/SSRF/cache
+confusion in Server Actions, GHSA-m99w-x7hq-7vfj +6 more), its transitive `postcss`, and
+`sharp` (libvips CVEs). `npm audit fix` (no `--force`) does not clear them within the
+current semver range; `postcss` explicitly needs `--force`. Did not attempt an unattended
+major/minor framework bump — Next 16 migration is already flagged separately (PLAN §6,
+`next lint` deprecation) and a forced bump risks the build without a human validating the
+result. `npm install` alone only churned lockfile `libc` metadata (reverted, no version
+change). Recommend a dedicated approved pack to upgrade Next.js/sharp/postcss and rerun
+`npm run build` + vitest before merge.
+Invariants: none touched (test-only fix, offline). No writes, no deploys, no DB touched
+(read-only local smoke was GET-only per profile — pytest/vitest/build only).
+**Rules distilled:** any test that stubs a fixed calendar date and gates through code
+that reads real `datetime.now()`/`date.today()` is a latent time bomb — freeze the clock
+in the test (monkeypatch the module's `datetime`), never assume "today" will stay close
+to the fixture forever.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
