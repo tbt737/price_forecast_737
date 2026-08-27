@@ -4,6 +4,44 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-27 MAINT-1 — MAINT_1_PASS
+Scheduled housekeeping pack (no active PLAN §5 workstream touched; picked from PLAN §6
+deferred polish + a gate failure found on arrival). Three changes:
+(1) **Fixed a real, currently-red test**: `tests/quality/test_weekly_movers.py::
+test_main_exit_codes` failed on arrival (`pytest` was 587 passed + 1 failed + 1 skipped) —
+`_forecast_stub()`'s fixture hardcoded `last_date="2026-07-21"`, and `wm.main()`'s
+freshness gate compares against the real wall clock (`datetime.now(UTC)`), so the fixture
+aged past `max_lag_trading_days=3` as real time moved on (a time-bomb test, not a prod
+defect). Fixed by making that one fixture value `date.today().isoformat()` instead of a
+frozen date — mirrors the existing convention in this file (`test_main_refuses_stale_
+global_data` already relies on real-clock drift, just in the other direction). Adversarial
+review (1 independent subagent) tried to refute via TZ-boundary/weekend edge cases,
+confirmed `global_lag` is provably ≤1 trading day under this fix regardless of host TZ —
+REFUTED, fix sound. The other hardcoded `"2026-07-21"` literals in the same file
+(`_mover()`, `test_apply_freshness_excludes_skewed_assets`) were left untouched — they pass
+an explicit fixed `today=` into `apply_freshness()` directly and never touch the real
+clock, so they don't rot.
+(2) **PLAN §6 item shipped**: `apps/web/next.config.mjs` now pins `outputFileTracingRoot`
+to `apps/web` itself — silences the "detected multiple lockfiles" build warning (root
+`package-lock.json` for the Cloudflare Worker wrapper vs. `apps/web/package-lock.json`)
+without touching the actual two-lockfile layout (both are real, needed roots).
+(3) **Safe dependency bump**: `npm audit fix` (no `--force`) in `apps/web` — lockfile-only,
+`package.json` ranges unchanged — cleared brace-expansion/js-yaml/nanoid/sharp high-sev
+transitive CVEs (7→3 findings). Remaining 3 (esbuild dev-only DoS, postcss, and next itself)
+all require `next@16` (breaking major) to clear — correctly left for a dedicated pack, not
+forced here.
+Invariants: none of INV-1..7 touched (Python prod code untouched; web-only + one test file).
+Gates: pytest **588 passed + 1 skipped** (was 587+1 failed+1 skipped) · ruff 0 · mypy 0
+(28 app + 34 etl) · `ci_check_workflows.py` OK (6 workflows) · web vitest **39** · web lint
+clean · web build clean (warning gone) · web typecheck clean.
+**Rules distilled:** (1) Any test fixture whose "freshness" is judged against
+`datetime.now()`/`date.today()` in prod code must itself derive from the real clock, not a
+frozen literal — grep for the pattern (`last_date=` / `as_of=` next to a literal
+`YYYY-MM-DD` in a test that also calls into a real-clock gate) as a periodic health check.
+(2) `npm audit fix` (non-force) is safe to run anytime in a pack — it only moves within
+existing `package.json` semver ranges; `--force` majors (here: `next@16`) need their own
+dedicated, tested pack per CLAUDE.md phase isolation.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
