@@ -1,3 +1,6 @@
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
 /** @type {import('next').NextConfig} */
 
 // Proxy the browser's same-origin /api/* calls to the FastAPI backend (server-side),
@@ -7,6 +10,10 @@ const API_PROXY_TARGET = process.env.API_PROXY_TARGET || "http://127.0.0.1:8000"
 
 const nextConfig = {
   reactStrictMode: true,
+  // The repo root also carries a package-lock.json (Cloudflare Worker wrapper), which
+  // makes Next.js misdetect the workspace root as the repo root instead of apps/web.
+  // Pin it explicitly so tracing/build output stays scoped to this app.
+  outputFileTracingRoot: path.dirname(fileURLToPath(import.meta.url)),
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${API_PROXY_TARGET}/:path*` }];
   },
