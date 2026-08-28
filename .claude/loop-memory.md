@@ -4,6 +4,27 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-28 SCHEDULED-REVIEW-1 — PASS
+Scheduled autonomous health-check pack (no code review agent, no owner ask involved —
+routine hygiene only, no waiting/locked workstream touched). Full gates run from a clean
+env: compileall + ruff + mypy(app,etl) 0 issues; pytest was **1 failed, 587 passed, 1
+skipped** at HEAD before this pack, now **588 passed, 1 skipped**; ci_check_workflows OK;
+`apps/web` touched ⇒ vitest 39 passed + `next lint` 0 + `next build` clean.
+Fixed 2 items:
+1. `tests/quality/test_weekly_movers.py::test_main_exit_codes` — root cause: `_forecast_stub`
+   hardcoded `last_date="2026-07-21"` fed into the REAL `main()`, which gates on real
+   wall-clock freshness (`today_ict` vs `last_date`, `max_lag_trading_days=3`); once enough
+   real time passed the fixture read as stale and tripped the fail-closed gate (correct
+   production behavior, stale test data). Fix: compute `last_date` as
+   `(datetime.now(UTC)+7h).date()` inside the stub instead of a fixed string. **Rule:** any
+   fixture whose value flows into code that calls `datetime.now()`/`date.today()` directly
+   (not an injected `today=`) must derive from real time too, or it silently rots.
+2. `apps/web/next.config.mjs` — added `outputFileTracingRoot` (repo root's own
+   `package-lock.json`, for the Cloudflare Worker wrapper, was making Next.js misdetect the
+   workspace root and warn on every build). Closes the PLAN.md §6 deferred-polish item.
+No production code, migrations, or writes touched; no waiting/locked (§5/§7) workstream
+started. Full pytest re-run confirms 0 regressions.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
