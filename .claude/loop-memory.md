@@ -4,6 +4,36 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-29 CLOCK-DRIFT-FIX — CLOCK_DRIFT_FIX_PASS (pushed 5969984, unreviewed)
+Idle-capacity autonomous pack. Full gate run surfaced one real failure:
+`tests/quality/test_weekly_movers.py::test_main_exit_codes` hardcoded the stub
+forecast's `last_date` to `2026-07-21`; `main()`'s trading-day freshness gate
+checks it against real `datetime.now`, so once wall time drifted > 3 trading
+days past that fixture the "fresh data" case started failing closed for real.
+Fixed by anchoring the stub to `date.today()` instead of a fixed past date —
+same bug PR #2 (`cursor/polish-deferred-upgrades-b2bd`, open since 2026-08-12,
+CI green, unreviewed/unmerged) already fixed via a clock-freeze; the two fixes
+are independent and will conflict trivially on the same test file whenever
+someone merges both. Also ran `npm audit fix` (non-force) in `apps/web`:
+patched brace-expansion/js-yaml/nanoid/sharp and a same-major Next.js 15.x
+bump (15.5.19→15.5.24) covering several high-severity advisories (SSRF +
+DoS in Server Actions, cache confusion); `package.json` range untouched,
+lockfile only. `pip-audit -r requirements.txt`: clean. Left alone
+(needs a human call, not this pack's scope): the remaining `postcss`
+high-severity advisory only resolves via `next@16` (major, breaking —
+PLAN §6 already deliberately stays on Next 15 pending the ESLint-CLI
+migration in PR #2); PRs #1 (draft, env-setup notes only) and #2 sitting
+open 17 days with no review action.
+Gates: pytest **588 passed + 1 skipped** · ruff/mypy 0 · web vitest **39**
+· typecheck/lint/build green (2 files touched only).
+**Rules distilled:** (1) Any test that feeds a fixture date through code
+gated on `datetime.now()`/`date.today()` is a time bomb — anchor the
+fixture to "now" (or freeze the clock the code reads) instead of a literal
+date, or it starts failing red purely from wall-clock drift with no code
+change. (2) Check `list_pull_requests`/workflow-run history early in an
+autonomous pack — this repo already had two stale open PRs (one green,
+duplicating this exact fix) that a local-only git log/pytest run cannot see.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
