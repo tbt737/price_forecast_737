@@ -4,6 +4,26 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-30 AUTO-REVIEW-1 — AUTO_REVIEW_1_PASS (46371f9 pushed, branch claude/sharp-hopper-gby4xs)
+Scheduled autonomous health-check pack. Full gate run (global py3.11 here, deps installed
+fresh): compileall/ruff/mypy(app+etl)/ci_check_workflows all clean; pytest showed **1 real
+failure** — `test_weekly_movers.py::test_main_exit_codes` — root-caused, not a product bug:
+`_forecast_stub()`'s default `last_date` was hardcoded `"2026-07-21"`; `main()`'s freshness
+gate (correctly) compares against real wall-clock `today_ict`, so once real time passed
+2026-07-21 by >3 trading days the fixture read as stale and `main([])` started returning 1
+instead of 0. Fixed by making the stub's `last_date` track `date.today()` so it can't rot
+again; freshness-gate *logic* itself untouched (still guarded by
+`test_apply_freshness_excludes_skewed_assets` / `test_main_refuses_stale_global_data`, which
+already inject explicit `today=`). Gates after fix: **pytest 588 passed + 1 skipped** · ruff 0
+· mypy 0 (28 app + 34 etl) · workflows OK. `pip-audit -r requirements.txt`: no known
+vulnerabilities; `pip list --outdated` showed only patch/minor bumps (pydantic_core, PyYAML,
+requests) already covered by existing `>=` pins — no action. No TODO/FIXME markers found in
+etl/ml/apps/scripts/db. No writes/migrations/deploys attempted (read-only review).
+**Rule distilled:** any test stub whose date value feeds a wall-clock-relative freshness/
+staleness gate must derive from `date.today()` (or take an explicit `today=` param like
+`apply_freshness` already does) — a fixed calendar-date fixture is a guaranteed future CI
+failure, not a one-off flake.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
