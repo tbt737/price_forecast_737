@@ -4,6 +4,30 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-31 AUTOREVIEW-1 — AUTOREVIEW_1_PASS (scheduled autonomous review, no prior activity since 2026-07-22)
+Scoped, low-risk pass only — no DB/network/deploy access in this sandbox (no `.env`, global
+Python 3.11 not the profile's 3.13; installed `requirements-dev.txt` fresh to run gates).
+Found: `tests/quality/test_weekly_movers.py::test_main_exit_codes` was RED on a clean checkout
+of `18099c3` — a real ~5-week-old time bomb, not new breakage. `_forecast_stub`'s `last_date`
+was hardcoded `"2026-07-21"`; `main()`'s freshness gate compares against the real clock
+(`today_ict`), so once the calendar moved past `max_lag_trading_days=3` the stub read as
+stale-data-refuse (`assert wm.main([]) == 0` → got 1). Fix: `_forecast_stub` now derives
+`last_date`/forecast `points.date` from `date.today()` at call time (0 lag by construction),
+never a fixed calendar string. Gates: compileall clean · ruff 0 · mypy 0 (28 app + 34 etl) ·
+**pytest 588 passed + 1 skipped** (was 587 failed→1 on this checkout; loop-memory's last
+recorded count was 606+1skip after WEEKLY-MOVERS-1B — discrepancy vs the 589-collected total
+here is unexplained by this pack, flagging for the next session rather than chasing it) ·
+`ci_check_workflows.py` OK (6/6). Did not touch `apps/web` (npm gates correctly skipped per
+profile). Did not run pip-outdated/npm-audit-driven upgrades — nothing exploitable found
+(`pydantic_core`/PyYAML/requests only had patch-level newer releases, already satisfied by
+the unpinned `>=` ranges in `requirements.txt`). Left PLAN.md §5/§7 (VN30-PROD canary
+follow-through, ACC-REVIEW, locked skills-loop branch) untouched — all need owner approval
+or a waiting artifact this unattended run cannot supply.
+**Rule distilled:** any test stub that hands a hardcoded past `last_date`/`as_of` string into
+a code path that reads the *real* clock (not an injected `today=`) is a time bomb — derive it
+from `date.today()` at call time instead, even when "today" is nowhere near the gate's
+threshold at authoring time.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,

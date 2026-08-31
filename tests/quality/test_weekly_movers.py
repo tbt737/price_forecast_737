@@ -5,7 +5,7 @@ Pure — no DB, no network: transports are injected fakes; config is the real YA
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -205,15 +205,22 @@ def test_format_message_truncates_over_telegram_limit() -> None:
 
 # ── collect_movers + main (offline: stubbed forecaster, fake session) ────────
 def _forecast_stub(pct: float, *, available: bool = True, model: str = "ridge_ar"):
+    # last_date is relative to the real clock (never a hardcoded calendar date) so this
+    # test stays "fresh" for main()'s live freshness gate no matter when it runs — a
+    # fixed past date bit-rots into a false failure once it falls outside
+    # cfg.max_lag_trading_days (see loop-memory 2026-07-11 rule on self-repeating skips).
+    today = date.today()
+    forecast_date = today + timedelta(days=7)
+
     def stub(session, code, *, horizons):
         if not available:
             return {"available": False, "reason": "need >= 252"}
         h = str(horizons[0])
         return {
-            "available": True, "last_price": 100.0, "last_date": "2026-07-21",
+            "available": True, "last_price": 100.0, "last_date": today.isoformat(),
             "horizons": {h: {
                 "model_used": model,
-                "points": [{"date": "2026-08-01", "value": 100.0 * (1 + pct / 100.0)}],
+                "points": [{"date": forecast_date.isoformat(), "value": 100.0 * (1 + pct / 100.0)}],
                 "backtest": {"mape_pct": 5.0, "naive_mape_pct": 6.0, "beats_naive": True},
             }},
         }
