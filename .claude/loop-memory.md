@@ -4,6 +4,26 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-20 AUTO-MAINT-1 — PASS (61d61b3 pushed, no owner-approval items touched)
+Scheduled autonomous review (no prior pack in ~1 month, last commit 2026-07-22). Full
+gate run from a clean checkout surfaced one real regression: `test_main_exit_codes`
+(tests/quality/test_weekly_movers.py) calls `wm.main()` without mocking the wall clock,
+so it depends on real "today" staying within `max_lag_trading_days` of the fixtures'
+hardcoded `last_date="2026-07-21"` — the freshness gate (working as designed) started
+correctly failing it once ~1 month of real time had passed. Fixed by freezing
+`wm.datetime.now()` via a monkeypatched subclass (same pattern the other freshness-gate
+tests already use via explicit `today=`/`now_utc=`). Also set `outputFileTracingRoot`
+in `apps/web/next.config.mjs` (PLAN.md §6 deferred-polish item) to silence the
+multi-lockfile workspace-root warning — config-only, no lockfile touched.
+Gates: pytest 587→**588 passed** + 1 skipped (was 1 failing), ruff 0, mypy 0 (28+34
+files), `ci_check_workflows.py` OK; `apps/web` vitest 39 passed, lint/typecheck/build
+clean. No DB writes, migrations, deploys, or workflow dispatches — read-only smoke only.
+**Rules distilled:** (1) Any test that exercises a script's real `datetime.now()` path
+(not just a pure function taking `today=`/`now_utc=`) is a latent time-bomb — must freeze
+the clock, or it silently rots weeks/months later with no code change. (2) `PLAN.md` §5/§7
+WAITING/LOCKED items (VN30-PROD, ACC-REVIEW, Skills Loop optimizer, RESEARCH-PUBLISH-1)
+correctly stayed untouched — none had a new trigger condition met.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
