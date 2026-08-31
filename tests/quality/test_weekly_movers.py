@@ -5,7 +5,7 @@ Pure — no DB, no network: transports are injected fakes; config is the real YA
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -210,7 +210,11 @@ def _forecast_stub(pct: float, *, available: bool = True, model: str = "ridge_ar
             return {"available": False, "reason": "need >= 252"}
         h = str(horizons[0])
         return {
-            "available": True, "last_price": 100.0, "last_date": "2026-07-21",
+            # relative to real "today" (not a fixed literal) — main() runs the
+            # freshness gate against the real clock, so a hardcoded date rots and
+            # eventually trips "refusing to send" as calendar time moves past it.
+            "available": True, "last_price": 100.0,
+            "last_date": (date.today() - timedelta(days=1)).isoformat(),
             "horizons": {h: {
                 "model_used": model,
                 "points": [{"date": "2026-08-01", "value": 100.0 * (1 + pct / 100.0)}],

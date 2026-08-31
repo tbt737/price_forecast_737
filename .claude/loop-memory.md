@@ -4,6 +4,34 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-31 SCHEDULED-HEALTH-1 — SCHEDULED_HEALTH_1_PASS
+Autonomous scheduled review (no new git activity in the prior 2 days). Full gate run found
+one real, CI-relevant failure: `tests/quality/test_weekly_movers.py::test_main_exit_codes`
+was FAILING (not skipped) — `_forecast_stub` hardcoded `last_date: "2026-07-21"`; `main()`'s
+freshness gate compares that against the real clock, so as calendar time moved past
+2026-07-21 the gate correctly started refusing ("freshest data lags 16 trading days").
+Fixed by making the stub's `last_date` relative to real `date.today()`
+(`(date.today() - timedelta(days=1)).isoformat()`) instead of a fixed literal — 1 file
+changed (`tests/quality/test_weekly_movers.py`). Swept the rest of the suite for the same
+pattern (`grep` for near-term hardcoded 2026-0[6-8] dates) — the only other two hits
+(`_mover()`'s default and `test_main_refuses_stale_global_data`'s deliberately-ancient
+`2026-06-01`) are safe: both are exercised only via explicit `today=` params or are stale
+enough to stay stale for a long time, so left as-is.
+Gates: pytest **588 passed + 1 skipped** (was 587 passed + 1 failed + 1 skipped before the
+fix — pass count +1, no count regression, no test deleted/weakened) · ruff 0 · mypy 0
+(28 app + 34 etl) · compileall OK · `ci_check_workflows.py` OK (6/6 workflows). `apps/web`
+untouched, so vitest/lint/build were not re-run per loop-profile's "only when web touched"
+rule. No production writes, migrations, deploys, or GitHub Actions dispatch — offline gate
+run only, `.env` never read for a live connection.
+**Rules distilled:** (1) Any offline test that stubs a "freshness"/"as-of" date compared
+against a real wall-clock inside the code under test (not an injected `today=`) must derive
+that date from `date.today()`/`datetime.now()`, never a literal — otherwise the test is a
+time bomb that fails on its own days-to-weeks later with zero code change. (2) When sweeping
+for this class of bug, grep for near-term hardcoded date literals specifically in test
+*stub/fixture* functions that feed code paths lacking an injected clock — not every hardcoded
+date in a test is at risk (ones compared only against other hardcoded dates, or passed via an
+explicit `today=`/`now=` parameter, are stable).
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
