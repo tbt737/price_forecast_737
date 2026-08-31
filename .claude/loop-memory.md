@@ -4,6 +4,31 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-13 SCHEDULED-REVIEW-1 — CLOCK_ROT_FIX_PASS (ca2fc68 pushed to claude/sharp-hopper-cqjd4y, NOT merged)
+Autonomous scheduled review found `tests/quality/test_weekly_movers.py::test_main_exit_codes`
+red on `master` (17 trading-day gap vs the 3-day freshness threshold): `_forecast_stub`
+hardcodes `last_date="2026-07-21"` but `main()`'s freshness gate reads the real wall
+clock, so the test bit-rots ~1 week after any commit. Fixed by freezing `wm.datetime.now()`
+to a fixed instant next to the fixture date (same pattern as
+`test_apply_freshness_excludes_skewed_assets`). Full gate green: compileall/ruff/mypy 0,
+pytest 588+1 skip.
+**Not just this run's discovery — check before re-fixing:** at least 5 prior scheduled
+sessions independently found and fixed this exact same test on their own orphaned
+branches (`claude/relaxed-hawking-zrp6tw`, `sharp-hopper-{1vj9r9,ctmxoe,ntvhfl,r200dj}`),
+none ever merged, so master kept regressing back to red. Open draft PR #2
+(`cursor/polish-deferred-upgrades-b2bd`, "POLISH-1") already carries this fix plus a much
+larger deferred-polish sweep (ESLint CLI migration, `outputFileTracingRoot`, Dependabot,
+CI whitespace gate, logistics sector, 22nd profile) and reports its own gates green —
+**review/merge that PR first**, it supersedes most of PLAN.md §6. Branch
+`claude/repo-check-vf0zmh` (2026-06-28) separately carries ~20 unmerged commits of real
+feature work (forecast accuracy log/evaluator, AI chat, I Ching page) — worth a look too.
+**Rules distilled:** (1) A test that reads the real wall clock through any freshness/lag
+gate against a hardcoded fixture date WILL eventually go red — freeze the clock in the
+test, don't hardcode "now"-relative fixtures. (2) This repo's scheduled-review runs create
+a fresh branch each time and never merge — the same fix gets rediscovered repeatedly
+unless someone merges the resulting branches/PRs. Owner action needed: merge PR #1/#2,
+and periodically merge or close stale `claude/*` branches instead of leaving them to rot.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
