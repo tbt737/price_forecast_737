@@ -4,6 +4,41 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-31 WEB-DEPS-AUDIT-1 — WEB_DEPS_AUDIT_1_PASS (autonomous maintenance run)
+`npm audit` on `apps/web` found **7 vulnerabilities (1 low, 6 high)**: brace-expansion
+(devDep, DoS), esbuild (dev-server-only arbitrary file read, Windows-only), js-yaml
+(quadratic CPU), nanoid (infinite loop), sharp/libvips (4 CVEs), postcss (XSS +
+path-traversal via sourceMappingURL), and next itself (Server Actions DoS/SSRF/cache
+confusion — 7 distinct advisories, `9.3.4-canary.0 - 16.3.0-preview.10`). Checked before
+touching anything: `next` has an official stable **`backport` dist-tag at 15.5.24**
+(same 15.x line already inside the existing `^15.5.19` range in package.json — not a
+major bump) that the Next.js team cut specifically to backport these security fixes.
+Applied: `npm audit fix` (no `--force`) bumped next→15.5.24 and fixed brace-expansion/
+js-yaml/nanoid/sharp outright; then manually bumped the exact-pinned `postcss` devDep
+8.5.1→8.5.26 (same 8.5.x patch line, matching this file's exact-pin convention for
+autoprefixer/eslint/prettier/tailwindcss/typescript) + `npm install` to re-resolve the
+lockfile — that fixed the **top-level** postcss instance. Net: 7→3 vulnerabilities;
+remaining are (a) esbuild 0.27.7 low/dev-only via vite, Windows-only impact, irrelevant
+to this Linux/Cloud-Run prod target, and (b) postcss@8.4.31 *bundled inside next's own
+node_modules* (next vendors its own copy) — fixing that one requires the Next.js 16.x
+major (`next@16.3.3`, `npm audit fix --force` territory), a breaking change out of scope
+for an unattended run; flagged, not attempted.
+Gates: `npm run typecheck` clean · `npm test` 39/39 (unchanged) · `npm run lint` 0
+warnings/errors · `npm run build` succeeds (Next.js 15.5.24, 6 routes, same route shape
+as before). Only `apps/web/package.json` (1 line) + `apps/web/package-lock.json`
+changed; Python side untouched.
+**Rules distilled:** (1) when `npm audit`'s in-range fix looks like it wants to bump a
+framework across what looks like a major-version advisory range, check
+`npm view <pkg> dist-tags --json` first — a `backport` tag can mean the vendor already
+shipped the CVE fix into the existing stable minor line, avoiding a false choice between
+"stay vulnerable" and "force a breaking major". (2) An exact-pinned (no caret) transitive
+dep that `npm audit fix` skips (because the exact pin blocks it) may still be safely
+bumpable by hand within the same minor line — check `npm ls <pkg>` for who else in the
+tree already resolved to a newer compatible version before assuming a major jump is
+required. (3) A framework that vendors its own nested copy of a dependency (here: next's
+private `postcss@8.4.31`) cannot be patched independently of the framework's own major
+version — that residual is expected, not a sign the top-level fix failed.
+
 ## 2026-08-31 TEST-TIMEBOMB-1 — TEST_TIMEBOMB_1_PASS (autonomous maintenance run)
 Full gate run (fresh venv, python3.13 + requirements-dev.txt) found `pytest -q` at
 **587 passed, 1 failed** — `tests/quality/test_weekly_movers.py::test_main_exit_codes`.
