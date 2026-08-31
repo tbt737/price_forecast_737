@@ -4,6 +4,43 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-31 SCHEDULED-HEALTH-1 — SCHEDULED_HEALTH_1_PASS
+Routine autonomous health pass (no `.env` write path touched; read-only DB smoke skipped,
+not needed). Two independent fixes, gates re-run after each:
+1. `tests/quality/test_weekly_movers.py::test_main_exit_codes` was a calendar time-bomb —
+   `_forecast_stub` hardcoded `last_date="2026-07-21"`; `main()`'s freshness gate compares
+   against the real wall clock (UTC+7) and correctly started refusing to send once real time
+   passed the 3-trading-day window, flipping a "fresh data" test case red with zero code
+   regression. Fixed by deriving the stub's `last_date` from `datetime.now(UTC)` (same basis
+   `main()` uses) instead of a literal. Not an isolated case — `grep` found 6 more test files
+   with hardcoded `202x-xx-xx` literals (`test_batch_report.py`, `test_forecast_evaluator.py`,
+   `test_forecast_writer.py`, `test_ml_feature_mv_two_phase_cutover.py`,
+   `test_etl_connector_gate.py`, `test_ingestion.py`) — none currently failing, not touched
+   this pass, worth an audit pack if one trips next.
+2. `apps/web`: `npm audit` found 7 vulnerabilities (6 high), rooted in outdated
+   `next@15.5.19`. Bumped to the official 15.x security backport (dist-tag `backport` =
+   `15.5.23`, in-range for `^15.5.19`, resolves nanoid/js-yaml/brace-expansion
+   transitively) + re-pinned devDependency `postcss` `8.5.1` → `8.5.26` (XSS +
+   sourceMappingURL path-traversal advisories). Also set `outputFileTracingRoot` in
+   `next.config.mjs` (closes a PLAN.md §6 deferred-polish item — silences the
+   multiple-lockfiles workspace-root warning on every lint/build).
+   **Residual, deliberately not fixed:** `next`'s own bundled `postcss`/`sharp` copies and
+   `esbuild` (dev-only, Windows-only advisory) only resolve via `next@16.3.2` — a breaking
+   major bump. Flagged for a dedicated upgrade pack with its own regression pass, not done
+   opportunistically here.
+Invariants: none touched (test-only + devDependency/config change; no schema, no ETL, no
+API contract). INV-4 unchanged (no profile/count change).
+Gates: pytest **588 passed + 1 skipped** (new baseline, was 476+1 skip at last recorded
+loop-memory baseline — many packs landed since without a memory update) · ruff 0 · mypy 0
+(28+34) · workflow check OK · web: tsc clean · vitest **39/39** · next lint 0 warnings ·
+next build ✓ (Next.js 15.5.23, 6/6 routes).
+**Rules distilled:** (1) A test that stubs a forecast/data "as of" date as a string literal
+is a time bomb the moment any freshness/staleness gate reads real wall-clock "today" —
+derive it from `datetime.now(UTC)` instead. (2) `npm audit fix` without `--force` only
+moves versions inside the declared semver range; check the package's `dist-tags` (a
+`backport` tag is a strong signal) before deciding a `--force` major bump is truly needed
+to close the remaining CVEs.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
