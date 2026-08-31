@@ -5,7 +5,7 @@ Pure — no DB, no network: transports are injected fakes; config is the real YA
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -204,13 +204,18 @@ def test_format_message_truncates_over_telegram_limit() -> None:
 
 
 # ── collect_movers + main (offline: stubbed forecaster, fake session) ────────
-def _forecast_stub(pct: float, *, available: bool = True, model: str = "ridge_ar"):
+def _forecast_stub(pct: float, *, available: bool = True, model: str = "ridge_ar", last_date: str | None = None):
     def stub(session, code, *, horizons):
         if not available:
             return {"available": False, "reason": "need >= 252"}
         h = str(horizons[0])
         return {
-            "available": True, "last_price": 100.0, "last_date": "2026-07-21",
+            # Freshness-gate math runs against real wall-clock "today" (main() has
+            # no today= override) — a hardcoded date would go stale and start
+            # failing the freshness gate the moment it drifts > max_lag_trading_days
+            # behind whenever the suite actually runs; anchor to "today" instead.
+            "available": True, "last_price": 100.0,
+            "last_date": last_date or (date.today() - timedelta(days=1)).isoformat(),
             "horizons": {h: {
                 "model_used": model,
                 "points": [{"date": "2026-08-01", "value": 100.0 * (1 + pct / 100.0)}],

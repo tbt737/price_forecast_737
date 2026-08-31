@@ -4,6 +4,35 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-31 TEST-TIMEBOMB-1 — TEST_TIMEBOMB_1_PASS (autonomous maintenance run)
+Full gate run (fresh venv, python3.13 + requirements-dev.txt) found `pytest -q` at
+**587 passed, 1 failed** — `tests/quality/test_weekly_movers.py::test_main_exit_codes`.
+Root cause: `_forecast_stub`'s fixture hardcoded `last_date="2026-07-21"`; `main()`'s
+freshness gate compares that against real wall-clock `datetime.now(UTC)` (no `today=`
+override exists in `main()`), so once real time drifted > `max_lag_trading_days` (3
+trading days) past the fixture, the "dry-run with data ⇒ 0" assertion started getting
+exit 1 instead — a classic hardcoded-fixture-date time bomb, not a product regression.
+Fix (`tests/quality/test_weekly_movers.py` only): `_forecast_stub` gained an optional
+`last_date` param and now defaults to `date.today() - timedelta(days=1)` instead of a
+frozen string, so the "fresh" fixture stays fresh regardless of when the suite runs;
+callers that need a deliberately stale date (`test_main_refuses_stale_global_data`)
+still pass one explicitly. No production code touched. Swept the rest of the suite for
+the same pattern (`grep` for hardcoded `2026-0*` dates near `date.today()`/
+`datetime.now()` call sites) — every other hardcoded date in the test suite is compared
+against another fixture date, not real wall-clock, so no further time bombs found.
+Gates after fix: compileall ✓ · ruff 0 · mypy 0 (28 app + 34 etl) · **pytest 588 passed
++ 1 skipped** (new baseline, PG skip unchanged) · `ci_check_workflows.py` OK (6
+workflows). `apps/web` untouched — web gates not run (per loop-profile "only when
+apps/web touched").
+**Rules distilled:** (1) any test stub whose freshness/staleness assertion runs through
+code that calls real `date.today()`/`datetime.now()` with no injectable `today=` must
+derive its fixture date from `date.today()` too — a literal date string next to a
+real-time comparison is a guaranteed future failure, not a hypothetical one. (2) When
+"tests pass" is the baseline claim, always run the actual suite locally before trusting
+CLAUDE.md/PLAN.md snapshot text — the last recorded baseline (473+1skip, 2026-07-11) was
+long stale (current tree: 588+1skip) simply from normal pack accretion, unrelated to
+this bug.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
