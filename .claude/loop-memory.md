@@ -4,6 +4,35 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-19 MAINT-1 — MAINT_1_PASS (routine autonomous maintenance, no owner ask pending)
+Scoped, low-risk pass after ~4 idle weeks (last commit 2026-07-22). Full gate run from a
+fresh environment surfaced one real regression: `test_main_exit_codes`
+(`tests/quality/test_weekly_movers.py`) failed because `_forecast_stub()` hardcoded
+`last_date="2026-07-21"` while `weekly_movers_alert.main()` gates freshness against real
+wall-clock "today" — once >`max_lag_trading_days` had elapsed since that literal date, the
+stub read as stale and the (correct) fail-closed path fired, sinking a test that expects
+success. Fixed by computing the stub's `last_date` from `date.today()` instead of a fixed
+string (`bb3a94c`) — no other test asserts the literal value. Also ran `npm audit fix`
+(no `--force`) in `apps/web`: patched js-yaml/nanoid/esbuild transitively and bumped
+`next` 15.5.19→15.5.23 inside the existing `^15.5.19` range; `package.json` unchanged
+(`72abb2c`). Remaining high-severity postcss/sharp/next findings only clear via
+`npm audit fix --force` (next→16.3.1, major/breaking) — deliberately left for a reviewed
+upgrade, not done here. `pip-audit` on both requirement files: clean. No TODO/FIXME/bare
+`except:`/hardcoded-secret smells found in `etl/ml/apps/scripts/db`.
+Gates after fix: pytest **588 passed + 1 skipped** (was 587 passed + 1 failed + 1 skipped
+before the test fix) · ruff 0 · mypy 0 (28 app + 34 etl) · compileall clean ·
+`ci_check_workflows.py` OK (6/6) · web: lint clean, typecheck clean, vitest **39 passed**,
+`next build` succeeds.
+**Rules distilled:** (1) any offline test that stubs a `last_date`/timestamp consumed by a
+wall-clock-relative freshness or staleness gate must derive it from `date.today()`/
+`datetime.now()`, never a literal calendar string — literal "fresh" dates silently expire
+and turn into false-red failures weeks later with no code regression behind them. (2) a
+long idle gap (no commits) is itself a signal to re-run the full gate before touching
+anything else — dependency advisories and date-drift bugs accrue with wall-clock time even
+when no one is pushing code. (3) `npm audit fix` without `--force` is safe to run
+unattended (semver-respecting); `--force` next major bumps are not — treat those as a
+LOCKED/approval-required item, not autonomous-maintenance scope.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
