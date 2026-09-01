@@ -4,6 +4,33 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-16 SCHEDULED-MAINTENANCE-1 — MAINTENANCE_1_PASS (autonomous review, no owner in session)
+Scope: unattended scheduled codebase review (no new commits since 2026-07-22; PLAN.md §5
+VN30-PROD/ACC-REVIEW workstreams untouched — still WAITING on owner approval/artifacts, not
+re-attempted). Picked from PLAN.md §6 deferred-polish (pre-approved "small, safe, anytime")
+plus one real bug found while running full gates:
+1. `tests/quality/test_weekly_movers.py::test_main_exit_codes` was a time bomb — its forecast
+   stub hardcoded `last_date="2026-07-21"`; by 2026-08-16 that's stale enough to trip the
+   real freshness gate (`wm.main()` uses real `datetime.now(UTC)`, uncontrolled), so the
+   "happy path" assertion started failing with no code change. Fixed by computing the stub's
+   `last_date` from wall-clock now instead of a fixed string. Left
+   `test_main_refuses_stale_global_data` alone — its "weeks old" date is deliberately stale,
+   not a decaying fixture.
+2. `apps/web`: `npm audit fix` (no `--force`) — brace-expansion/js-yaml/nanoid bumped within
+   existing `package.json` ranges (next 15.5.19→15.5.23, range unchanged); `next.config.mjs`
+   now pins `outputFileTracingRoot` to silence the multi-lockfile warning (root has a second
+   lockfile for the unrelated Cloudflare Worker). Did NOT apply `--force`: the remaining
+   postcss/sharp advisories only resolve via `next@16`, a breaking major bump out of scope
+   for an unattended run.
+Gates: pytest **588 passed + 1 skipped** (was 587+1, +1 from the fix, no drop) · ruff 0 ·
+mypy 0 (28+34 files) · compileall OK · ci_check_workflows OK · web vitest **39/39** · web
+lint/typecheck/build all green. No `.env`/DB/migration/deploy touched; nothing pushed to
+`master`. Pushed to session branch `claude/sharp-hopper-qoz1hu` only (2 commits).
+**Rules distilled:** freshness-gate tests that exercise the real `wm.main()` (uncontrolled
+wall clock) must derive "fresh" fixture dates from `datetime.now(UTC)`, never a fixed
+calendar string — the gate's own job is to compare against real time, so any hardcoded
+"fresh" date is a future failure waiting to happen.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
