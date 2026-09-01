@@ -4,6 +4,30 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-01 SCHEDULED-REVIEW-1 — SCHEDULED_REVIEW_1_PASS (1e00311 pushed, polish tier only)
+Scheduled autonomous review (no live user). Full gate run surfaced one real failure:
+`tests/quality/test_weekly_movers.py::test_main_exit_codes` hardcoded the forecaster
+stub's `last_date="2026-07-21"`; `main()`'s freshness gate compares that against the
+real wall-clock date (ICT), so the test time-bombed once actual time passed >3 trading
+days beyond the fixture (failed today, ~3.5 weeks after the WEEKLY-MOVERS-1D pack).
+Fixed by making `_forecast_stub`'s `last_date` an injectable kwarg (default unchanged —
+other callers unaffected) and pinning `test_main_exit_codes` to `datetime.now(UTC).date()`.
+No production code touched; no prod DB/deploy/dispatch actions taken (none authorized —
+no live user to approve per §11). Gates: compileall ✓ · ruff 0 · mypy 0 (28+34 files) ·
+**pytest 588 passed + 1 skip** (was 587 passed/1 failed/1 skip) · ci_check_workflows.py ✓.
+apps/web untouched, web gates skipped per profile rule.
+**Observation (not fixed, no active failure):** `tests/quality/test_forecast_writer.py`
+also hardcodes an absolute `last_date` ("2026-06-26") passed through
+`scripts/write_forecast_log.py`; currently passing because that path has no wall-clock
+freshness gate, but worth a look if it ever grows one — same failure class as this pack.
+**Rules distilled:** (1) any test stub feeding a "freshness"/"as-of" style gate that
+reads real wall-clock time must derive its date from `datetime.now()`/`date.today()` at
+test-run time, never a string literal — literal dates are pack-local time bombs that
+detonate on an unrelated future run. (2) `PLAN.md` §10 pack-selection order (production
+safety > data reliability > accuracy evidence > polish) applies to autonomous/scheduled
+runs too — with no live user to approve writes/deploys/dispatch, scope collapses to the
+polish tier and read-only/offline verification only.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
