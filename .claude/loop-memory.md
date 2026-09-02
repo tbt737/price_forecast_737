@@ -4,6 +4,29 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-02 SCHED-REVIEW-1 — SCHED_REVIEW_1_PASS
+Routine autonomous review found `tests/quality/test_weekly_movers.py::test_main_exit_codes`
+FAILING on a clean checkout: `_forecast_stub()`'s fixture hardcoded `last_date="2026-07-21"`,
+so `main()`'s freshness gate (which correctly compares against real `datetime.now(UTC)`) now
+sees ~31-trading-day-old data and refuses to send — the dry-run branch the test asserts
+returns 0 now returns 1. Root cause: a wall-clock-relative assertion pinned to a
+calendar-fixed fixture (violates CLAUDE.md §3 determinism — this direction: fixture must
+track "now", not the reverse). Fix: `_forecast_stub` now stamps `last_date` as
+`datetime.now(UTC).date().isoformat()` instead of a literal string, so the fixture is always
+fresh regardless of when the suite runs (max 1-trading-day margin from the UTC/ICT boundary
+in `main()`, well under `max_lag_trading_days=3`). No production code touched — `main()`'s
+real-time freshness gate is correct as-is and this is exactly the case it's designed to catch.
+Other freshness tests (`test_main_refuses_stale_global_data`,
+`test_apply_freshness_excludes_skewed_assets`) already pin explicit/old dates and are
+unaffected. Full local gates (no `.env`/DB in this session — pure offline run): compileall OK
+· ruff 0 · mypy 0 (28 app + 34 etl) · **pytest 588 passed + 1 skipped** (new baseline, was
+587+1 failing before the fix) · workflow check OK (6/6). `apps/web` not touched, web gates
+skipped per profile rule. `pip-audit -r requirements.txt`: no known vulnerabilities. No TODO/
+FIXME markers found in non-test source.
+**Rule distilled:** any test whose fixture date feeds a real-wall-clock freshness/staleness
+comparison must derive that date from `datetime.now()` at test time (or freeze `now` via
+monkeypatch) — never a literal past date — or it silently rots into a future CI failure.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
