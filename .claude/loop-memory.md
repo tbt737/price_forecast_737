@@ -4,6 +4,36 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-02 SCHEDULED-HEALTH-1 — SCHEDULED_HEALTH_1_PASS (commit 2dc7dfe, pushed)
+Routine autonomous health-check pack (no live owner in session). Ran full gate suite
+first (Step 0/1 per this profile) after ~6 weeks of no commits (last prior commit
+2026-07-22): compileall/ruff/mypy all green, but `pytest` turned up 1 real failure —
+`tests/quality/test_weekly_movers.py::test_main_exit_codes` — root-caused (not
+patched blind, per CLAUDE.md 3-strike rule) to `_forecast_stub()` hardcoding
+`last_date="2026-07-21"` while `weekly_movers_alert.main()` gates delivery on real
+`datetime.now(UTC)` freshness; once real wall-clock time drifted ~6 weeks past that
+frozen date, the freshness gate correctly saw the fixture as 20-trading-days stale
+and the test's "dry-run ⇒ 0" assertion broke. Fixed by making the stub's `last_date`
+track `today - 1` instead of a frozen date (`tests/quality/test_weekly_movers.py`
+only); left `_mover()`'s fixed 2026-07-21 default untouched since
+`test_apply_freshness_excludes_skewed_assets` pins an explicit `today=` and depends
+on that exact fixed relationship — verified that test still passes unchanged.
+No invariants touched (test-only change, INV-1..7 unaffected); `apps/web` not
+touched so no npm gates run. Scanned production code for the same "hardcoded
+date vs. real-time freshness gate" pattern (`scripts/`, `ml/`, `etl/`,
+`apps/api/app/`) — no other instance found; full suite is otherwise clean.
+Gates at land: pytest **588 passed + 1 skipped** (PG-only) · ruff 0 · mypy 0
+(28 app + 34 etl files) · `ci_check_workflows.py` OK (6 workflows).
+**Rules distilled:** (1) A test fixture that hardcodes an absolute calendar date to
+satisfy a *real-wall-clock* freshness/staleness gate is a time bomb — it passes only
+inside a narrow window after being written and then fails forever, for reasons
+unrelated to the code under test. Prefer `today ± N` derived at test-run time unless
+the test explicitly pins `today=` itself (as `test_apply_freshness_excludes_skewed_assets`
+correctly does). (2) On a scheduled/unattended run with no owner present, PLAN.md §3
+priorities are all manual-only/WAITING/LOCKED — the only in-scope autonomous work is
+"run the gates, root-cause anything red, fix narrowly, stay off LOCKED/WAITING items,
+never write to the live DB or deploy."
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
