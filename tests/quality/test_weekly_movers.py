@@ -5,7 +5,7 @@ Pure — no DB, no network: transports are injected fakes; config is the real YA
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -209,8 +209,14 @@ def _forecast_stub(pct: float, *, available: bool = True, model: str = "ridge_ar
         if not available:
             return {"available": False, "reason": "need >= 252"}
         h = str(horizons[0])
+        # main() gates on real wall-clock freshness (datetime.now(UTC)), so this must
+        # track "today" rather than a fixed calendar date, or the freshness gate goes
+        # stale and rejects the dry-run as soon as real time drifts past the date the
+        # test was written on. `today - 1` keeps the trading-day lag at 0-1 regardless
+        # of which weekday the suite happens to run on (never exceeds max_lag_trading_days).
+        recent_date = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
         return {
-            "available": True, "last_price": 100.0, "last_date": "2026-07-21",
+            "available": True, "last_price": 100.0, "last_date": recent_date,
             "horizons": {h: {
                 "model_used": model,
                 "points": [{"date": "2026-08-01", "value": 100.0 * (1 + pct / 100.0)}],
