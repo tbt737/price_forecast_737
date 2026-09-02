@@ -4,6 +4,28 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-01 HEALTH-SWEEP-1 — HEALTH_SWEEP_PASS (4b14938, cfb62ac pushed, read-only survey)
+Scheduled autonomous review pack, no DB/deploy/write touched. (1) Fixed a time-bomb test:
+`tests/quality/test_weekly_movers.py::test_main_exit_codes` hardcoded the fake forecaster's
+`last_date` to a fixed past date; `main()` checks it against the real wall clock via the
+freshness gate (`max_lag_trading_days=3`), so the test started failing for reasons unrelated
+to any code change once enough calendar time passed since 2026-07-22. Anchored the stub to
+`date.today()` instead — stays fresh indefinitely. Deliberate-stale-data sibling test
+(`test_main_refuses_stale_global_data`) untouched (its fixed old date only grows more stale,
+which is what it's testing). (2) Landed the `outputFileTracingRoot` deferred-polish item
+from PLAN.md §6: `apps/web/next.config.mjs` now pins the workspace root so Next stops
+inferring it from the *unrelated* root `package-lock.json` (that one belongs to the
+Cloudflare Worker package, `cqp-api-worker`). Full-repo agent survey (config-over-code,
+error handling in ETL connectors, dependency floors, dead code) turned up nothing else
+actionable at low risk — see PLAN.md §6 for the remaining lower-priority items (ESLint
+8→9, dependency upper bounds) intentionally left for a dedicated pack.
+**Gates:** compileall/ruff/mypy(app+etl)/ci_check_workflows green; pytest 588 passed + 1
+skipped (was 587 passed + 1 failed) — new floor. Web: vitest 39 passed, lint clean, build
+clean (warning silenced). **Rules distilled:** any test that feeds a fixed calendar-date
+fixture into code that compares against `date.today()`/`datetime.now()` is a time bomb —
+anchor such fixtures to `date.today()` (or take an injectable `today` param, the pattern
+`apply_freshness()` already used correctly) instead of a literal string.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,
