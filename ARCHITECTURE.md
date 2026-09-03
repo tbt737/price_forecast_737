@@ -1,7 +1,7 @@
 # ARCHITECTURE — Multi-Commodity Quant Forecasting Platform
 
-> **Status:** Phases 1–10 implemented and **live** (Cloud Run + Supabase). **51**
-> profiles (21 commodities + 30 VN30 equities); star schema + loaders; ETL connectors
+> **Status:** Phases 1–10 implemented and **live** (Cloud Run + Supabase). **52**
+> profiles (22 commodities + 30 VN30 equities); star schema + loaders; ETL connectors
 > (Yahoo prices, NASA POWER weather, VN domestic/stocks, config-driven CSV/Agmarknet
 > imports) with a fail-closed provenance gate; ML forecasting (Ridge AR + XGBoost,
 > multi-scale Cobweb cycle harmonics, OU mean-reversion) chosen per-commodity by
@@ -294,7 +294,7 @@ apps/   api (FastAPI) + web (Next.js)
 db/     migrations, views, seeds, commodity_profiles
 etl/    sources/{market,weather,macro,logistics,supply_demand,events}, loaders, tests
 ml/     features, models, backtests, registry, tests
-configs/commodities  16 YAML commodity profiles (source of truth)
+configs/commodities  52 YAML profiles (source of truth; count pinned by tests)
 data/   raw, processed, exports (gitignored content)
 infra/  docker, github-actions, deployment
 tests/  integration, quality
