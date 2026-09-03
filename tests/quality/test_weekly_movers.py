@@ -5,7 +5,7 @@ Pure — no DB, no network: transports are injected fakes; config is the real YA
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -204,13 +204,21 @@ def test_format_message_truncates_over_telegram_limit() -> None:
 
 
 # ── collect_movers + main (offline: stubbed forecaster, fake session) ────────
-def _forecast_stub(pct: float, *, available: bool = True, model: str = "ridge_ar"):
+def _forecast_stub(
+    pct: float, *, available: bool = True, model: str = "ridge_ar", last_date: str | None = None
+):
+    # `main()` measures freshness against the REAL clock, so the stub must speak in
+    # dates relative to today — a hardcoded last_date silently rots the exit-code
+    # tests a few trading days after they are written. Callers that test the stale
+    # path pass last_date explicitly.
+    stub_last_date = last_date or date.today().isoformat()
+
     def stub(session, code, *, horizons):
         if not available:
             return {"available": False, "reason": "need >= 252"}
         h = str(horizons[0])
         return {
-            "available": True, "last_price": 100.0, "last_date": "2026-07-21",
+            "available": True, "last_price": 100.0, "last_date": stub_last_date,
             "horizons": {h: {
                 "model_used": model,
                 "points": [{"date": "2026-08-01", "value": 100.0 * (1 + pct / 100.0)}],
@@ -271,6 +279,33 @@ def test_collect_movers_math_split_and_unavailable(monkeypatch) -> None:
     assert by_code["EQ_VN"].is_equity and not by_code["COM"].is_equity
     assert by_code["EQ_VN"].pct_move == pytest.approx(7.5)
     assert by_code["COM"].pct_move == pytest.approx(-2.0)
+
+
+def test_collect_movers_labels_the_series_currency_not_the_default(monkeypatch) -> None:
+    """The forecaster serves whichever instrument has the most price dates, and that
+    instrument's unit is often not the commodity's `default_currency` — WHEAT is USD by
+    default while every ingested instrument is USc, and ROBUSTA/CHINESE_GARLIC serve INR
+    mandi prices. Labelling a 543 USc/bushel print "543 USD" overstates it 100x in a
+    bulletin that goes to end users."""
+    import ml.forecast as mlf
+    from scripts.weekly_movers_alert import collect_movers
+
+    def stub(session, code, *, horizons):
+        out = _forecast_stub(+1.0)(session, code, horizons=horizons)
+        out["currency"] = "USc"  # what the served instrument is actually quoted in
+        return out
+
+    monkeypatch.setattr(mlf, "forecast_commodity", stub)
+    session = _FakeSession([_FakeRow("WHEAT", "agriculture")])  # _FakeRow default is USD
+    movers, _, _ = collect_movers(session, AlertConfig())
+    assert movers[0].currency == "USc"
+
+    def no_currency(session, code, *, horizons):  # older payloads carry no currency
+        return _forecast_stub(+1.0)(session, code, horizons=horizons)
+
+    monkeypatch.setattr(mlf, "forecast_commodity", no_currency)
+    movers, _, _ = collect_movers(_FakeSession([_FakeRow("WHEAT", "agriculture")]), AlertConfig())
+    assert movers[0].currency == "USD"  # falls back to the profile default
 
 
 def test_collect_movers_db_failure_aborts_loudly(monkeypatch) -> None:
@@ -345,10 +380,10 @@ def test_main_refuses_stale_global_data(monkeypatch, capsys) -> None:
     session = _FakeSession([_FakeRow("EQ_VN", "equity")])
     monkeypatch.setattr("app.db.session.get_session_factory", lambda: (lambda: session))
 
-    def stub(s, code, *, horizons):
-        out = _forecast_stub(+3.0)(s, code, horizons=horizons)
-        out["last_date"] = "2026-06-01"  # weeks-old data ⇒ ingest broken
-        return out
+    # weeks-old data ⇒ ingest broken. Relative to today so the scenario stays
+    # "stale" whenever this suite runs, not only in the week it was written.
+    stale = (date.today() - timedelta(days=60)).isoformat()
+    stub = _forecast_stub(+3.0, last_date=stale)
 
     monkeypatch.setattr(mlf, "forecast_commodity", stub)
     assert wm.main([]) == 1  # red even in dry-run — never a bulletin off dead data

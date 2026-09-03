@@ -55,7 +55,12 @@ def parse_chart_arrays(raw: str, scale: float) -> list[dict[str, Any]]:
     for ts, close in zip(times, closes, strict=False):
         try:
             d = datetime.fromtimestamp(int(ts), UTC).date()
-            value = float(close) * scale
+            # Round to the stored precision (fact_price_daily.value is Numeric(20,6)),
+            # as the Yahoo connector does. 16.10 * 1000 is 16100.000000000002 in binary
+            # float; Postgres stores 16100.000000, and the writer's Decimal(str(...))
+            # compare would then read a replay of the SAME bar as a `conflict` — which
+            # blocks and rolls back the whole batch. ~1.6% of HOSE ticks hit this.
+            value = round(float(close) * scale, 6)
         except (TypeError, ValueError, OverflowError, OSError):
             continue
         # json.loads accepts bare NaN/Infinity — both pass `<= 0`, so gate on finiteness too
