@@ -99,6 +99,38 @@ def test_mechanistic_forecaster_deterministic() -> None:
     assert np.all(np.isfinite(pa))
 
 
+def test_forecast_fails_closed_on_any_non_positive_month() -> None:
+    """The trajectory is renormalised by `raw[0]`, so a single non-positive month makes
+    `scale` negative and flips the sign of every later point — negative prices, an
+    inverted move, and `lower > upper` bands downstream. Any non-positive value must
+    fail closed to the flat anchor instead."""
+
+    class _StubInner:  # stands in for CashFlowFourierPredictor
+        def __init__(self, preds: list[float]) -> None:
+            self._preds = preds
+
+        def predict(self, month_starts):
+            return pd.DataFrame({
+                "date": month_starts,
+                "price_pred": self._preds[: len(month_starts)],
+            })
+
+    def _run(preds: list[float]) -> np.ndarray:
+        f = MechanisticFourierForecaster(horizon=30)
+        f._model = _StubInner(preds)  # type: ignore[assignment]
+        f._last_date = date(2026, 3, 20)
+        return f.forecast(np.zeros(3), None, 2, 100.0, 30)
+
+    flipped = _run([-4.0, 30.0, 60.0])  # negative FIRST month drove the old sign flip
+    assert np.all(flipped == 100.0), "must fall back to the flat anchor, not invert"
+
+    later_negative = _run([50.0, -10.0, 60.0])  # negative LATER month — also not a price path
+    assert np.all(later_negative == 100.0)
+
+    healthy = _run([50.0, 60.0, 70.0])  # unchanged on a well-formed trajectory
+    assert healthy[0] == 100.0 and np.all(healthy > 0) and not np.allclose(healthy, 100.0)
+
+
 def test_walk_forward_mechanistic_finite() -> None:
     price_df, exog = _panel(n=400, seed=4)
     dates = [d.date() if hasattr(d, "date") else d for d in pd.to_datetime(price_df["date"])]

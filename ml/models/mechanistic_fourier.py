@@ -197,9 +197,14 @@ class MechanisticFourierForecaster:
             [month_price.get((d.year, d.month), float(y_anchor)) for d in future_dates],
             dtype=float,
         )
-        if not np.isfinite(raw).all() or np.all(raw <= 0):
+        # `np.any`, not `np.all`: the trajectory is renormalised by `raw[0]`, so a single
+        # non-positive month — which the unbounded polynomial residual fit can easily
+        # extrapolate — makes `scale` negative and FLIPS THE SIGN of every later point,
+        # emitting negative prices and an inverted move. A price path with any
+        # non-positive value is not a price path; fail closed to the flat anchor.
+        if not np.isfinite(raw).all() or np.any(raw <= 0):
             return np.repeat(float(y_anchor), steps)
-        scale = float(y_anchor) / float(raw[0]) if raw[0] != 0 else 1.0
+        scale = float(y_anchor) / float(raw[0])
         return raw * scale
 
     def forecast_interval(
