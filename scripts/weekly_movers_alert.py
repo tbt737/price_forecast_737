@@ -515,7 +515,13 @@ def collect_movers(session: Any, cfg: AlertConfig, *, limit: int | None = None) 
                 is_equity=str(getattr(c.commodity_group, "value", c.commodity_group)) == "equity",
                 pct_move=(end_value / float(last_price) - 1.0) * 100.0,
                 last_price=float(last_price),
-                currency=c.default_currency or "",
+                # The currency of the SERIES, not the commodity's nominal default: the
+                # forecaster picks whichever instrument has the most price dates, and that
+                # instrument's unit is often not `default_currency` (WHEAT is USD by default
+                # but every ingested instrument is USc; ROBUSTA/CHINESE_GARLIC serve INR
+                # mandi prices). Labelling a 543 USc/bushel wheat print "543 USD" overstates
+                # it 100x in a bulletin that goes to end users.
+                currency=str(result.get("currency") or c.default_currency or ""),
                 model_used=str(hz.get("model_used", "?")),
                 mape_pct=bt.get("mape_pct"),
                 naive_mape_pct=bt.get("naive_mape_pct"),

@@ -281,6 +281,33 @@ def test_collect_movers_math_split_and_unavailable(monkeypatch) -> None:
     assert by_code["COM"].pct_move == pytest.approx(-2.0)
 
 
+def test_collect_movers_labels_the_series_currency_not_the_default(monkeypatch) -> None:
+    """The forecaster serves whichever instrument has the most price dates, and that
+    instrument's unit is often not the commodity's `default_currency` — WHEAT is USD by
+    default while every ingested instrument is USc, and ROBUSTA/CHINESE_GARLIC serve INR
+    mandi prices. Labelling a 543 USc/bushel print "543 USD" overstates it 100x in a
+    bulletin that goes to end users."""
+    import ml.forecast as mlf
+    from scripts.weekly_movers_alert import collect_movers
+
+    def stub(session, code, *, horizons):
+        out = _forecast_stub(+1.0)(session, code, horizons=horizons)
+        out["currency"] = "USc"  # what the served instrument is actually quoted in
+        return out
+
+    monkeypatch.setattr(mlf, "forecast_commodity", stub)
+    session = _FakeSession([_FakeRow("WHEAT", "agriculture")])  # _FakeRow default is USD
+    movers, _, _ = collect_movers(session, AlertConfig())
+    assert movers[0].currency == "USc"
+
+    def no_currency(session, code, *, horizons):  # older payloads carry no currency
+        return _forecast_stub(+1.0)(session, code, horizons=horizons)
+
+    monkeypatch.setattr(mlf, "forecast_commodity", no_currency)
+    movers, _, _ = collect_movers(_FakeSession([_FakeRow("WHEAT", "agriculture")]), AlertConfig())
+    assert movers[0].currency == "USD"  # falls back to the profile default
+
+
 def test_collect_movers_db_failure_aborts_loudly(monkeypatch) -> None:
     from sqlalchemy.exc import OperationalError
 

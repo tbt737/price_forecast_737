@@ -166,8 +166,14 @@ def main() -> int:
 
     session = get_session_factory()()
     try:
-        seed_ingestion_sources(session)
-        session.commit()
+        # Seeding COMMITS dim_data_source rows, so it must not run on the dry-run path:
+        # `python -m etl.ingest` is documented (and used as the sanctioned production
+        # smoke) as writing nothing, while the local .env points at the live DB. The
+        # write paths still seed exactly as before — `--backfill`/`--csv-import` always
+        # persist, `run()`/`--reconcile` only under `--write`.
+        if args.write or args.backfill or args.csv_import:
+            seed_ingestion_sources(session)
+            session.commit()
         if args.reconcile:
             if args.sources != "vn_stocks":
                 parser.error("--reconcile currently applies to --sources vn_stocks only")
