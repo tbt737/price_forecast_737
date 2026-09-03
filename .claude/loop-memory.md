@@ -4,6 +4,54 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-03 AUDIT-1 — AUDIT_1_PASS (pushed to `claude/sharp-hopper-l75u32`; 4 items ESCALATED)
+Autonomous review pack (3 fresh reviewers over etl/ · ml/ · apps/api+scripts+workflows; every
+finding re-verified locally before acting, several by running the real code).
+**Shipped — 6 fixes, each pinned by a test that fails without it:**
+(1) `test_weekly_movers::test_main_exit_codes` was RED on master — a wall-clock time bomb:
+the stub hardcoded `last_date="2026-07-21"` while `main()` measures freshness against the real
+clock, so it rotted 3 trading days after it was written. Stub is now relative to `date.today()`.
+(2) `vn_domestic`: bare `NaN`/`Infinity` survive `json.loads` and do NOT compare `<= 0` — a
+garbled PNJ/VNAppMob row reached `fact_price_daily`. Unrecoverable in place: `Decimal('NaN') !=
+Decimal('NaN')` ⇒ every replay is a false `conflict` ⇒ whole batch blocked+rolled back forever;
+restatement can't heal it either (`stored <= 0` is False for NaN). Now `math.isfinite`-gated,
+matching vn_stocks. (3) `vn_stocks`: `float(close)*scale` unrounded vs `Numeric(20,6)` — 16.10*1000
+= 16100.000000000002 ⇒ same false-conflict batch block; 46/2801 real HOSE ticks (1.6%) hit it.
+Now `round(...,6)` like yahoo.py. Invisible to tests because SQLite doesn't apply Numeric rounding.
+(4) `mechanistic_fourier`: guard was `np.all(raw<=0)` but the path is renormalised by `raw[0]` —
+a negative first month made `scale` negative and FLIPPED THE SIGN of every point (verified:
+[-4,30,60] ⇒ [100,100,-750,-750,-1500,-1500], lower>upper bands, -1600% would top the bulletin's
+"GIẢM mạnh nhất"). Now `np.any` ⇒ fail closed to flat anchor. Auto-enabled in prod when a
+commodity has supply drivers. (5) `write_forecast_log`: per-commodity `except Exception` ate
+DBAPIError; with pool_pre_ping the run recovers, inserts a partial day and exits 0 GREEN, and the
+evaluator then scores a biased subset. Now propagates, as weekly_movers already does.
+(6) `evaluate_forecast_log --limit 0` was falsy ⇒ dropped the LIMIT and would flip EVERY matured
+pending row in one one-way commit. Rejected with exit 2. Plus docs: PLAN §2/README/ARCHITECTURE
+inventory re-measured (52 profiles = 22+30 / 100 instruments — 51/98 was stale since PEPPER_VN
++ DIESEL_VN); PLAN §6 web polish cleared (eslint CLI, outputFileTracingRoot, `npm audit fix`
+no-force: 5/8 advisories cleared in-range).
+**Gates:** pytest 588→**594 passed + 1 skip** · ruff 0 · mypy 0 (28+34) · workflows 5/5 ·
+vitest 39 · tsc/eslint/next build clean. No DB, no network, no deploy, no `--write` (container
+has no `.env`).
+**ESCALATED — needs owner decision, deliberately NOT changed:** (a) `--backfill`/`--csv-import`
+commit with NO `--write` (INV-7 breach), and the dry-run path commits `seed_ingestion_sources`
+first — but `.github/workflows/ingest.yml` (5 call sites) DEPENDS on that write, so fixing it
+without adding `--write` there stops the daily ingest. (b) `POST /forecast` has no internal-key
+gate while its GET twin does — and `test_forecast_api_gate.py:81-85` PINS the ungated behaviour,
+so this is a design decision, not a slip. (c) `ml/runner.py` backtests the forward-filled
+calendar-day MV and picks the LOWEST instrument_key, while `/forecast` serves the instrument with
+the most price dates — so `/models/best` can advertise a MAPE from a different series than
+production uses; registry promotion also lacks `SWITCH_MARGIN`, so it registers models
+`/forecast` will never pick. (d) `cash_flow_predictor` slices `q_future` positionally from a
+date-sorted frame, making the configured 6-month harvest lag act as 5 (verified: +9.09 = exactly
+one month of planted area). (e) Restatement accepts a reload covering only 90% of stored dates —
+can silently shorten served history; sits inside the approval-gated VN30-PROD area.
+**Rules distilled:** (1) A test that pins a clock-dependent code path must inject or relativise
+the date — an absolute fixture date is a time bomb, not a pin. (2) SQLite-backed writer tests
+cannot see `Numeric(p,s)` rounding, so any float written to a Numeric column needs rounding at
+the source (there is now a precedent in yahoo/vn_stocks — follow it for new connectors).
+(3) When a trajectory is renormalised by its first element, guards must be `any`, not `all`.
+
 ## 2026-09-03 WEB-POLISH-1 — WEB_POLISH_1_PASS (local only; not pushed)
 Cleared PLAN.md §6 deferred-polish items: (1) `apps/web/next.config.mjs` sets
 `outputFileTracingRoot` (repo-root Cloudflare-worker `package-lock.json` was making Next
