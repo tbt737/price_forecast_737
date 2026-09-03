@@ -5,7 +5,7 @@ Pure — no DB, no network: transports are injected fakes; config is the real YA
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -204,13 +204,21 @@ def test_format_message_truncates_over_telegram_limit() -> None:
 
 
 # ── collect_movers + main (offline: stubbed forecaster, fake session) ────────
-def _forecast_stub(pct: float, *, available: bool = True, model: str = "ridge_ar"):
+def _forecast_stub(
+    pct: float, *, available: bool = True, model: str = "ridge_ar", last_date: str | None = None
+):
+    # `main()` measures freshness against the REAL clock, so the stub must speak in
+    # dates relative to today — a hardcoded last_date silently rots the exit-code
+    # tests a few trading days after they are written. Callers that test the stale
+    # path pass last_date explicitly.
+    stub_last_date = last_date or date.today().isoformat()
+
     def stub(session, code, *, horizons):
         if not available:
             return {"available": False, "reason": "need >= 252"}
         h = str(horizons[0])
         return {
-            "available": True, "last_price": 100.0, "last_date": "2026-07-21",
+            "available": True, "last_price": 100.0, "last_date": stub_last_date,
             "horizons": {h: {
                 "model_used": model,
                 "points": [{"date": "2026-08-01", "value": 100.0 * (1 + pct / 100.0)}],
@@ -345,10 +353,10 @@ def test_main_refuses_stale_global_data(monkeypatch, capsys) -> None:
     session = _FakeSession([_FakeRow("EQ_VN", "equity")])
     monkeypatch.setattr("app.db.session.get_session_factory", lambda: (lambda: session))
 
-    def stub(s, code, *, horizons):
-        out = _forecast_stub(+3.0)(s, code, horizons=horizons)
-        out["last_date"] = "2026-06-01"  # weeks-old data ⇒ ingest broken
-        return out
+    # weeks-old data ⇒ ingest broken. Relative to today so the scenario stays
+    # "stale" whenever this suite runs, not only in the week it was written.
+    stale = (date.today() - timedelta(days=60)).isoformat()
+    stub = _forecast_stub(+3.0, last_date=stale)
 
     monkeypatch.setattr(mlf, "forecast_commodity", stub)
     assert wm.main([]) == 1  # red even in dry-run — never a bulletin off dead data
