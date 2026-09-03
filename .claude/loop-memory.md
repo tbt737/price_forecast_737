@@ -4,6 +4,29 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-03 WEB-POLISH-1 — WEB_POLISH_1_PASS (local only; not pushed)
+Cleared PLAN.md §6 deferred-polish items: (1) `apps/web/next.config.mjs` sets
+`outputFileTracingRoot` (repo-root Cloudflare-worker `package-lock.json` was making Next
+misdetect the workspace root — build warning confirmed present before, gone after);
+(2) `apps/web` `lint` script + `.github/workflows/ci.yml` step moved `next lint` →
+`eslint .` (deprecated in Next 16) — added `ignorePatterns` (`.next/**`, `next-env.d.ts`,
+`coverage/**`, `node_modules/**`) to `.eslintrc.json` since plain eslint, unlike `next
+lint`, doesn't auto-skip the generated `next-env.d.ts` triple-slash reference;
+(3) `npm audit fix` (no `--force`) in `apps/web` — 5/8 vulnerabilities cleared in-range
+(browserslist, js-yaml, nanoid, sharp, brace-expansion; `next` patch-bumped
+15.5.19→15.5.25 within its own `^15.5.19` range) — lockfile-only diff, `package.json`
+deps unchanged. Remaining 3 (postcss/esbuild/next high-severity range) need a Next 16
+major — deliberately NOT force-fixed; recorded as its own approval-gated item in
+PLAN.md §6, not attempted here.
+Gates run (apps/web touched): vitest 39 passed (matches PLAN §2 baseline, unchanged) ·
+`tsc --noEmit` clean · `eslint .` clean · `next build` clean (workspace-root warning
+gone). Python side untouched — no repo-root gates re-run (nothing outside apps/web
+changed).
+**Rules distilled:** (1) `npm audit fix` without `--force` is safe to run unattended —
+it only moves within declared semver ranges; always diff `package.json` after to confirm
+(here: lockfile-only). (2) migrating off `next lint` needs explicit `ignorePatterns` for
+generated files (`next-env.d.ts`) that `next lint` silently skipped.
+
 ## 2026-07-22 WEEKLY-MOVERS-1D — PUSHED_PENDING_TELEGRAM_SECRETS (4f25ab9 pushed; 007 áp prod)
 Least-privilege activation: role `weekly_alert_runner` (LOGIN-only, NOBYPASSRLS, connlimit 3)
 + migration 007 (áp prod ×2 idempotent): read-allowlist đúng call-graph (dim_commodity,

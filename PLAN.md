@@ -99,11 +99,11 @@ Highest-value next actions, in order:
 
 ## 6. Deferred polish (small, safe, anytime)
 
-- Migrate `next lint` → ESLint CLI (deprecated in Next 16).
-- Silence the multiple-lockfiles workspace-root warning via `outputFileTracingRoot`.
 - Optional whitespace gate in CI.
 - Optional: Dependabot / container scan; parameterize web Docker `API_PROXY_TARGET`.
 - Optional: E2E smoke (health + one forecast via proxy).
+- Next.js major bump to v16 (needed to clear the remaining postcss/esbuild advisories) —
+  breaking change, needs its own pack + explicit approval, not "anytime" polish.
 
 ## 7. Locked / approval-required work
 
