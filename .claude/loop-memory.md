@@ -4,6 +4,61 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
+26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
+→ 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
+infra/docker, freshness); 1 completeness critic. **Verification changed the answers — 3 of 5
+escalated claims did not survive as stated.**
+**Verdicts:** restatement 90%-coverage truncation **CONFIRMED HIGH** (probe: 18/20 stored dates
+⇒ coverage exactly 0.900 ⇒ accepted, revision bumped, 2 dates gone from every read path, exit 0;
+one-line fix at `etl/restatement.py:238` + sources.yaml:182 + the value assert in
+test_restatement.py:411 — the 3 happy-path tests all republish 100%, so nothing legitimate
+regresses). backfill-write-gate **CONFIRMED MEDIUM but recalibrated**: `--backfill`/`--csv-import`
+are the repo's DELIBERATE documented write path (`.claude/skills/backfill-price-history/SKILL.md`
+teaches it; ingest.yml uses it at 5 sites) — the defect is the CLI help/docstring claiming
+"default is dry-run" while `--write` is silently ignored there, i.e. a contract lie, not a data
+bug (append-only, idempotent). POST /forecast **PARTIALLY_CONFIRMED LOW, not a live breach**: the
+router is mounted only under `ENABLE_ML_FORECAST_API`, which defaults False and is set by NO
+deploy surface (probe under prod env: 404, absent from OpenAPI). ml/runner backtest-vs-serve
+mismatch **PARTIALLY_CONFIRMED LOW** — both mechanisms real, but unreachable while
+`ENABLE_ML_MODELS_API` is off. harvest-lag **PARTIALLY_CONFIRMED MEDIUM, dormant** — real, but
+the cause is BOTH the positional `q_future` slice AND positional `_shift_by_months`; a
+slice-only fix repairs only the first forecast month (measured).
+⚠️ **Correction to the AUDIT-1 entry below:** it recorded "a test pins the ungated POST behaviour,
+so this is a design decision". That is WRONG. `test_forecast_api_gate.py:81-85` is
+`test_forecast_route_exists_when_flag_on` — it asserts the flag mounts the route and makes no auth
+claim. Git history settles it: forecast.py + that test landed 2026-07-01 (303a17c); the internal-key
+gate landed 2026-07-03 (88f0c27) and never touched that router. The gate was never extended to the
+flag-off experimental route — a latent tripwire that arms the moment anyone flips the flag on an
+`--allow-unauthenticated` service, not a deliberate public endpoint.
+**Shipped from this pass (all gates green, 599 passed + 1 skip):** (7) weekly bulletin labelled
+prices with the commodity `default_currency` while `last_price` comes from whichever instrument has
+the most dates — WHEAT is USD by default but every ingested instrument is USc, so a 543 USc/bushel
+close went out as "543 USD" (100x); ROBUSTA/CHINESE_GARLIC serve INR mandi prices under a USD
+default. Now carries the payload's own currency. (8) `COMEX_HG` was `USc` in the profile vs `USD`
+in the registry (HG=F is quoted USD/lb) ⇒ /forecast and /prices rendered the same copper number
+100x apart, and the USc figure fed the AI-chat prompt. Profile corrected + a quality test now pins
+registry currency == profile instrument currency, with ONE documented waiver (the Indian garlic
+proxy stored on the Jinxiang instrument) and a second test that fails when a waiver goes stale.
+(9) bare `python -m etl.ingest` committed 11 dim_data_source rows before dispatch (measured 11→0;
+`--write` still seeds 11) — the seeding now sits behind the write-mode guard. (10) `validate_record`
+had NO numeric validation at all, so the NaN class was only closed per-connector: it now rejects
+NaN/±Inf as NON_FINITE_VALUE at the choke point every record passes through.
+**Still open, ranked (nothing below was changed):** restatement coverage 1.0 (do it BEFORE
+`ENABLE_VN_STOCKS_INGEST=true`) · `/ai/chat` rate limiter keys on the FIRST X-Forwarded-For entry,
+which the client controls, so the 15/min cap never fires and the key map degrades to an O(n) scan
+per request — needs the owner's trusted-proxy hop count to fix correctly · 8 of 52 commodities are
+in no freshness group at all, and no layer between model and reader carries a staleness signal, so
+a months-stale produce series is forecast and rendered exactly like a fresh one · `ml/forecast.py:85-92`
+takes `MAX(revision)` per (commodity, instrument) with no per-date grouping — the same defect the
+sweep rated HIGH in build_pandas_mv.py, on the LIVE serving path · alembic (`0001`,`0002`) and
+`db/migrations/001-007.sql` are two independent definitions of one schema, never compared.
+**Rules distilled:** (1) An adjudicated verdict is worth more than a finding — 3 of 5 escalations
+changed severity or cause under adversarial checking; never escalate an unverified reviewer claim
+to the owner. (2) Fix a data-hygiene class at the validation choke point, not in the connector that
+happened to expose it. (3) The INV-2 network guard scans COMMENTS — never name an upstream library
+in `etl/` prose.
+
 ## 2026-09-03 AUDIT-1 — AUDIT_1_PASS (pushed to `claude/sharp-hopper-l75u32`; 4 items ESCALATED)
 Autonomous review pack (3 fresh reviewers over etl/ · ml/ · apps/api+scripts+workflows; every
 finding re-verified locally before acting, several by running the real code).
