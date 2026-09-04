@@ -347,6 +347,32 @@ def test_capped_response_with_extra_prehistory_is_refused(session: Session) -> N
     assert _series(session) == pytest.approx(BASIS_A)
 
 
+def test_reload_missing_a_single_stored_date_is_refused(session: Session) -> None:
+    # Regression guard for the 90%-coverage truncation defect (AUDIT-1B): a reload
+    # missing just ONE of 18 stored dates scores 17/18 ≈ 0.94 — comfortably above the
+    # old 0.9 threshold (which would have accepted it and silently dropped that date
+    # from every read path forever) but below the current 1.0 requirement.
+    _seed_initial(session, BASIS_A)
+    restated_window = {d: round(v * 0.85, 4) for d, v in BASIS_A.items()}
+    dropped = min(BASIS_A)  # oldest date — outside the recent anchor window
+    restated_deep = {d: v for d, v in restated_window.items() if d != dropped}
+
+    def dual_fetch(url: str) -> str:
+        qs = dict(p.split("=") for p in url.split("?", 1)[1].split("&"))
+        lo, hi = int(qs["from"]), int(qs["to"])
+        source = restated_deep if (hi - lo) > 40 * 86400 else restated_window
+        return _fetch_for(source)(url)
+
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=dual_fetch, dry_run=False
+    )
+    item = report["instruments"][0]
+    assert item["status"] == "error" and not report["ok"]
+    assert any("coverage" in w for w in item["warnings"])
+    assert {r[2] for r in _all_rows(session)} == {0}  # canonical series untouched
+    assert _series(session) == pytest.approx(BASIS_A)
+
+
 def test_append_after_restatement_lands_at_new_revision(session: Session) -> None:
     # After a reload to revision 1, daily appends must land at revision 1 too — an
     # append at revision 0 would be INVISIBLE to the single-basis read paths.
@@ -408,5 +434,5 @@ def test_reconcile_config_loads_from_sources_yaml() -> None:
     rc = cfg.vn_stocks_reconcile
     assert isinstance(rc, StockReconcileConfig)
     assert rc.epsilon_pct == 0.5 and rc.anchor_days == 5
-    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 0.9
+    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 1.0
     assert rc.deep_from == "2000-01-01"
