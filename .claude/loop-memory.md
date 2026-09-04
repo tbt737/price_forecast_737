@@ -4,6 +4,39 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-04 AUDIT-1C — AUDIT_1C_PASS (autonomous scheduled review; small, targeted)
+Shipped the one AUDIT-1B "still open" item that was safe to close unilaterally:
+`min_reload_coverage` 0.9→1.0 (`etl/ingestion/config.py` + `configs/ingestion/sources.yaml`)
+— a restatement reload missing up to 10% of stored dates was being accepted as the new
+canonical revision, silently stranding those dates from every read path forever (single-
+basis reads serve only the latest revision as a whole). Added
+`test_reload_missing_a_single_stored_date_is_refused` (94% coverage, previously accepted,
+now refused) — verified it actually fails at the old 0.9 default before landing the fix.
+Dormant in prod (`ENABLE_VN_STOCKS_INGEST` off) — closes the gap before that flag flips.
+**Investigated, deliberately NOT touched:** (1) "8 of 52 commodities in no freshness
+group" (CHINESE_GARLIC, DEHYDRATED_GARLIC, DEHYDRATED_ONION, INDIAN_CHILIES, PEANUTS,
+RED_ONION_CHINA, RED_ONION_INDIA, ROBUSTA) — confirmed these have NO wired ETL connector
+at all (grep for the codes across `etl/sources` and `etl/ingestion` is empty), so there is
+no live feed to monitor; adding them to a group would either gate on data that will never
+arrive or (worse) be silently ineffective — `check_freshness.py`'s `_latest_date` takes
+`MAX(price_date)` across an ENTIRE group, so one fresh member masks seven with zero rows.
+This needs a product decision (build the connectors, or a dedicated "manual/subscription"
+group with its own semantics), not a config tweak. (2) `ml/forecast.py:85-92` MAX(revision)
+without per-date grouping — re-verified this is actually SAFE under the current invariant
+(every restatement write is a full-history reload per `etl/restatement.py`'s own contract,
+now enforced at 100% by this pass), so the AUDIT-1B "same defect as build_pandas_mv.py"
+framing overstates it: `ml/build_pandas_mv.py` is explicitly the OFFLINE/experimental
+builder (not the production MV), so its share of that defect is out of scope for the live
+path. (3) Python deps (`requirements*.txt`, `pyproject.toml`) are all open (`>=`) ranges
+with no lockfile — nothing to safely pin/bump; `apps/web` `npm audit` did not return before
+this session's time budget (proxy/registry latency) — not re-attempted, no lockfile change.
+**Rules distilled:** (1) Before adding a commodity to a monitoring/freshness group, grep
+for its commodity_code across `etl/sources` + `etl/ingestion` — a profile with no connector
+has nothing to be fresh or stale about. (2) A group-level freshness check that takes MAX
+across multiple commodities cannot detect one dead member among several live ones — know
+this before trusting a "group OK" verdict as per-commodity coverage.
+Gates: pytest 599→**600 passed + 1 skip** · ruff 0 · mypy 0 (28+34) · workflows 6/6.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
