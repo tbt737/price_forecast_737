@@ -93,5 +93,6 @@ export interface Forecast {
   model?: string;
   last_date?: string;
   last_price?: number;
+  data_age_days?: number;
   horizons?: Record<string, HorizonForecast>;
 }

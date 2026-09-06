@@ -67,6 +67,18 @@ def test_forecast_deterministic_and_contract_shape() -> None:
     assert "mape_pct" in bt and "naive_mape_pct" in bt and "candidates" in bt
     assert bt["ou_considered"] is True
     assert bt["beats_naive"] == (hz["model_used"] != "naive")
+    expected_age = (date.today() - date.fromisoformat(fa["last_date"])).days
+    assert fa["data_age_days"] == expected_age
+
+
+def test_data_age_days_helper() -> None:
+    from ml.predictor import _data_age_days
+
+    today = date(2026, 9, 6)
+    assert _data_age_days(date(2026, 9, 6), today) == 0  # same day ⇒ fresh
+    assert _data_age_days(date(2026, 9, 1), today) == 5
+    assert _data_age_days(date(2024, 1, 1), today) > 600  # long-stale one-time CSV import
+    assert _data_age_days(date(2026, 9, 10), today) == 0  # future date never reads negative
 
 
 def test_enable_ou_false_omits_ou_candidate() -> None:

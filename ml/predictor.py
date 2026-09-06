@@ -79,6 +79,15 @@ def _business_days_ahead(start: date, n: int) -> date:
     return _next_business_days(start, n)[-1]
 
 
+def _data_age_days(last: date, today: date) -> int:
+    """Calendar days between the series' last observed date and ``today`` — the
+    staleness signal every forecast reader (API, weekly bulletin, AI chat) can act
+    on, so a months-stale produce series is never rendered indistinguishably from a
+    fresh one. Clamped at 0 so a same-day ``last`` (or a clock skew edge case) never
+    reads as negative "freshness"."""
+    return max(0, (today - last).days)
+
+
 class CommodityPredictorError(Exception):
     """Base error for the production predictor."""
 
@@ -376,6 +385,7 @@ class CommodityPricePredictor:
             "history_points": len(values),
             "last_date": dates[-1].isoformat(),
             "last_price": round(values[-1], 4),
+            "data_age_days": _data_age_days(dates[-1], date.today()),
             "horizons": horizon_out,
         }
 

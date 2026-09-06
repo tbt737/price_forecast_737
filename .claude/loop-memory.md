@@ -4,6 +4,39 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-06 STALENESS-SIGNAL-1 — STALENESS_SIGNAL_1_PASS (scheduled autonomous pack)
+AUDIT-1B (below) flagged "no layer between model and reader carries a staleness
+signal" for the 8 commodities with no automated ingestion at all (CHINESE_GARLIC,
+DEHYDRATED_GARLIC, DEHYDRATED_ONION, INDIAN_CHILIES, PEANUTS, RED_ONION_CHINA,
+RED_ONION_INDIA, ROBUSTA — one-time CSV backfills per `etl/sources/csv_file.py`,
+absent from `configs/ingestion/sources.yaml` `prices.instruments` and every
+`monitoring.groups` entry, so `scripts/check_freshness.py` never watches them).
+Considered adding a freshness group for them instead, but rejected it: non-critical
+groups only WARN and these sources have no scheduled top-up at all, so the group
+would either warn forever (noise, same failure mode already seen with
+CHINESE_GARLIC's separate ad hoc staleness exclusion in `weekly_movers_alert.py`,
+2026-07-22) or, marked critical, permanently red a daily gate over data that is
+supposed to be static. That is a cadence question for the owner, not a bug to
+autofix.
+Shipped instead, at the actual read boundary: `ml.predictor.CommodityPricePredictor.forecast()`
+now returns `data_age_days` (calendar days between `last_date` and `date.today()`,
+floored at 0) via a new pure `_data_age_days(last, today)` helper (unit-tested
+directly, plus asserted on the live `forecast()` output). Threaded through as an
+additive optional field on `ForecastOut` (`apps/api/app/schemas/forecast.py`) and
+the web `Forecast` TS type (`apps/web/src/shared/api/types.ts`) — every reader of
+`/forecast` (web, weekly bulletin, AI-chat prompt builder) can now tell a
+months-stale produce forecast apart from a same-day one by reading one field,
+instead of needing to parse `last_date` themselves. No DB/schema change, no write
+path touched. Deliberately NOT done here: a UI badge/threshold for "stale" — that's
+a design decision (what counts as stale varies per source cadence), left for a
+follow-up pack once wanted.
+Gates: pytest 599→**600 passed + 1 skip** · ruff 0 · mypy 0 (28+34) · workflows 6/6 ·
+vitest 39 · eslint/tsc/`next build` clean.
+**Rules distilled:** (1) A freshness *gate* (pass/fail CI check) and a freshness
+*signal* (a value the reader can act on) solve different problems — a source with
+no scheduled top-up needs the latter; forcing it through the former just trades one
+kind of silent failure (no signal) for another (permanent noise nobody reads).
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
