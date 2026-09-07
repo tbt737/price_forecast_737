@@ -23,8 +23,10 @@ Locked 2026-07-07 at commit `4925b9d` (details + monotonic rule in `.claude/loop
 **20 commodity profiles** (pinned by `tests/quality/test_profiles_quality.py`). Test counts
 never go down; locked invariants never weaken.
 
-> Current (2026-09-03, re-measured): **pytest 588 + 1 skipped · vitest 39 · 52
+> Current (2026-09-07, re-measured): **pytest 599 + 1 skipped · vitest 39 · 52
 > profiles / 100 instruments** (22 commodities + 30 VN30 equities, `commodity_group: equity`).
+> The 588→599 delta is AUDIT-1 (`571502f`) test additions (`ml/tests/test_mechanistic_pool.py`,
+> `tests/integration/test_vn_domestic_source.py`) that landed without a PLAN.md count bump.
 > The profile count is pinned by `tests/quality/test_profiles_quality.py`; PEPPER_VN and
 > DIESEL_VN joined after the 2026-07-11 snapshot that this line used to carry.
 
