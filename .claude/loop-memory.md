@@ -4,6 +4,49 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-09 SWEEP-1 — SWEEP_1_PASS (no code bugs found in-scope; one safe dep bump shipped)
+Scheduled health-check pass, no owner in the loop. Re-ran the full gate suite cold (fresh
+container, no cached deps) before touching anything: pytest **599 passed + 1 skip**, ruff 0,
+mypy 0 (28+34 files), workflows 5/5 — unchanged since AUDIT-1B (2026-09-03), confirming nothing
+regressed in the 6 days since. `git log --since="2 days ago"` was empty (no intervening commits).
+**Shipped:** `apps/web` `npm audit fix` (no `--force`) — patch-only bump of the vitest
+sub-dependency tree (`@vitest/*` 3.2.6→3.2.7) inside its declared semver range;
+`package.json` untouched, `package-lock.json` lockfile-only. Verified after: vitest **39
+passed**, `eslint .` clean, `next build` clean. Does not touch the 3 advisories that need a
+major bump (esbuild needs 0.28.1+, but vite@7.3.5 pins `^0.27.0`; postcss needs Next 16) —
+confirmed still blocked exactly as WEB-POLISH-1 recorded; an `overrides` entry could force
+esbuild past vite's declared range but that is the same risk class as `--force` and was not
+attempted unattended.
+**Re-checked the "Still open" list from AUDIT-1B — nothing here was safe to touch without the
+owner:** restatement coverage <1.0 and the `MAX(revision)`-without-per-date-grouping read in
+`ml/forecast.py`/`ml/build_pandas_mv.py` both sit inside the approval-gated VN30-PROD area (a
+naive per-date-max fix would violate the documented single-basis rule and splice adjustment
+bases — needs the coverage fix landed first, which is the owner's call); the `/ai/chat` rate
+limiter keying on the first (spoofable) `X-Forwarded-For` hop still needs the owner's real
+deployment topology (trusted proxy hop count) — guessing an index risks either no fix or
+misbucketing real users, so left as documented.
+**New finding, not previously distilled:** the "8 of 52 commodities have no freshness group"
+item is a symptom of something larger — cross-checked `configs/commodities/*.yaml` commodity
+codes against every price-bearing section of `configs/ingestion/sources.yaml`
+(`prices`/`vn_prices`/`vn_history`/`vn_stocks`) and all **8 are commodities with NO market-price
+connector registered at all**: `CHINESE_GARLIC`, `RED_ONION_CHINA`, `RED_ONION_INDIA`,
+`INDIAN_CHILIES`, `PEANUTS`, `DEHYDRATED_GARLIC`, `DEHYDRATED_ONION`, `ROBUSTA` — exactly the
+"garlic, chili, onion, robusta" commodities the profiles describe drivers for (weather regions,
+USDA supply-demand) but never got a `find-price-source` → `add-commodity` price-ingestion step.
+Until one exists these can never accumulate `fact_price_daily` rows, so they can never be
+forecast, never get a real freshness group, and a "no data" gap looks identical to a "stale
+data" gap — there's nothing to add a group over yet. Onboarding a live price source per
+commodity is exactly what the `find-price-source`/`add-commodity`/`backfill-price-history`
+skills exist for; it needs live network probing per commodity and is its own multi-step pack,
+not a same-run fix. Flagging for the next owner-directed pass rather than guessing at scrapers
+unsupervised.
+**Rules distilled:** (1) On a scheduled pass with no new commits, re-run gates cold before
+concluding "healthy" — a clean `git log` doesn't prove the toolchain/deps still resolve the
+same way after time has passed (here they did, but that's a measured fact, not an assumption).
+(2) "No freshness group" and "no price connector" are different severities; check the
+ingestion config's own source lists before assuming the fix is a one-line YAML addition to
+`monitoring.groups`.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
