@@ -4,6 +4,33 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-11 SCHED-REVIEW-1 — SCHED_REVIEW_1_PASS (scheduled autonomous review; no live user)
+Health check + PLAN.md §6 deferred-polish pass. Confirmed baseline unchanged since AUDIT-1
+(571502f): **pytest 599 passed + 1 skip · ruff 0 · mypy 0 (28+34) · workflows 5/5** — no
+regressions, nothing new to fix at the code-logic level.
+**Shipped:** (1) `.github/dependabot.yml` — weekly pip (root), npm (`apps/web`, `next`
+major excluded — v16 stays its own approval-gated pack per PLAN §6), npm (root worker),
+github-actions; grouped minor/patch, no auto-merge, every PR still runs `ci.yml`. (2)
+`package.json`/`package-lock.json`: `@cloudflare/containers` was pinned to the npm
+dist-tag `"latest"` instead of a semver range — harmless under `npm ci` (lockfile already
+resolved it to `0.3.7`) but a real drift risk under any future plain `npm install`. Now
+`^0.3.7`, matching the resolved version; re-verified `npm ci --dry-run` stays in sync.
+**Investigated, deliberately NOT touched (still open, unchanged from AUDIT-1B):** the
+`ml/forecast.py::load_price_series` / `ml/build_pandas_mv.py` single global-MAX(revision)
+read pattern silently drops any date a partial restatement didn't cover — confirmed still
+live, but it is entangled with `min_reload_coverage` (currently 0.90) inside the
+owner-approval-gated VN30-PROD/restatement track (PLAN §5); switching the read side to a
+per-date-latest-revision join on its own risks the opposite failure mode the single-basis
+rule exists to prevent (splicing an old-basis date next to newly-adjusted ones), so this
+needs the owner's write-path decision first, not a read-side workaround. `/ai/chat`
+rate-limiter (keys on client-controlled first X-Forwarded-For hop) also left alone — needs
+the owner's trusted-proxy hop count, not a guess. Web `npm audit`: the remaining
+postcss/esbuild advisories only clear via the Next.js v16 major (PLAN §6 — explicitly its
+own pack). No `.env`/DB/deploy touched (read-only local smoke only, no `--write`).
+**Rule distilled:** a read path that special-cases "latest revision" per *series* rather
+than per *date* is only as safe as the write path's coverage guarantee — don't patch one
+side without checking whether the other side already assumes the gap.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/

@@ -102,7 +102,11 @@ Highest-value next actions, in order:
 ## 6. Deferred polish (small, safe, anytime)
 
 - Optional whitespace gate in CI.
-- Optional: Dependabot / container scan; parameterize web Docker `API_PROXY_TARGET`.
+- ~~Dependabot~~ — DONE (`.github/dependabot.yml`, 2026-09-11): weekly pip (root),
+  npm (`apps/web`, `next` major excluded pending its own pack), npm (root worker),
+  github-actions; grouped minor/patch, no auto-merge — every PR still runs `ci.yml`.
+  Optional: container image scan. `API_PROXY_TARGET` was already parameterized
+  (Dockerfile `ARG`/`ENV`, overridable via `--build-arg`) — nothing to do there.
 - Optional: E2E smoke (health + one forecast via proxy).
 - Next.js major bump to v16 (needed to clear the remaining postcss/esbuild advisories) —
   breaking change, needs its own pack + explicit approval, not "anytime" polish.

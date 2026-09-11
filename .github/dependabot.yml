@@ -1,0 +1,44 @@
+# Automated dependency-update PRs. Grouped + weekly to avoid noise; nothing here
+# auto-merges — every PR still runs the real CI gate (.github/workflows/ci.yml)
+# and needs human/agent review before merge, per CLAUDE.md "no destructive
+# overwrites" / PLAN.md release-safety rules.
+version: 2
+updates:
+  # Root Python deps (requirements.txt / requirements-dev.txt / pyproject.toml)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      python-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Next.js dashboard (apps/web)
+  - package-ecosystem: "npm"
+    directory: "/apps/web"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      web-minor-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # Next.js major bump needs its own pack + explicit approval (postcss/esbuild
+      # advisories only clear on v16 — see PLAN.md §6) — do not propose it here.
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+
+  # Cloudflare Worker wrapper (root package.json)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Workflow actions (checkout, setup-python, setup-node, ...)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
