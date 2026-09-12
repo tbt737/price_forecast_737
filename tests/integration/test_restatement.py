@@ -288,6 +288,30 @@ def test_truncated_reload_is_refused(session: Session) -> None:
     assert _series(session) == pytest.approx(BASIS_A)
 
 
+def test_reload_missing_a_single_stored_date_is_refused(session: Session) -> None:
+    # Regression for the near-100%-but-not-quite gap: dropping just ONE of 18 stored
+    # dates yields coverage 17/18 ≈ 0.944 — comfortably above the old 0.9 threshold,
+    # which would have PROMOTED this reload and made that one date vanish from every
+    # single-basis read path (ml.forecast.load_price_series takes MAX(revision) per
+    # series, not per date, so a date absent at the new revision is gone, not stale).
+    # min_reload_coverage == 1.0 must refuse it instead.
+    _seed_initial(session, BASIS_A)
+    missing_date = sorted(BASIS_A)[-1]
+    almost_complete = {d: round(v * 0.85, 4) for d, v in BASIS_A.items() if d != missing_date}
+    assert 0.9 < len(almost_complete) / len(BASIS_A) < 1.0
+
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=_fetch_for(almost_complete), dry_run=False
+    )
+    item = report["instruments"][0]
+    assert item["status"] == "error" and any("coverage" in w for w in item["warnings"])
+    # Fail-closed: nothing was written; the canonical series still has every date.
+    assert {r[2] for r in _all_rows(session)} == {0}
+    served = load_price_series(session, "TSTA_VN")
+    assert served is not None and len(served["dates"]) == len(BASIS_A)
+    assert missing_date in served["dates"]
+
+
 def test_duplicate_grain_inside_reload_aborts_whole_instrument(session: Session) -> None:
     _seed_initial(session, BASIS_A)
     restated = {d: round(v * 0.85, 4) for d, v in BASIS_A.items()}
@@ -408,5 +432,5 @@ def test_reconcile_config_loads_from_sources_yaml() -> None:
     rc = cfg.vn_stocks_reconcile
     assert isinstance(rc, StockReconcileConfig)
     assert rc.epsilon_pct == 0.5 and rc.anchor_days == 5
-    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 0.9
+    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 1.0
     assert rc.deep_from == "2000-01-01"

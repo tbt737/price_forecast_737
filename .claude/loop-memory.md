@@ -4,6 +4,43 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-12 RESTATE-COVERAGE-1 — RESTATE_COVERAGE_1_PASS (local; autonomous scheduled review)
+Closed the #1 "still open" item carried since AUDIT-1B: `min_reload_coverage` (the
+restatement reload-acceptance guard) was **0.9**, so a deep reload reproducing exactly
+90%+ of stored dates was PROMOTED to the canonical revision — and because every
+single-basis read path (`ml.forecast.load_price_series`, the API price endpoint,
+`build_pandas_mv.py`) takes `MAX(revision)` per (commodity, instrument) with no
+per-date grouping, any stored date NOT reproduced at that new revision doesn't go
+stale, it **vanishes** from history entirely. Dormant (`ENABLE_VN_STOCKS_INGEST` is
+off everywhere — no deploy surface sets it), but a live landmine the moment VN-stocks
+ingest is turned on.
+**Shipped:** `min_reload_coverage` 0.9 → **1.0** in `etl/ingestion/config.py` (both the
+dataclass default and the YAML-loader default), `configs/ingestion/sources.yaml:182`,
+and the assertion in `tests/integration/test_restatement.py:411`; prose in
+`docs/etl/vn-stocks-restatement.md` §4 updated (0.9/90% → 1.0/100%, with the why). New
+regression test `test_reload_missing_a_single_stored_date_is_refused` — drops 1 of 18
+stored dates (coverage 17/18 ≈ 0.944, comfortably above the old 0.9 threshold) and pins
+that the reload is now refused, the store stays untouched, and
+`ml.forecast.load_price_series` still returns all 18 dates. All 3 existing happy-path
+restatement tests already republish 100% coverage, so nothing legitimate regresses; the
+2 existing truncation tests (far below 90%) are unaffected.
+**Gates:** pytest 599+1skip → **600 passed + 1 skip** · ruff 0 · mypy 0 (28+34) ·
+workflows 6/6. `apps/web` untouched — vitest/eslint/build not re-run (not required).
+**Still open, ranked (nothing else changed this pass):** the underlying `MAX(revision)`-
+per-series (not per-date) read pattern in `ml/forecast.py:85-92` and
+`build_pandas_mv.py:80` is now unreachable via a truncated *reload* (coverage must be
+100%), but the pattern itself is still there — a future data class that legitimately
+needs partial/rolling per-date revisions would still break silently · `/ai/chat` rate
+limiter keys on the first X-Forwarded-For entry (client-controlled) · 8 of 52
+commodities in no freshness group · alembic vs `db/migrations/*.sql` never compared.
+**Rules distilled:** (1) When a read path enforces "single basis, no mixing" by taking
+one MAX(revision) per series, the write-side acceptance guard for a new revision must
+require 100% coverage of what it replaces — anything less silently deletes history
+rather than leaving it stale, and deletion is worse than staleness because nothing
+downstream can detect it. (2) A percentage threshold guard needs a boundary regression
+test at "just under 100% but comfortably over the threshold," not just a "far below
+threshold" truncation test — the latter doesn't exercise the actual gap.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
