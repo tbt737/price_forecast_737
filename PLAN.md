@@ -120,6 +120,29 @@ Highest-value next actions, in order:
   on Potato; research-only, guarded by `test_vdp_forecaster.py::test_not_wired_into_production`.
 - **Volatility regime-gate — REFUTED** (model value concentrates in cyclical produce and
   grows with volatility).
+- **Galperin / Calogero–Moser LOB collision counter — REJECTED by evidence** (owner decision D1;
+  landed at commit `c709700896ae67d7f317de997379fbb03911b190` as `docs/ml/galperin-lob-research.md`,
+  blob `da8c2dfd658d127ad2fff21573adfc2c1cc63836` — cite the blob, not the file's on-disk sha256:
+  `core.autocrlf=true` here rewrites line endings on checkout, so only `git hash-object --path`
+  reproduces that id). Three grounds, none of them data-dependent: the model emits a dimensionless
+  count and never a price displacement; its collisions are tick-scale while this platform stores one
+  bar per day (`fact_price_daily.price_date` is a `DATE`, `db/migrations/001_core_schema.sql:237`);
+  the source mapping fails before any data — `galperin-lob-research.md:11,12,13`, named as the
+  load-bearing three at `:104`. Headline number: the walk-forward pooled MAE improvement over naive
+  is -0.08 / -0.08 / -0.18 % at h = 7 / 14 / 30 on 2,842 events over 48 symbols
+  (`ev:stdout/v4_adversarial_recheck_galperin_timing.py__L41.txt:44-46`). **No volume work opens**
+  (D2): the configuration proves only that 12 of the 52 committed profiles sit outside both the
+  VN-equity and the Yahoo basket (`configs/ingestion/sources.yaml:188-217,11-21`) with no
+  volume-bearing feed — the Yahoo collector drops the Volume column
+  (`etl/sources/market/yahoo.py:26-33`) although the storage column exists
+  (`db/migrations/001_core_schema.sql:243`). Evidence stays sealed out of repo at
+  `E:\CQP_EVIDENCE\galperin-lob\` (D3), anchored by the immutable first-round manifest
+  `audit/MANIFEST-v1.sha256` — 296 entries, sha256
+  `15b92ee4c35761f1fb0544809a23ff9db7c0ff0b7e055c936c004b4ba0b44f5f`; the live `MANIFEST.sha256`
+  gains rows at every verification round, so its own hash and entry count are deliberately not
+  quoted here (D6). Landed at **CONDITIONAL** level — the last archived verification reads VERDICT
+  CÓ ĐIỀU KIỆN (`ev:audit/V-GALPERIN-DELTA-3_report.md:1`). Do not implement the collision counter
+  in any form, and do not build the execution architecture proposed around it.
 - PINN / MARL / deep TaylorNet / fractional derivatives — deferred, research-grade.
 - **ECON-3 CVaR confidence bands (display-only)** is the preferred candidate IF econophysics
   is revisited — behind ACC/VN priorities; backtest by calibration coverage, not vs naive.
