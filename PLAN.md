@@ -38,7 +38,7 @@ never go down; locked invariants never weaken.
 Authoritative repair sequence (measured 2026-09-13): `docs/plans/2026-09-13-ops-repair-upgrade.md`.
 Pack order: production safety > data reliability > accuracy evidence > polish.
 
-1. **VN30-RETRY** (Grok, parallel) — 12/30 HOSE tickers `window fetch yielded no usable bars` on ingest 2026-09-12; retry empty Entrade fetches. Job stayed green via `continue-on-error`.
+1. **VN30-RETRY** — code on this branch (`3722c20`): 3 attempts on empty bars / `OSError`. Still needs a post-merge ingest dispatch on a HOSE session to confirm the 12-ticker cluster is gone.
 2. **INGEST-SIGNAL** — surface VN30 `ok:false` + MV refresh CONTRACT_VIOLATION instead of a silent green Daily ingestion.
 3. **MV-CANONICALIZE** — TABLE→MATERIALIZED VIEW via `scripts/canonicalize_ml_feature_mv.py` (**owner approval**, two-phase prepare then cutover). Daily `refresh_ml_features.py` is red until this lands.
 4. **ACC-REVIEW** — read-only SQL on `fact_forecast_log` (writer since 2026-07-05; h=30 should have matured). Still WAITING until numbers are read, not guessed.

@@ -56,7 +56,7 @@ Cập nhật `PLAN.md` cho khớp production: ingest VN30 đang ON, inventory li
 
 ---
 
-### Pack 1 — VN30-RETRY — **Grok, chạy song song**
+### Pack 1 — VN30-RETRY — **landed on this branch** (`3722c20`)
 
 **Vấn đề:** Entrade trả cửa sổ rỗng cho ~12/30 mã; `_fetch_records` không retry → ticker đó `error` cả ngày. Job vẫn xanh vì `continue-on-error`.
 
