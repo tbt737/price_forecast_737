@@ -55,7 +55,10 @@ def select_groups(groups: list, names: list[str] | None) -> tuple[list, list[str
 
 def classify(group, latest: date | None, today: date, strict: bool) -> str:
     """Verdict for one group given its latest price date: ``'ok'`` | ``'warn'`` | ``'fail'``.
-    A stale group fails when it is ``critical`` OR ``strict`` is set; otherwise it only warns."""
+    Frozen snapshot groups never fail the live gate (they are not a cron feed).
+    A stale live group fails when it is ``critical`` OR ``strict`` is set; otherwise it only warns."""
+    if getattr(group, "frozen", False):
+        return "ok"
     if is_within_gap(latest, today, group.max_gap_days):
         return "ok"
     return "fail" if (group.critical or strict) else "warn"
@@ -112,6 +115,12 @@ def main(argv: list[str] | None = None) -> int:
         for g in groups:
             latest = _latest_date(session, list(g.commodities))
             tag = "critical" if g.critical else "non-critical"
+            if getattr(g, "frozen", False):
+                print(
+                    f"[freshness] FROZEN — {g.name} ({tag}): latest {latest} "
+                    f"(snapshot; not a live feed)"
+                )
+                continue
             verdict = classify(g, latest, today, args.strict)
             if verdict == "ok":
                 print(f"[freshness] OK — {g.name} ({tag}): latest {latest} within {g.max_gap_days}d of {today}")

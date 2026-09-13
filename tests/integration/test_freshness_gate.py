@@ -7,6 +7,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import yaml
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 from check_freshness import classify, is_within_gap, select_groups  # noqa: E402
@@ -39,6 +41,9 @@ def test_freshness_config_loads_critical_and_noncritical_groups() -> None:
     vn = groups["vn_domestic"]
     assert vn.critical is False  # scraped spot ⇒ warn, not block the daily gate
     assert "GOLD_VN" in vn.commodities and "SILVER_VN" in vn.commodities
+    frozen = groups["produce_frozen"]
+    assert frozen.frozen is True and frozen.critical is False
+    assert "ROBUSTA" in frozen.commodities and "DEHYDRATED_ONION" in frozen.commodities
 
 
 # ETL-VN-4: --group filter + strict classification (pure; no DB/network).
@@ -86,3 +91,23 @@ def test_classify_fresh_is_ok_even_strict() -> None:
     today = date(2026, 7, 4)
     assert classify(_VN, date(2026, 7, 3), today, strict=True) == "ok"
     assert classify(_FUT, date(2026, 7, 3), today, strict=True) == "ok"
+
+
+def test_classify_frozen_never_fails() -> None:
+    frozen = FreshnessGroup(
+        name="produce_frozen", critical=False, max_gap_days=3650,
+        commodities=("ROBUSTA",), frozen=True,
+    )
+    today = date(2026, 9, 13)
+    assert classify(frozen, date(2026, 4, 20), today, strict=True) == "ok"
+    assert classify(frozen, None, today, strict=True) == "ok"
+
+
+def test_every_profile_is_in_a_freshness_group() -> None:
+    profiles_dir = Path(__file__).resolve().parents[2] / "configs" / "commodities"
+    codes = set()
+    for path in profiles_dir.glob("*.yaml"):
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        codes.add(data["commodity_code"])
+    grouped = {c for g in load_freshness_groups() for c in g.commodities}
+    assert sorted(codes - grouped) == []

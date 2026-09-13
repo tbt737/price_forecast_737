@@ -47,3 +47,33 @@ def test_prices_endpoint_serves_only_latest_revision(
     # ONLY revision-1 values — none of the revision-0 basis leaks into the series.
     assert [p["value"] for p in body["points"]] == [85000.0, 85850.0, 86000.0]
     assert len(body["points"]) == 3  # no duplicate dates from the older revision
+
+
+def test_prices_endpoint_keeps_dates_only_on_older_revision(
+    client: TestClient, seeded_session: Session
+) -> None:
+    """A later revision that omits a stored date must not drop that date from /prices."""
+    com = seeded_session.execute(select(DimCommodity).filter_by(commodity_code="FPT_VN")).scalar_one()
+    inst = seeded_session.execute(
+        select(DimMarketInstrument).filter_by(instrument_code="HOSE_FPT")
+    ).scalar_one()
+    d1, d2, d3 = date(2026, 7, 1), date(2026, 7, 2), date(2026, 7, 3)
+    seeded_session.add_all(
+        [
+            _row(com, inst, d1, 100_000, 0),
+            _row(com, inst, d2, 101_000, 0),
+            _row(com, inst, d3, 102_000, 0),
+            _row(com, inst, d1, 85_000, 1),
+            _row(com, inst, d2, 85_850, 1),
+        ]
+    )
+    seeded_session.commit()
+
+    r = client.get("/commodities/FPT_VN/prices?days=20000")
+    assert r.status_code == 200
+    by_date = {p["date"]: p["value"] for p in r.json()["points"]}
+    assert by_date == {
+        "2026-07-01": 85000.0,
+        "2026-07-02": 85850.0,
+        "2026-07-03": 102000.0,  # only on rev 0 — still served
+    }

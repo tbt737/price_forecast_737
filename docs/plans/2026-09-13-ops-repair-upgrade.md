@@ -79,7 +79,7 @@ python -m pytest tests/integration/test_restatement.py -q
 
 ---
 
-### Pack 2 — INGEST-SIGNAL (visibility)
+### Pack 2 — INGEST-SIGNAL — **landed on this branch**
 
 **Vấn đề:** Job Daily ingestion xanh trong khi VN30 `ok:false` và MV refresh exit 1.
 
@@ -122,7 +122,7 @@ Writer từ 2026-07-05; h=30 đã quá 6 tuần. Evaluator Monday xanh. `PLAN.md
 
 ---
 
-### Pack 5 — RESTATE-COVERAGE
+### Pack 5 — RESTATE-COVERAGE — **landed on this branch**
 
 AUDIT-1B: `min_reload_coverage == 0.9` chấp nhận reload cắt 10% lịch sử. Pin hiện tại: `tests/integration/test_restatement.py:411`.
 
@@ -136,7 +136,7 @@ AUDIT-1B: `min_reload_coverage == 0.9` chấp nhận reload cắt 10% lịch s�
 
 ---
 
-### Pack 6 — FORECAST-REVISION (đường serve live)
+### Pack 6 — FORECAST-REVISION — **landed on this branch**
 
 `ml/forecast.py` lấy `MAX(revision)` theo (commodity, instrument), không theo ngày. AUDIT-1B: cùng class lỗi `build_pandas_mv` từng HIGH.
 
@@ -149,7 +149,7 @@ AUDIT-1B: `min_reload_coverage == 0.9` chấp nhận reload cắt 10% lịch s�
 
 ---
 
-### Pack 7 — FRESHNESS-PRODUCE (config)
+### Pack 7 — FRESHNESS-PRODUCE — **landed on this branch**
 
 8/52 mã không thuộc freshness group (produce Ấn Độ + dehydrated*). Forecast UI hiện như series tươi.
 

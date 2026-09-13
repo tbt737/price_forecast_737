@@ -39,12 +39,12 @@ Authoritative repair sequence (measured 2026-09-13): `docs/plans/2026-09-13-ops-
 Pack order: production safety > data reliability > accuracy evidence > polish.
 
 1. **VN30-RETRY** — code on this branch (`3722c20`): 3 attempts on empty bars / `OSError`. Still needs a post-merge ingest dispatch on a HOSE session to confirm the 12-ticker cluster is gone.
-2. **INGEST-SIGNAL** — surface VN30 `ok:false` + MV refresh CONTRACT_VIOLATION instead of a silent green Daily ingestion.
+2. **INGEST-SIGNAL** — landed: ingest.yml warns `INGEST_PARTIAL_FAIL` when vn_stocks or MV refresh fail; job stays green.
 3. **MV-CANONICALIZE** — TABLE→MATERIALIZED VIEW via `scripts/canonicalize_ml_feature_mv.py` (**owner approval**, two-phase prepare then cutover). Daily `refresh_ml_features.py` is red until this lands.
 4. **ACC-REVIEW** — read-only SQL on `fact_forecast_log` (writer since 2026-07-05; h=30 should have matured). Still WAITING until numbers are read, not guessed.
-5. **RESTATE-COVERAGE** — raise `min_reload_coverage` 0.9 → 1.0 (AUDIT-1B HIGH).
-6. **FORECAST-REVISION** — per-date latest revision on `ml/forecast.py` serve path.
-7. **FRESHNESS-PRODUCE** + **DOCS-INVENTORY** — frozen Agmarknet group; live `/stats` is 66 profiles vs test-pin 52.
+5. **RESTATE-COVERAGE** — landed: `min_reload_coverage` 0.9 → **1.0**.
+6. **FORECAST-REVISION** — landed: per-date latest revision on `load_price_series` + `/prices` + evaluator LOOKUP.
+7. **FRESHNESS-PRODUCE** — landed: `produce_frozen` group; every YAML profile is in a freshness group. Live `/stats` 66 vs test-pin 52 remains a docs note (Pack 8).
 
 Observed 2026-09-13 (do not treat §5 “ingest OFF” as current): cron ingest **does** run `vn_stocks --reconcile` (`ENABLE_VN_STOCKS_INGEST` is on). Freshness OK (futures 2026-09-11, vn_domestic 2026-09-12, vn_stocks 2026-09-11). MV refresh fails: `mv_ml_daily_features_wide` is a table. Indian produce last date 2026-04-20 (snapshot, not a dead cron).
 

@@ -125,9 +125,9 @@ def get_commodity_prices(
     if commodity is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Unknown commodity '{commodity_code}'")
 
-    # Benchmark by DISTINCT dates; serve ONLY the instrument's latest revision — a
-    # restated (adjusted) series is re-ingested at revision+1 (etl/restatement.py) and
-    # mixing revisions would splice two adjustment bases (see ml.forecast counterpart).
+    # Benchmark by DISTINCT dates; per date take that date's latest revision (keep
+    # in sync with ml.forecast.load_price_series). Where a later revision restated a
+    # date, that value wins; dates only on an older revision are not dropped.
     best = db.execute(
         select(FactPriceDaily.market_instrument_key)
         .where(FactPriceDaily.commodity_key == commodity.commodity_key)
@@ -139,21 +139,29 @@ def get_commodity_prices(
         return PriceSeriesOut(commodity_code=commodity.commodity_code, points=[])
 
     instrument = db.get(DimMarketInstrument, best)
-    latest_revision = (
-        select(func.max(FactPriceDaily.revision))
+    per_date = (
+        select(
+            FactPriceDaily.price_date.label("price_date"),
+            func.max(FactPriceDaily.revision).label("max_rev"),
+        )
         .where(
             FactPriceDaily.commodity_key == commodity.commodity_key,
             FactPriceDaily.market_instrument_key == best,
         )
-        .scalar_subquery()
+        .group_by(FactPriceDaily.price_date)
+        .subquery()
     )
     cutoff = date.today() - timedelta(days=max(1, days))
     rows = db.execute(
         select(FactPriceDaily.price_date, FactPriceDaily.value, FactPriceDaily.currency)
+        .join(
+            per_date,
+            (FactPriceDaily.price_date == per_date.c.price_date)
+            & (FactPriceDaily.revision == per_date.c.max_rev),
+        )
         .where(
             FactPriceDaily.commodity_key == commodity.commodity_key,
             FactPriceDaily.market_instrument_key == best,
-            FactPriceDaily.revision == latest_revision,
             FactPriceDaily.price_date >= cutoff,
         )
         .order_by(FactPriceDaily.price_date)

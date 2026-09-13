@@ -106,6 +106,7 @@ def test_lookup_actual_sql_matches_single_basis_read_path() -> None:
     assert "count(distinct" in s.replace(" ", "")
     assert "max(f.revision)" in s or "max(revision)" in s
     assert "f.revision = lr.revision" in s
+    assert "group by f.price_date" in s
 
 
 # ── CLI dry-run vs --write ───────────────────────────────────────────────────
