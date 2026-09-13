@@ -1,7 +1,9 @@
 # ARCHITECTURE — Multi-Commodity Quant Forecasting Platform
 
 > **Status:** Phases 1–10 implemented and **live** (Cloud Run + Supabase). **52**
-> profiles (22 commodities + 30 VN30 equities); star schema + loaders; ETL connectors
+> YAML profiles (22 commodities + 30 VN30 equities; quality-test pin). Live
+> `/stats` 2026-09-13 is 66/114 because 14 leftover VN equities have registry rows
+> and no YAML — `docs/ops/live-inventory-delta-2026-09-13.md`. Star schema + loaders; ETL connectors
 > (Yahoo prices, NASA POWER weather, VN domestic/stocks, config-driven CSV/Agmarknet
 > imports) with a fail-closed provenance gate; ML forecasting (Ridge AR + XGBoost,
 > multi-scale Cobweb cycle harmonics, OU mean-reversion) chosen per-commodity by

@@ -9,13 +9,16 @@ never editing this engine. Quotes are published in thousands of VND; the configu
 Date-range source like the other historical VN feeds: it runs ONLY when explicitly
 requested (``--sources vn_stocks``) — the daily workflow tops up a short window, a
 deep backfill passes a wide ``--history-days``. The fetch function is injectable so
-tests never touch the network; per-endpoint failures are fail-soft (skip, don't crash).
+tests never touch the network; empty bars and transient ``OSError``/timeout are
+retried (``FETCH_ATTEMPTS``) then fail-soft per endpoint (skip, don't crash).
 """
 
 from __future__ import annotations
 
 import json
 import math
+import time
+import urllib.request
 from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -27,14 +30,51 @@ from etl.sources.base import BaseSource
 
 #: fetch(url) -> raw response body (text)
 StockFetch = Callable[[str], str]
+#: sleep(seconds) — injectable so retry backoff is deterministic in tests
+SleepFn = Callable[[float], None]
+
+#: Total tries of the same URL (1 initial + 2 retries) for empty bars / OSError.
+FETCH_ATTEMPTS = 3
+#: Backoff after attempts 1 and 2 (length must be FETCH_ATTEMPTS - 1).
+FETCH_RETRY_BACKOFF_SECONDS: tuple[float, ...] = (0.4, 0.8)
 
 
 def _http_fetch(url: str) -> str:
-    import urllib.request
-
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - fixed https chart endpoints
         return resp.read().decode("utf-8", errors="replace")
+
+
+def _noop_sleep(_seconds: float) -> None:
+    return None
+
+
+def _fetch_chart_rows(
+    url: str,
+    *,
+    fetch: StockFetch,
+    parser: Callable[[str, float], list[dict[str, Any]]],
+    scale: float,
+    sleep: SleepFn,
+) -> list[dict[str, Any]]:
+    """Fetch+parse ``url``, retrying empty bars and transient ``OSError``/timeout.
+
+    Same URL, up to ``FETCH_ATTEMPTS`` tries. Empty parsed bars and ``OSError``
+    (timeouts included) back off with ``FETCH_RETRY_BACKOFF_SECONDS`` then retry.
+    Parse errors (``JSONDecodeError``, ``ValueError``) are not retried — they
+    propagate to the caller for the existing fail-soft skip.
+    """
+    rows: list[dict[str, Any]] = []
+    for attempt in range(FETCH_ATTEMPTS):
+        try:
+            rows = parser(fetch(url), scale)
+        except OSError:
+            rows = []
+        if rows:
+            return rows
+        if attempt + 1 < FETCH_ATTEMPTS:
+            sleep(FETCH_RETRY_BACKOFF_SECONDS[attempt])
+    return []
 
 
 def parse_chart_arrays(raw: str, scale: float) -> list[dict[str, Any]]:
@@ -78,9 +118,10 @@ STOCK_HISTORY_PARSERS: dict[str, Callable[[str, float], list[dict[str, Any]]]] =
 
 class VnStockHistorySource(BaseSource):
     """Daily-close history for Vietnamese listed equities over a [from, to] window.
-    Yields one ``price_daily`` record per source-observed trading date. Fails soft per
-    endpoint (a dead ticker or malformed body skips that ticker, never crashes the run);
-    duplicate dates within one response are dropped deterministically (first wins)."""
+    Yields one ``price_daily`` record per source-observed trading date. Empty parsed
+    bars and transient ``OSError``/timeout retry the same URL up to ``FETCH_ATTEMPTS``
+    times; remaining per-endpoint failures are fail-soft (skip, never crash the run).
+    Duplicate dates within one response are dropped deterministically (first wins)."""
 
     family = FactFamily.price_daily
 
@@ -91,11 +132,20 @@ class VnStockHistorySource(BaseSource):
         date_from: int,
         date_to: int,
         fetch: StockFetch | None = None,
+        sleep: SleepFn | None = None,
     ) -> None:
         self._specs = specs
         self._from = int(date_from)
         self._to = int(date_to)
         self._fetch = fetch or _http_fetch
+        # Injected fetch ⇒ no wall-clock wait (offline tests). Production uses time.sleep
+        # unless a sleep injectable is provided explicitly.
+        if sleep is not None:
+            self._sleep = sleep
+        elif fetch is not None:
+            self._sleep = _noop_sleep
+        else:
+            self._sleep = time.sleep
         self.source_code = specs[0].source_code if specs else "vn_stocks"
 
     def collect(self) -> Iterable[NormalizedRecord]:
@@ -108,7 +158,9 @@ class VnStockHistorySource(BaseSource):
                 # inside the try: a malformed url_template (bad placeholder) must skip
                 # this endpoint like any other per-endpoint failure, not crash the run
                 url = spec.url_template.format(ts_from=self._from, ts_to=self._to, ticker=spec.ticker)
-                rows = parser(self._fetch(url), spec.scale)
+                rows = _fetch_chart_rows(
+                    url, fetch=self._fetch, parser=parser, scale=spec.scale, sleep=self._sleep
+                )
             except (OSError, ValueError, KeyError, IndexError, json.JSONDecodeError):
                 continue  # network/template/parse failure is fail-soft per endpoint
             origin_base = spec.url_template.split("?", 1)[0]

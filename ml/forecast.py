@@ -79,23 +79,32 @@ def load_price_series(session: Session, commodity_code: str) -> dict[str, Any] |
         return {"commodity": commodity, "instrument": None, "dates": [], "values": []}
 
     instrument = session.get(DimMarketInstrument, instrument_key)
-    # Single-basis rule: an ADJUSTED source restates its whole history at corporate
-    # actions and is re-ingested at revision+1 (etl/restatement.py) — mixing revisions
-    # would splice two adjustment bases, so read ONLY the instrument's latest revision.
-    latest_revision = (
-        select(func.max(FactPriceDaily.revision))
+    # Per-date latest revision: a truncated restatement (rev N missing some dates)
+    # must not drop those dates from the serve path. Dates present on rev N still
+    # prefer N (single basis where both exist). Pack 5 (coverage 1.0) is the
+    # guard against mixed bases becoming canonical in the first place.
+    per_date = (
+        select(
+            FactPriceDaily.price_date.label("price_date"),
+            func.max(FactPriceDaily.revision).label("max_rev"),
+        )
         .where(
             FactPriceDaily.commodity_key == commodity.commodity_key,
             FactPriceDaily.market_instrument_key == instrument_key,
         )
-        .scalar_subquery()
+        .group_by(FactPriceDaily.price_date)
+        .subquery()
     )
     rows = session.execute(
         select(FactPriceDaily.price_date, FactPriceDaily.value)
+        .join(
+            per_date,
+            (FactPriceDaily.price_date == per_date.c.price_date)
+            & (FactPriceDaily.revision == per_date.c.max_rev),
+        )
         .where(
             FactPriceDaily.commodity_key == commodity.commodity_key,
             FactPriceDaily.market_instrument_key == instrument_key,
-            FactPriceDaily.revision == latest_revision,
             FactPriceDaily.value.is_not(None),
         )
         .order_by(FactPriceDaily.price_date)

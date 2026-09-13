@@ -118,3 +118,28 @@ def test_ml_feature_refresh_step_present_and_non_blocking() -> None:
     assert step.get("continue-on-error") is True
     assert str(step.get("if")).strip() == "always()"
     assert "${{ secrets.DATABASE_URL }}" in (step.get("env", {}) or {}).get("DATABASE_URL", "")
+
+
+def test_partial_fail_is_surfaced_without_failing_the_job() -> None:
+    """VN30 ok:false and MV CONTRACT_VIOLATION must not hide inside a green job,
+    but must not turn Daily ingestion red (Tết / Entrade blips / pandas TABLE)."""
+    steps = _steps()
+    vn = _with_run(steps, "--sources vn_stocks")[0]
+    refresh = _with_run(steps, "refresh_ml_features.py")[0]
+    assert vn.get("id") == "vn_stocks"
+    assert refresh.get("id") == "mv_refresh"
+    surface = [
+        s for s in steps
+        if isinstance(s.get("run"), str) and "INGEST_PARTIAL_FAIL" in s["run"]
+    ]
+    assert len(surface) == 1
+    step = surface[0]
+    assert step.get("continue-on-error") is not True  # the step itself is a no-op echo
+    assert "always()" in str(step.get("if"))
+    assert "!cancelled()" in str(step.get("if"))
+    # Outcomes are read, not used as a job-level failure.
+    assert "steps.vn_stocks.outcome" in str(step.get("env", {}))
+    assert "steps.mv_refresh.outcome" in str(step.get("env", {}))
+    # Critical futures step and freshness gate stay the only job-failing data gates.
+    gate = _with_run(steps, "check_freshness.py")[0]
+    assert gate.get("continue-on-error") is not True

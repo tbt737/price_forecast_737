@@ -63,6 +63,7 @@ jobs:
       # needs DATABASE_URL), so it still self-heals after an unrelated failure — but it
       # must not fire on a cancelled run (owner decision 2026-07-11, observation 3).
       - name: Ingest VN30 equities (non-blocking, flag-gated)
+        id: vn_stocks
         if: ${{ !cancelled() && vars.ENABLE_VN_STOCKS_INGEST == 'true' }}
         continue-on-error: true
         env:
@@ -92,11 +93,28 @@ jobs:
       # Non-blocking: a missing MV (pre-apply_views) or lock contention must not fail
       # the price feed — freshness gate below still enforces data advancement.
       - name: Refresh ML feature view (non-blocking)
+        id: mv_refresh
         if: always()
         continue-on-error: true
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python scripts/refresh_ml_features.py --write
+
+      # Visibility only: continue-on-error steps above can fail while the job stays
+      # green (VN stocks are non-critical; MV refresh is non-blocking). Emit a warning
+      # annotation so a 12-ticker ok:false or a TABLE-not-matview refresh cannot hide
+      # in a green check. Does NOT fail the job — freshness gate below is the critical
+      # signal. Skipped vn_stocks (flag off) is not a failure.
+      - name: Surface non-blocking failures
+        if: ${{ always() && !cancelled() }}
+        env:
+          VN_STOCKS_OUTCOME: ${{ steps.vn_stocks.outcome }}
+          MV_REFRESH_OUTCOME: ${{ steps.mv_refresh.outcome }}
+        run: |
+          echo "INGEST_STEP_OUTCOMES vn_stocks=${VN_STOCKS_OUTCOME} mv_refresh=${MV_REFRESH_OUTCOME}"
+          if [ "$VN_STOCKS_OUTCOME" = "failure" ] || [ "$MV_REFRESH_OUTCOME" = "failure" ]; then
+            echo "::warning::INGEST_PARTIAL_FAIL vn_stocks=${VN_STOCKS_OUTCOME} mv_refresh=${MV_REFRESH_OUTCOME} (job stays green; futures freshness is the critical gate)"
+          fi
 
       # Freshness gate (read-only): the run is green ONLY if futures prices actually
       # advanced to the previous business day or later — a green run can no longer mean

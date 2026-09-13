@@ -40,6 +40,8 @@ PROFILE_FILES = sorted(PROFILES_DIR.glob("*.yaml"))
 
 
 def test_sixteen_profiles_present() -> None:
+    # Pin stays 52 even though live /stats is 66 (14 leftover VN equities, no YAML).
+    # See docs/ops/live-inventory-delta-2026-09-13.md — do not invent profiles.
     assert len(PROFILE_FILES) == 52  # 22 commodities + 30 VN30 equities (Vietnam domestic)
 
 

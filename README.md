@@ -5,10 +5,10 @@ A **generic, configuration-driven** AI platform for forecasting commodity prices
 New assets are onboarded by adding a YAML profile — **never** by hardcoding business logic.
 
 > **Project status: Phase 10 — Productionization & UI (live).** See `PLAN.md` for the
-> authoritative snapshot (52 profiles / 100 instruments, Cloud Run + Supabase).
+> authoritative snapshot. Repo YAML pin is **52 profiles** (22 commodities + 30
+> VN30 equities). Live `/stats` 2026-09-13 is **66 / 114 instruments** — extra 14
+> VN equity registry rows have no YAML (`docs/ops/live-inventory-delta-2026-09-13.md`).
 > Companion docs: `ARCHITECTURE.md` (design), `DEPLOY.md` (hosting), `CLAUDE.md` (agent rules).
->
-> This README may lag on inventory counts — prefer `PLAN.md` §2.
 
 ---
 
@@ -96,8 +96,9 @@ make quality                # compileall + ruff + mypy + pytest + workflow check
 Profiles live in `configs/commodities/` (agriculture, metals, energy, logistics,
 Vietnam domestic, and VN30 equities). Count is pinned by
 `tests/quality/test_profiles_quality.py` and reported in `PLAN.md` §2 — currently
-**52** (22 commodities + 30 equities). Each profile follows the schema in
-`ARCHITECTURE.md` / `CLAUDE.md`.
+**52** (22 commodities + 30 equities). Live production has 14 additional leftover
+equity codes without YAML; do not invent profiles to close that gap. Each
+in-repo profile follows the schema in `ARCHITECTURE.md` / `CLAUDE.md`.
 
 ## Contributing / agent sessions
 

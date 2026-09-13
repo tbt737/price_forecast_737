@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from etl.backfill import backfill
 from etl.ingestion.config import StockReconcileConfig, VnStockSpec, load_ingestion_config
 from etl.restatement import reconcile_stock_history
-from etl.sources.market.vn_stocks import VnStockHistorySource
+from etl.sources.market.vn_stocks import FETCH_ATTEMPTS, VnStockHistorySource
 from ml.forecast import load_price_series
 
 URL_TEMPLATE = "https://chart.example/ohlcs/stock?from={ts_from}&to={ts_to}&symbol={ticker}&resolution=1D"
@@ -272,6 +272,36 @@ def test_restated_store_converges_and_is_idempotent(session: Session) -> None:
     assert _series(session) == pytest.approx(restated2)
 
 
+def test_ninety_percent_coverage_reload_is_refused(session: Session) -> None:
+    """AUDIT-1B: coverage == 0.90 used to pass (`coverage < 0.9` is false at exactly
+    0.9) and then MAX(revision) reads dropped the missing 10%. Default is now 1.0."""
+    stored_dates = [
+        d for d in (date(2026, 5, 4) + timedelta(days=i) for i in range(28)) if d.weekday() < 5
+    ][:20]
+    assert len(stored_dates) == 20
+    basis = {d: 100.0 + i for i, d in enumerate(stored_dates)}
+    _seed_initial(session, basis)
+    kept = dict(list(sorted(basis.items()))[2:])  # drop 2 oldest → 18/20 = 0.90
+    assert len(kept) / len(basis) == 0.9
+    truncated = {d: round(v * 0.85, 4) for d, v in kept.items()}
+    restated_window = {d: round(v * 0.85, 4) for d, v in basis.items()}
+
+    def dual_fetch(url: str) -> str:
+        qs = dict(p.split("=") for p in url.split("?", 1)[1].split("&"))
+        lo, hi = int(qs["from"]), int(qs["to"])
+        source = truncated if (hi - lo) > 40 * 86400 else restated_window
+        return _fetch_for(source)(url)
+
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=dual_fetch, dry_run=False
+    )
+    item = report["instruments"][0]
+    assert item["status"] == "error" and not report["ok"]
+    assert any("coverage" in w for w in item["warnings"])
+    assert {r[2] for r in _all_rows(session)} == {0}
+    assert _series(session) == pytest.approx(basis)
+
+
 def test_truncated_reload_is_refused(session: Session) -> None:
     _seed_initial(session, BASIS_A)
     # Restated AND truncated: the source only serves the last 3 days on the new basis.
@@ -402,11 +432,54 @@ def test_restated_rows_release_date_is_reconcile_day(session: Session) -> None:
     assert rel == {TODAY}
 
 
+# ── window-fetch retry (empty / transient OSError) ──────────────────────────
+def test_window_fetch_retries_empty_and_oserror_then_succeeds(session: Session) -> None:
+    # Chart APIs flake under sequential windows: empty body then OSError must not
+    # fail-close the day if a later attempt of the SAME url returns usable bars.
+    _seed_initial(session, BASIS_A)
+    calls = {"n": 0}
+
+    def flaky(url: str) -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return "{}"  # arrayless JSON → zero usable bars
+        if calls["n"] == 2:
+            raise OSError("temporary")
+        return _fetch_for(BASIS_A)(url)
+
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=flaky, dry_run=False
+    )
+    item = report["instruments"][0]
+    assert calls["n"] == FETCH_ATTEMPTS
+    assert item["status"] == "fresh" and report["ok"]
+    assert "window fetch yielded no usable bars" not in item["warnings"]
+    assert _series(session) == pytest.approx(BASIS_A)
+
+
+def test_window_fetch_exhausted_retries_stays_error(session: Session) -> None:
+    _seed_initial(session, BASIS_A)
+    calls = {"n": 0}
+
+    def always_empty(_url: str) -> str:
+        calls["n"] += 1
+        return "{}"
+
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=always_empty, dry_run=False
+    )
+    item = report["instruments"][0]
+    assert calls["n"] == FETCH_ATTEMPTS
+    assert item["status"] == "error" and report["ok"] is False
+    assert item["warnings"] == ["window fetch yielded no usable bars"]
+    assert _series(session) == pytest.approx(BASIS_A)  # fail-closed: store untouched
+
+
 # ── config plumbing ──────────────────────────────────────────────────────────
 def test_reconcile_config_loads_from_sources_yaml() -> None:
     cfg = load_ingestion_config()
     rc = cfg.vn_stocks_reconcile
     assert isinstance(rc, StockReconcileConfig)
     assert rc.epsilon_pct == 0.5 and rc.anchor_days == 5
-    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 0.9
+    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 1.0
     assert rc.deep_from == "2000-01-01"

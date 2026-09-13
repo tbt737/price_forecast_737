@@ -90,7 +90,7 @@ class StockReconcileConfig:
     anchor_days: int = 5  # how many recent stored dates to re-verify
     jump_alert_pct: float = 15.0  # day-over-day |return| that only WARNS (HOSE band ±7%)
     deep_from: str = "2000-01-01"  # full-history refetch window start (ISO date)
-    min_reload_coverage: float = 0.9  # reloaded series must cover ≥ this × stored dates
+    min_reload_coverage: float = 1.0  # reloaded series must cover every stored date
 
 
 @dataclass(frozen=True)
@@ -433,7 +433,7 @@ def load_ingestion_config(path: Path = CONFIG_PATH) -> IngestionConfig:
         anchor_days=int(rc.get("anchor_days", 5)),
         jump_alert_pct=float(rc.get("jump_alert_pct", 15.0)),
         deep_from=str(rc.get("deep_from", "2000-01-01")),
-        min_reload_coverage=float(rc.get("min_reload_coverage", 0.9)),
+        min_reload_coverage=float(rc.get("min_reload_coverage", 1.0)),
     )
 
     return IngestionConfig(
@@ -453,6 +453,7 @@ class FreshnessGroup:
     critical: bool
     max_gap_days: int
     commodities: tuple[str, ...]
+    frozen: bool = False
 
 
 def load_freshness_groups(path: Path = CONFIG_PATH) -> list[FreshnessGroup]:
@@ -466,6 +467,7 @@ def load_freshness_groups(path: Path = CONFIG_PATH) -> list[FreshnessGroup]:
             critical=bool(g.get("critical", False)),
             max_gap_days=int(g["max_gap_days"]),
             commodities=tuple(g.get("commodities", [])),
+            frozen=bool(g.get("frozen", False)),
         )
         for g in groups
     ]
