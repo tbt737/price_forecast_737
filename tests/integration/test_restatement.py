@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from etl.backfill import backfill
 from etl.ingestion.config import StockReconcileConfig, VnStockSpec, load_ingestion_config
 from etl.restatement import reconcile_stock_history
-from etl.sources.market.vn_stocks import VnStockHistorySource
+from etl.sources.market.vn_stocks import FETCH_ATTEMPTS, VnStockHistorySource
 from ml.forecast import load_price_series
 
 URL_TEMPLATE = "https://chart.example/ohlcs/stock?from={ts_from}&to={ts_to}&symbol={ticker}&resolution=1D"
@@ -400,6 +400,49 @@ def test_restated_rows_release_date_is_reconcile_day(session: Session) -> None:
         for r in session.execute(select(FactPriceDaily).where(FactPriceDaily.revision == 1)).scalars()
     }
     assert rel == {TODAY}
+
+
+# ── window-fetch retry (empty / transient OSError) ──────────────────────────
+def test_window_fetch_retries_empty_and_oserror_then_succeeds(session: Session) -> None:
+    # Chart APIs flake under sequential windows: empty body then OSError must not
+    # fail-close the day if a later attempt of the SAME url returns usable bars.
+    _seed_initial(session, BASIS_A)
+    calls = {"n": 0}
+
+    def flaky(url: str) -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return "{}"  # arrayless JSON → zero usable bars
+        if calls["n"] == 2:
+            raise OSError("temporary")
+        return _fetch_for(BASIS_A)(url)
+
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=flaky, dry_run=False
+    )
+    item = report["instruments"][0]
+    assert calls["n"] == FETCH_ATTEMPTS
+    assert item["status"] == "fresh" and report["ok"]
+    assert "window fetch yielded no usable bars" not in item["warnings"]
+    assert _series(session) == pytest.approx(BASIS_A)
+
+
+def test_window_fetch_exhausted_retries_stays_error(session: Session) -> None:
+    _seed_initial(session, BASIS_A)
+    calls = {"n": 0}
+
+    def always_empty(_url: str) -> str:
+        calls["n"] += 1
+        return "{}"
+
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=always_empty, dry_run=False
+    )
+    item = report["instruments"][0]
+    assert calls["n"] == FETCH_ATTEMPTS
+    assert item["status"] == "error" and report["ok"] is False
+    assert item["warnings"] == ["window fetch yielded no usable bars"]
+    assert _series(session) == pytest.approx(BASIS_A)  # fail-closed: store untouched
 
 
 # ── config plumbing ──────────────────────────────────────────────────────────

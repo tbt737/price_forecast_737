@@ -14,7 +14,12 @@ import pytest
 
 from etl.contracts import FactFamily
 from etl.ingestion.config import VnStockSpec, load_ingestion_config
-from etl.sources.market.vn_stocks import VnStockHistorySource, parse_chart_arrays
+from etl.sources.market.vn_stocks import (
+    FETCH_ATTEMPTS,
+    FETCH_RETRY_BACKOFF_SECONDS,
+    VnStockHistorySource,
+    parse_chart_arrays,
+)
 
 _FIX = Path(__file__).resolve().parents[2] / "etl" / "tests" / "fixtures" / "vn"
 STOCK_JSON = (_FIX / "entrade_stock_daily.json").read_text(encoding="utf-8")
@@ -114,6 +119,39 @@ def test_collect_dedupes_repeated_dates_first_wins() -> None:
     raw = '{"t":[1746410400,1746410400],"c":[91.41,92.0]}'
     recs = list(VnStockHistorySource([_spec()], date_from=1, date_to=2, fetch=lambda _u: raw).collect())
     assert len(recs) == 1 and recs[0].value == 91410.0
+
+
+def test_collect_retries_empty_then_oserror_then_succeeds() -> None:
+    delays: list[float] = []
+    calls = {"n": 0}
+
+    def fetch(_url: str) -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return "{}"
+        if calls["n"] == 2:
+            raise OSError("temporary")
+        return STOCK_JSON
+
+    recs = list(
+        VnStockHistorySource(
+            [_spec()], date_from=1, date_to=2, fetch=fetch, sleep=delays.append
+        ).collect()
+    )
+    assert calls["n"] == FETCH_ATTEMPTS
+    assert delays == list(FETCH_RETRY_BACKOFF_SECONDS)
+    assert len(recs) == 49
+
+
+def test_collect_empty_after_retries_yields_nothing() -> None:
+    calls = {"n": 0}
+
+    def fetch(_url: str) -> str:
+        calls["n"] += 1
+        return "{}"
+
+    recs = list(VnStockHistorySource([_spec()], date_from=1, date_to=2, fetch=fetch).collect())
+    assert recs == [] and calls["n"] == FETCH_ATTEMPTS
 
 
 def test_collect_is_fail_soft_per_endpoint() -> None:
