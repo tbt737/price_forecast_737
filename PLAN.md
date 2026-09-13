@@ -35,12 +35,18 @@ never go down; locked invariants never weaken.
 
 ## 3. Active priorities
 
-Highest-value next actions, in order:
-1. The two **manual-only GitHub tasks** (§4) — they close the last Đợt-1 gaps.
-2. **Land RESTATE-1 gates green**, then follow the VN30-PROD canary sequence in §5
-   (still needs explicit owner approval per write/deploy step).
-3. **ACC-REVIEW** when its artifact exists (§5) — first real evidence of live forecast skill.
-4. If idle capacity remains: deferred polish (§6) as a small tooling pack.
+Authoritative repair sequence (measured 2026-09-13): `docs/plans/2026-09-13-ops-repair-upgrade.md`.
+Pack order: production safety > data reliability > accuracy evidence > polish.
+
+1. **VN30-RETRY** (Grok, parallel) — 12/30 HOSE tickers `window fetch yielded no usable bars` on ingest 2026-09-12; retry empty Entrade fetches. Job stayed green via `continue-on-error`.
+2. **INGEST-SIGNAL** — surface VN30 `ok:false` + MV refresh CONTRACT_VIOLATION instead of a silent green Daily ingestion.
+3. **MV-CANONICALIZE** — TABLE→MATERIALIZED VIEW via `scripts/canonicalize_ml_feature_mv.py` (**owner approval**, two-phase prepare then cutover). Daily `refresh_ml_features.py` is red until this lands.
+4. **ACC-REVIEW** — read-only SQL on `fact_forecast_log` (writer since 2026-07-05; h=30 should have matured). Still WAITING until numbers are read, not guessed.
+5. **RESTATE-COVERAGE** — raise `min_reload_coverage` 0.9 → 1.0 (AUDIT-1B HIGH).
+6. **FORECAST-REVISION** — per-date latest revision on `ml/forecast.py` serve path.
+7. **FRESHNESS-PRODUCE** + **DOCS-INVENTORY** — frozen Agmarknet group; live `/stats` is 66 profiles vs test-pin 52.
+
+Observed 2026-09-13 (do not treat §5 “ingest OFF” as current): cron ingest **does** run `vn_stocks --reconcile` (`ENABLE_VN_STOCKS_INGEST` is on). Freshness OK (futures 2026-09-11, vn_domestic 2026-09-12, vn_stocks 2026-09-11). MV refresh fails: `mv_ml_daily_features_wide` is a table. Indian produce last date 2026-04-20 (snapshot, not a dead cron).
 
 ## 4. Manual-only tasks (owner, GitHub UI — sessions have no gh auth)
 
@@ -48,8 +54,7 @@ Highest-value next actions, in order:
   `Python (lint + tests)` and `Web (lint + test + build)` (exact display names from
   `ci.yml` — short names like "Python" will not bind), then open one intentionally
   failing PR to confirm the gate actually blocks merge.
-- [ ] **Dispatch `vn-freshness-monitor.yml` once** (Actions → run workflow) to smoke-test the
-  live read-only VN monitor (cron 01:30 UTC).
+- [x] **Dispatch `vn-freshness-monitor.yml` once** — cron has been green daily (verified 2026-09-13, run 34742745197 and prior). Re-dispatch only if the workflow goes red.
 
 ## 5. Waiting workstreams (do not execute yet)
 
@@ -128,8 +133,7 @@ Highest-value next actions, in order:
 
 ## 9. No-action monitoring items
 
-- **GOLD_VN** (`VNAPPMOB_SJC_1L`): ~123/252 rows, self-accumulating daily (22:00 UTC ingest
-  + self-heal top-up) toward MIN_HISTORY=252 — months away; nothing to do but wait.
+- **GOLD_VN** (`VNAPPMOB_SJC_1L`): **174/252** rows as of 2026-09-13 (API `/prices?days=20000`, last 2026-09-11); self-accumulating daily toward MIN_HISTORY=252 — wait, don't force a forecast.
 - VN freshness monitor (01:30 UTC) turns its workflow red on staleness — watch, don't touch.
 - CI gate runs itself on every push/PR.
 
