@@ -2,7 +2,8 @@
 
 Dùng trên máy local sau khi `grok` đã login. **Repo:** https://github.com/tbt737/price_forecast_737
 
-**Đừng làm Pack 1** nếu Cursor Grok trên branch `cursor/ops-repair-plan-92ba` đã implement VN30-RETRY (tránh đụng file). Lấy pack tiếp theo chưa ai nhận: **Pack 5 RESTATE-COVERAGE** (ưu tiên) hoặc Pack 6 FORECAST-REVISION.
+Packs **1, 2, 5, 6, 7, 8** đã land trên `cursor/ops-repair-plan-92ba`. **Đừng làm lại.**
+Pack còn lại cần owner: **3 MV-CANONICALIZE** (ghi DB) và **4 ACC-REVIEW** (`DATABASE_URL` read-only).
 
 ---
 

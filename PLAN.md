@@ -27,6 +27,10 @@ never go down; locked invariants never weaken.
 > profiles / 100 instruments** (22 commodities + 30 VN30 equities, `commodity_group: equity`).
 > The profile count is pinned by `tests/quality/test_profiles_quality.py`; PEPPER_VN and
 > DIESEL_VN joined after the 2026-07-11 snapshot that this line used to carry.
+>
+> Live `/stats` 2026-09-13: **66 profiles / 114 instruments / 464 056 fact rows**.
+> YAML pin stays **52**. The extra 14 are leftover VN equity registry rows with
+> no YAML in this repo (`docs/ops/live-inventory-delta-2026-09-13.md`).
 
 > ⚠️ Companion docs: `README.md` / `ARCHITECTURE.md` / `DEPLOY.md` were refreshed in the
 > RESTATE-1 hardening pack (2026-07-11) for profile counts, SEC-2 smoke, and live status.
@@ -44,7 +48,8 @@ Pack order: production safety > data reliability > accuracy evidence > polish.
 4. **ACC-REVIEW** — read-only SQL on `fact_forecast_log` (writer since 2026-07-05; h=30 should have matured). Still WAITING until numbers are read, not guessed.
 5. **RESTATE-COVERAGE** — landed: `min_reload_coverage` 0.9 → **1.0**.
 6. **FORECAST-REVISION** — landed: per-date latest revision on `load_price_series` + `/prices` + evaluator LOOKUP.
-7. **FRESHNESS-PRODUCE** — landed: `produce_frozen` group; every YAML profile is in a freshness group. Live `/stats` 66 vs test-pin 52 remains a docs note (Pack 8).
+7. **FRESHNESS-PRODUCE** — landed: `produce_frozen` group; every YAML profile is in a freshness group.
+8. **DOCS-INVENTORY** — landed: live 66 vs YAML pin 52 explained in `docs/ops/live-inventory-delta-2026-09-13.md` (14 leftover VN equities, no YAML invented).
 
 Observed 2026-09-13 (do not treat §5 “ingest OFF” as current): cron ingest **does** run `vn_stocks --reconcile` (`ENABLE_VN_STOCKS_INGEST` is on). Freshness OK (futures 2026-09-11, vn_domestic 2026-09-12, vn_stocks 2026-09-11). MV refresh fails: `mv_ml_daily_features_wide` is a table. Indian produce last date 2026-04-20 (snapshot, not a dead cron).
 
@@ -87,8 +92,9 @@ Observed 2026-09-13 (do not treat §5 “ingest OFF” as current): cron ingest 
   ML/API serve unique-date latest-revision series; scoped gates 64/64 + ruff/mypy
   green; independently audited read-only → AUDIT_VERDICT: CANARY_CONFIRMED.
   (Data reality: all 44 equity tickers already carry full history from owner
-  sessions 07-13→07-17; scheduled equity reconcile still OFF — equity tail was
-  3 sessions stale until this canary topped up FPT/VCB only.) →
+  sessions 07-13→07-17; **as of 2026-09-13** scheduled equity reconcile is ON
+  (`ENABLE_VN_STOCKS_INGEST=true`); the “still OFF” line below is the 2026-07-22
+  canary note. 14 of those 44 equities have no YAML in-repo — see Pack 8.) →
   deploy API + smoke → deploy web + smoke `/stocks` → re-enable scheduled top-up
   (`ENABLE_VN_STOCKS_INGEST=true`) → watch ≥1 ingest cycle.
   ⚠ Interim side effects until deploy: the LIVE explorer (old web build) shows the 30

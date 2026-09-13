@@ -162,9 +162,12 @@ AUDIT-1B: `min_reload_coverage == 0.9` chấp nhận reload cắt 10% lịch s�
 
 ---
 
-### Pack 8 — DOCS-INVENTORY
+### Pack 8 — DOCS-INVENTORY — **landed on this branch**
 
-Live 66 profiles vs test pin 52. Đo lại: `tests/quality/test_profiles_quality.py` vs `/stats`. Nếu DB có profile không có YAML → ghi rõ, không bịa YAML. Cập nhật README/ARCHITECTURE counts từ test pin, ghi chú live delta.
+Live 66 vs YAML pin 52: 14 leftover VN equity registry rows (`CTD_VN` … `VCG_VN`)
+claim `*.yaml` paths that are **not in this repo**. Documented in
+`docs/ops/live-inventory-delta-2026-09-13.md`. README / ARCHITECTURE / PLAN.md §2
+keep the **52** pin and note the live delta. No YAML invented.
 
 ---
 
@@ -210,4 +213,4 @@ Prompt dán: `docs/plans/2026-09-13-grok-build-handoff.md`. Cần SuperGrok / X 
 3. Pack 2 sau khi Pack 1 có test (tránh đổi workflow 2 lần).
 4. Pack 3 chỉ khi owner duyệt ghi DB.
 5. Pack 4 read-only ngay khi có `DATABASE_URL`.
-6. Pack 5–8 theo sức, không nhảy Next.js 16.
+6. Pack 5–8 landed on this branch (docs inventory in Pack 8). Next.js 16 still out of scope.
