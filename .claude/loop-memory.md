@@ -4,6 +4,33 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-14 RESTATE-COVERAGE-1 — RESTATE_COVERAGE_1_PASS (scheduled autonomous review; local only, not pushed to master)
+Closed one item from AUDIT-1B's "still open" list: `StockReconcileConfig.min_reload_coverage`
+was 0.9, but every read path treats `max(revision)` as GLOBAL per (commodity, instrument) with
+no per-date grouping (`ml.forecast.load_price_series`, the API price endpoint, `build_pandas_mv`)
+— a restatement reload covering only 90–99% of stored dates would have been ACCEPTED and silently
+dropped the uncovered dates from every serve/backtest path the moment the new revision became the
+max, with no test pinning that gap (existing tests only covered near-0% coverage truncation).
+**Shipped:** `etl/ingestion/config.py` (`StockReconcileConfig.min_reload_coverage` default +
+`load_ingestion_config` fallback, 0.9→1.0) + `configs/ingestion/sources.yaml`
+(`vn_stocks.reconcile.min_reload_coverage`, 0.9→1.0) + `docs/etl/vn-stocks-restatement.md` updated
+to match + new regression test `test_reload_missing_one_stored_date_is_refused` (17/18 = 94.4%
+coverage, which the old 0.9 gate would have passed — now refused, fail-closed, canonical series
+untouched) + updated the pinned config-loader assertion in `test_reconcile_config_loads_from_sources_yaml`.
+Dormant in production today: `vn_stocks` reconcile only runs when `ENABLE_VN_STOCKS_INGEST=true`,
+which PLAN.md §5 still has OFF pending owner approval — this closes a prerequisite named in the
+AUDIT-1B memory entry, does not touch the flag, and makes no DB write (no `.env`/network in this
+session; gates only).
+**Gates:** pytest **600 passed + 1 skip** (599 baseline +1 new test) · ruff 0 · mypy 0 (28 app +
+34 etl files) · workflows 5/5. `apps/web` untouched — no npm gates re-run.
+**Rules distilled:** (1) A tuning knob that feeds a documented GLOBAL (not per-date) invariant
+needs its guard test to probe the boundary just inside the OLD threshold, not just near-zero —
+the existing truncation tests all used ~0% coverage and would have stayed green forever with the
+90% gap live. (2) When a `.claude/loop-memory.md` "still open" note names a concrete before-X
+prerequisite, treat it as a valid, boundedly-scoped, non-gated pack candidate even while the
+larger workstream it belongs to (here VN30-PROD) stays owner-gated — as long as the fix doesn't
+touch the gated flag/deploy/write path itself.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/

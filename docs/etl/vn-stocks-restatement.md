@@ -48,9 +48,13 @@
   exception ⇒ `rollback()` ⇒ không còn lại gì (test pin). **Không dùng
   ON CONFLICT DO NOTHING** trong reconcile — duplicate grain trong một reload là bug
   và phải nổ to (per-instrument, các mã khác tiếp tục).
-- Guard chống reload cụt: `min_reload_coverage` (0.9) — series mới phải phủ ≥ 90% số
+- Guard chống reload cụt: `min_reload_coverage` (1.0) — series mới phải phủ **100%** số
   ngày đang stored, kèm 0 record invalid; vi phạm ⇒ `error`, không ghi gì (giữ nguyên
-  basis cũ). Chặn việc một response bị cắt ngắn trở thành series canonical.
+  basis cũ). Chặn việc một response bị cắt ngắn trở thành series canonical. Bắt buộc
+  1.0 chứ không phải "gần đủ": mọi đường đọc (`ml.forecast.load_price_series`, API
+  price endpoint, `build_pandas_mv`) chọn `max(revision)` TOÀN CỤC theo instrument,
+  không group theo từng ngày — nên chỉ cần thiếu 1 ngày trong revision mới là ngày đó
+  biến mất khỏi mọi đường serve/backtest ngay khi revision đó trở thành max.
 
 ## 5. Cache / model invalidation
 

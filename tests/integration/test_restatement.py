@@ -347,6 +347,27 @@ def test_capped_response_with_extra_prehistory_is_refused(session: Session) -> N
     assert _series(session) == pytest.approx(BASIS_A)
 
 
+def test_reload_missing_one_stored_date_is_refused(session: Session) -> None:
+    """min_reload_coverage must be 1.0, not merely "close": every read path
+    (ml.forecast.load_price_series, the API price endpoint, build_pandas_mv) selects
+    the instrument's GLOBAL max(revision) with no per-date grouping, so ANY stored
+    date missing from a new revision silently vanishes from every serving/backtest
+    path the moment that revision becomes the max — not just a below-90% truncation."""
+    _seed_initial(session, BASIS_A)
+    dropped = sorted(BASIS_A)[5]  # an old date, outside the recent anchor window
+    assert (len(BASIS_A) - 1) / len(BASIS_A) > 0.9  # would have PASSED the old 0.9 gate
+    almost_full = {d: round(v * 0.85, 4) for d, v in BASIS_A.items() if d != dropped}
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=_fetch_for(almost_full), dry_run=False
+    )
+    item = report["instruments"][0]
+    assert item["status"] == "error" and not report["ok"]
+    assert any("coverage" in w for w in item["warnings"])
+    # Fail-closed: nothing was written; the canonical series is still basis A in full.
+    assert {r[2] for r in _all_rows(session)} == {0}
+    assert _series(session) == pytest.approx(BASIS_A)
+
+
 def test_append_after_restatement_lands_at_new_revision(session: Session) -> None:
     # After a reload to revision 1, daily appends must land at revision 1 too — an
     # append at revision 0 would be INVISIBLE to the single-basis read paths.
@@ -408,5 +429,5 @@ def test_reconcile_config_loads_from_sources_yaml() -> None:
     rc = cfg.vn_stocks_reconcile
     assert isinstance(rc, StockReconcileConfig)
     assert rc.epsilon_pct == 0.5 and rc.anchor_days == 5
-    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 0.9
+    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 1.0
     assert rc.deep_from == "2000-01-01"
