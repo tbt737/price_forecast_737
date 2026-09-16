@@ -347,6 +347,33 @@ def test_capped_response_with_extra_prehistory_is_refused(session: Session) -> N
     assert _series(session) == pytest.approx(BASIS_A)
 
 
+def test_reload_missing_a_single_date_is_refused_at_full_coverage(session: Session) -> None:
+    # Regression: dropping just ONE of BASIS_A's 18 stored dates yields 17/18 ≈ 0.944
+    # coverage — comfortably above the old default (0.9), which would have ACCEPTED
+    # this reload and made that one date vanish from every read path forever (the
+    # single-basis rule means only the new revision is ever served again).
+    # min_reload_coverage now defaults to 1.0: any gap, however small, must refuse.
+    _seed_initial(session, BASIS_A)
+    missing_date = min(BASIS_A)
+    deep_source = {d: round(v * 0.85, 4) for d, v in BASIS_A.items() if d != missing_date}
+    restated_window = {d: round(v * 0.85, 4) for d, v in BASIS_A.items()}
+
+    def dual_fetch(url: str) -> str:
+        qs = dict(p.split("=") for p in url.split("?", 1)[1].split("&"))
+        lo, hi = int(qs["from"]), int(qs["to"])
+        source = deep_source if (hi - lo) > 40 * 86400 else restated_window
+        return _fetch_for(source)(url)
+
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=dual_fetch, dry_run=False
+    )
+    item = report["instruments"][0]
+    assert item["status"] == "error" and any("coverage" in w for w in item["warnings"])
+    assert {r[2] for r in _all_rows(session)} == {0}  # canonical series untouched
+    assert _series(session) == pytest.approx(BASIS_A)
+    assert missing_date in _series(session)  # the almost-dropped date is still readable
+
+
 def test_append_after_restatement_lands_at_new_revision(session: Session) -> None:
     # After a reload to revision 1, daily appends must land at revision 1 too — an
     # append at revision 0 would be INVISIBLE to the single-basis read paths.
@@ -408,5 +435,5 @@ def test_reconcile_config_loads_from_sources_yaml() -> None:
     rc = cfg.vn_stocks_reconcile
     assert isinstance(rc, StockReconcileConfig)
     assert rc.epsilon_pct == 0.5 and rc.anchor_days == 5
-    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 0.9
+    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 1.0
     assert rc.deep_from == "2000-01-01"
