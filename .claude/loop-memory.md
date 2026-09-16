@@ -4,6 +4,51 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-16 AUDIT-2 — AUDIT_2_PASS (scheduled autonomous review; pushed to `claude/sharp-hopper-q7fx9o`)
+No commits since AUDIT-1B (2026-09-03) — nothing new to triage, so this pack picked the
+top item off AUDIT-1B's "Still open, ranked" list: **restatement coverage 1.0** (do it
+BEFORE `ENABLE_VN_STOCKS_INGEST=true`). Verified the defect still stood exactly as
+recorded, then closed it.
+**Shipped (1 fix, pinned by a new regression test):** `min_reload_coverage` defaulted to
+0.9 (`etl/ingestion/config.py` dataclass + `configs/ingestion/sources.yaml`), so a
+corporate-action reload reproducing only 90% of stored dates was silently ACCEPTED and
+bumped the revision — and since every read path (`ml.forecast.load_price_series`,
+`GET /commodities/{code}/prices`) serves ONLY the latest revision (single-basis rule),
+the missing dates would vanish from every forecast/chart forever, no error. Tightened
+the default to 1.0 (both the dataclass and sources.yaml) so ANY gap fails closed. New
+test `test_reload_missing_a_single_date_is_refused_at_full_coverage` drops exactly 1 of
+18 stored dates (17/18 ≈ 0.944 — comfortably above the old 0.9 threshold, i.e. it would
+have been silently accepted before) and asserts the reload is now refused with the
+missing date still readable. Docs (`docs/etl/vn-stocks-restatement.md`) synced.
+**Also checked, no action needed (already tracked / already correct):** the sibling
+global-`MAX(revision)` pattern in `apps/api/app/routers/commodities.py` (price series
+GET) and `ml/forecast.py::load_price_series` is now moot for the VN-stocks case since a
+partial-coverage revision can no longer exist to begin with — a genuinely mixed-basis
+read (rather than a rejected-at-write-time defect) would need a broader design change
+and was deliberately left alone. Confirmed the production MV
+(`db/views/001_v_ml_daily_feature_events_long.sql`) does NOT share this defect — its
+`DISTINCT ON (as_of_date, …) ORDER BY … revision DESC` is grounded in
+`release_date <= as_of_date` per as-of-date, not a single global max, so it already
+picks the PIT-correct revision per day. `pip list --outdated` against
+requirements.txt/-dev.txt showed nothing outdated (fresh install pulls latest
+compatible). `apps/web` `npm audit`: same 2 advisories (postcss/next) as WEB-POLISH-1,
+still gated behind a Next 16 major per PLAN.md §6 — not forced, nothing new.
+**Gates:** pytest 599→**600 passed + 1 skip** · ruff 0 · mypy 0 (28+34) · workflows 6/6 ·
+compileall clean. `apps/web` untouched — no npm gates re-run.
+**Still open, ranked (nothing below was changed, carried from AUDIT-1B):** `/ai/chat`
+rate limiter keys on the first (client-controlled) X-Forwarded-For entry · 8/52
+commodities in no freshness group, no staleness signal anywhere between model and
+reader · `ml/runner.py` picks the lowest instrument_key while `/forecast` serves the
+most-dated one (registry `/models/best` can advertise a MAPE forecast never uses) ·
+`cash_flow_predictor` harvest-lag off-by-one-month (positional `q_future` slice) ·
+alembic vs `db/migrations/001-007.sql` never compared · `/ai/chat` design debt above.
+**Rules distilled:** (1) When a "still open, ranked" list already exists from a prior
+adversarial pass, re-verify the top item against the current code before spending a
+scheduled run's budget re-discovering it from scratch — the ranking already reflects
+adjudicated severity. (2) A coverage/threshold guard that is "safe on average" (0.9)
+is still a data-loss bug on a single-basis (latest-revision-only) read model: any
+guard protecting an all-or-nothing read must itself be all-or-nothing.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
