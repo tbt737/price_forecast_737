@@ -215,6 +215,22 @@ vn_stocks:
     - { commodity_code: VPB_VN, instrument_code: HOSE_VPB, ticker: VPB }
     - { commodity_code: VPL_VN, instrument_code: HOSE_VPL, ticker: VPL }
     - { commodity_code: VRE_VN, instrument_code: HOSE_VRE, ticker: VRE }
+    # Non-VN30 additions (2026-07-13). Same ENTRADE chart API serves
+    # HOSE, HNX and UPCoM tickers; instrument_code prefix records the actual board.
+    - { commodity_code: CTD_VN, instrument_code: HOSE_CTD, ticker: CTD }
+    - { commodity_code: DGC_VN, instrument_code: HOSE_DGC, ticker: DGC }
+    - { commodity_code: GEX_VN, instrument_code: HOSE_GEX, ticker: GEX }
+    - { commodity_code: HAG_VN, instrument_code: HOSE_HAG, ticker: HAG }
+    - { commodity_code: HBC_VN, instrument_code: UPCOM_HBC, ticker: HBC }
+    - { commodity_code: KBC_VN, instrument_code: HOSE_KBC, ticker: KBC }
+    - { commodity_code: KCB_VN, instrument_code: UPCOM_KCB, ticker: KCB }
+    - { commodity_code: KSB_VN, instrument_code: HOSE_KSB, ticker: KSB }
+    - { commodity_code: NKG_VN, instrument_code: HOSE_NKG, ticker: NKG }
+    - { commodity_code: NSH_VN, instrument_code: HNX_NSH, ticker: NSH }
+    - { commodity_code: NVL_VN, instrument_code: HOSE_NVL, ticker: NVL }
+    - { commodity_code: PET_VN, instrument_code: HOSE_PET, ticker: PET }
+    - { commodity_code: TCL_VN, instrument_code: HOSE_TCL, ticker: TCL }
+    - { commodity_code: VCG_VN, instrument_code: HOSE_VCG, ticker: VCG }
 
 monitoring:
   # Freshness/coverage gate groups (scripts/check_freshness.py) — config-over-code, no
@@ -236,4 +252,6 @@ monitoring:
       commodities: [ACB_VN, BID_VN, BVH_VN, CTG_VN, FPT_VN, GAS_VN, GVR_VN, HDB_VN,
                     HPG_VN, LPB_VN, MBB_VN, MSN_VN, MWG_VN, PLX_VN, SAB_VN, SHB_VN,
                     SSB_VN, SSI_VN, STB_VN, TCB_VN, TPB_VN, VCB_VN, VHM_VN, VIB_VN,
-                    VIC_VN, VJC_VN, VNM_VN, VPB_VN, VPL_VN, VRE_VN]
+                    VIC_VN, VJC_VN, VNM_VN, VPB_VN, VPL_VN, VRE_VN,
+                    CTD_VN, DGC_VN, GEX_VN, HAG_VN, HBC_VN, KBC_VN, KCB_VN, KSB_VN,
+                    NKG_VN, NSH_VN, NVL_VN, PET_VN, TCL_VN, VCG_VN]

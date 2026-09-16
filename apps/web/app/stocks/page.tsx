@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { CommodityExplorer } from "@/widgets/commodity-explorer";
 
 export const metadata: Metadata = {
-  title: "Dự báo giá cổ phiếu VN30",
+  title: "Dự báo giá cổ phiếu Việt Nam",
   description:
-    "Giá thật + dự báo thống kê (Ridge AR / XGBoost, backtest vs naive) cho 30 cổ phiếu blue-chip rổ VN30 trên HOSE.",
+    "Giá thật + dự báo thống kê (Ridge AR / XGBoost, backtest vs naive) cho rổ VN30 và các cổ phiếu HOSE/HNX/UPCoM được theo dõi.",
 };
 
 export default function StocksPage() {
@@ -12,11 +12,10 @@ export default function StocksPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">📈 Cổ phiếu VN30 — dự báo giá</h2>
+          <h2 className="text-lg font-semibold">📈 Cổ phiếu Việt Nam — dự báo giá</h2>
           <p className="text-sm text-muted">
-            30 mã blue-chip trong rổ VN30 của HOSE (kỳ cơ cấu hiệu lực từ 02/02/2026) — nhóm cổ
-            phiếu vốn hóa và thanh khoản tốt nhất thị trường, do Sở GDCK TP.HCM sàng lọc định kỳ
-            nửa năm một lần. Giá điều chỉnh cập nhật hằng ngày; dự
+            30 mã blue-chip rổ VN30 của HOSE (kỳ cơ cấu hiệu lực từ 02/02/2026) cùng các mã
+            HOSE/HNX/UPCoM khác đang theo dõi. Giá điều chỉnh cập nhật hằng ngày; dự
             báo Ridge AR / XGBoost có backtest so với naive. Mã chưa ingest dữ liệu được đánh dấu{" "}
             <span className="font-medium text-demo">DEMO</span>.
           </p>

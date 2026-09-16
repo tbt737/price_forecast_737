@@ -155,12 +155,13 @@ def test_collect_skips_unknown_parser_format_and_non_json() -> None:
 # ── config registry: the vn_stocks section loads into specs ──────────────────
 def test_sources_yaml_vn_stocks_section_loads() -> None:
     cfg = load_ingestion_config()
-    assert len(cfg.vn_stocks) == 30  # the VN30 basket, one endpoint per constituent
+    assert len(cfg.vn_stocks) == 44  # VN30 basket + 14 non-VN30 additions, one endpoint each
     tickers = {s.ticker for s in cfg.vn_stocks}
-    assert len(tickers) == 30  # no duplicate tickers
+    assert len(tickers) == 44  # no duplicate tickers
     for s in cfg.vn_stocks:
         assert s.commodity_code == f"{s.ticker}_VN"
-        assert s.instrument_code == f"HOSE_{s.ticker}"
+        # instrument_code prefix records the actual listing board (HOSE / HNX / UPCoM)
+        assert s.instrument_code in (f"HOSE_{s.ticker}", f"HNX_{s.ticker}", f"UPCOM_{s.ticker}")
         assert s.parser == "chart_arrays_json" and s.scale == 1000.0
         assert s.currency == "VND" and s.source_code == "ENTRADE"
         assert "{ts_from}" in s.url_template and "{ticker}" in s.url_template

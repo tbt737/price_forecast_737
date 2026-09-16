@@ -95,9 +95,9 @@ def test_loads_all_real_profiles(session: Session) -> None:
     summary = load_profiles(session)
     session.commit()
 
-    assert summary["profile:loaded"] == 52  # 22 commodities + 30 VN30 equities
-    assert _count(session, DimCommodity) == 52
-    assert _count(session, CommodityProfileRegistry) == 52
+    assert summary["profile:loaded"] == 66  # 22 commodities + 30 VN30 + 14 non-VN30 VN equities
+    assert _count(session, DimCommodity) == 66
+    assert _count(session, CommodityProfileRegistry) == 66
     assert _count(session, CommodityRegionMap) > 0
 
     groups = {g for (g,) in session.execute(select(DimCommodity.commodity_group).distinct())}
