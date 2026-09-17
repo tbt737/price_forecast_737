@@ -237,3 +237,15 @@ monitoring:
                     HPG_VN, LPB_VN, MBB_VN, MSN_VN, MWG_VN, PLX_VN, SAB_VN, SHB_VN,
                     SSB_VN, SSI_VN, STB_VN, TCB_VN, TPB_VN, VCB_VN, VHM_VN, VIB_VN,
                     VIC_VN, VJC_VN, VNM_VN, VPB_VN, VPL_VN, VRE_VN]
+    - name: agri_mandi_import
+      critical: false
+      # No daily connector at all — these ride solely on a manual CSV reload
+      # (csv_imports.yaml, Agmarknet/Kaggle snapshots), so "stale" means "nobody has
+      # re-run the import lately", not "a live feed died". 90d catches an abandoned
+      # import without paging on ordinary reload cadence. DEHYDRATED_GARLIC,
+      # DEHYDRATED_ONION and RED_ONION_CHINA have NO csv_imports.yaml entry at all yet
+      # (not even a one-off snapshot) — they report latest=None here, i.e. permanently
+      # STALE, which is the accurate signal until a source is found for them.
+      max_gap_days: 90
+      commodities: [ROBUSTA, CHINESE_GARLIC, RED_ONION_INDIA, INDIAN_CHILIES, PEANUTS,
+                    DEHYDRATED_GARLIC, DEHYDRATED_ONION, RED_ONION_CHINA]

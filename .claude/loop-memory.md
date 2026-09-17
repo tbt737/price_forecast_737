@@ -4,6 +4,35 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-17 FRESHNESS-COVERAGE-1 — FRESHNESS_COVERAGE_1_PASS (scheduled autonomous review; local only, not pushed by this pack)
+Closes the AUDIT-1B "still open" item: **8 of 52 commodities had no freshness monitoring
+group at all** (ROBUSTA, CHINESE_GARLIC, RED_ONION_INDIA, INDIAN_CHILIES, PEANUTS,
+DEHYDRATED_GARLIC, DEHYDRATED_ONION, RED_ONION_CHINA) — confirmed by diffing every
+profile's `commodity_code` against `monitoring.groups` in `sources.yaml`. New group
+`agri_mandi_import` (non-critical, `max_gap_days: 90`) covers all 8. New regression test
+`tests/integration/test_freshness_gate.py::test_every_commodity_profile_is_in_a_freshness_group`
+diffs `configs/commodities/*.yaml` against the loaded groups so a future onboarded
+commodity can't silently repeat the gap; `add-commodity/SKILL.md` Step 2 now says to
+register the group. **New finding surfaced while investigating (NOT fixed here, config-only
+pack): 3 of the 8 — DEHYDRATED_GARLIC, DEHYDRATED_ONION, RED_ONION_CHINA — have no
+ingestion path at all, not even a `csv_imports.yaml` one-off snapshot; `ml.forecast` returns
+`available: false` for them forever, and they will show `latest=None` (permanent STALE) in
+the new group, which is correct — but the real fix is sourcing their price data
+(find-price-source skill), not something to script from config alone.** The other 5 do have
+history (`IN_NATIONAL_MEDIAN` Agmarknet mandi proxies, national 2001–2026 stitched series +
+Jinxiang/Coffee proxies), just no daily accumulation — `90d` was chosen to flag an abandoned
+reload without paging on ordinary (infrequent, manual) reload cadence.
+**Gates:** pytest 599+1skip → **600 passed + 1 skip** · ruff 0 · mypy 0 (28+34 files) ·
+`ci_check_workflows.py` 6/6. `apps/web` untouched, JS gates not re-run. No DB/network/deploy;
+container has no `.env` this session (offline-only, matches AUDIT-1's constraint).
+**Rules distilled:** (1) A monitoring-group config gap is invisible to every existing test
+unless something diffs it against the profile list — added that diff as a standing guard
+rather than a one-time fix, matching the AUDIT-1B rule "fix a hygiene class at the choke
+point, not the instance". (2) `check_freshness.py` treats a commodity with zero rows
+(`latest=None`) as always-STALE, which turns out to be the right behavior for a
+never-sourced commodity too, not just a dead feed — no code change was needed to make the
+signal correct, only config coverage.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/

@@ -7,6 +7,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import yaml
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 from check_freshness import classify, is_within_gap, select_groups  # noqa: E402
@@ -39,6 +41,26 @@ def test_freshness_config_loads_critical_and_noncritical_groups() -> None:
     vn = groups["vn_domestic"]
     assert vn.critical is False  # scraped spot ⇒ warn, not block the daily gate
     assert "GOLD_VN" in vn.commodities and "SILVER_VN" in vn.commodities
+
+
+def test_every_commodity_profile_is_in_a_freshness_group() -> None:
+    """AUDIT-1B: 8 of 52 commodities had no freshness group at all — a months-stale
+    series was forecast and rendered exactly like a fresh one, with no CI signal.
+    Every onboarded commodity must land in at least one monitoring group, whether or
+    not it has a live daily feed (`agri_mandi_import` reports a permanent STALE for
+    codes with no ingestion source at all, which is the correct signal, not a bug)."""
+    profiles_dir = Path(__file__).resolve().parents[2] / "configs" / "commodities"
+    profile_codes = set()
+    for path in sorted(profiles_dir.glob("*.yaml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        profile_codes.add(data["commodity_code"])
+
+    covered: set[str] = set()
+    for group in load_freshness_groups():
+        covered.update(group.commodities)
+
+    missing = profile_codes - covered
+    assert not missing, f"commodities with no freshness monitoring group: {sorted(missing)}"
 
 
 # ETL-VN-4: --group filter + strict classification (pure; no DB/network).

@@ -38,6 +38,11 @@ matches the type (`gold.yaml` for a metal/macro asset, `robusta.yaml` for a crop
   `etl/sources/market/vn_domestic.py` `PARSERS` (e.g. `pnj_json`, `phuquy_silver_html`) —
   never a per-commodity branch. New format ⇒ add a parser function there.
 - **Historical CSV** → add an entry to `csv_imports.yaml` (see backfill-price-history).
+- Either way, add the `commodity_code` to a `monitoring.groups` entry in `sources.yaml`
+  (an existing group if it fits, a new one otherwise) — pinned by
+  `tests/integration/test_freshness_gate.py::test_every_commodity_profile_is_in_a_freshness_group`.
+  A commodity with no automated feed (CSV-only) still belongs in a group; it will report
+  a permanent STALE, which is the correct signal, not a bug to work around.
 
 ## Step 3 — Wire a NEW connector (only if a new source type)
 If you added a brand-new connector module under `etl/sources/`:
