@@ -4,6 +4,40 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-18 RESTATE-COVERAGE-1 — RESTATE_COVERAGE_1_PASS (pushed to `claude/sharp-hopper-vp6lji`)
+Closed the top item on AUDIT-1B's "still open" list: `StockReconcileConfig.min_reload_coverage`
+default was 0.9, so a VN-STOCKS restatement reload missing up to 10% of stored dates was
+silently ACCEPTED as the new canonical series (single-basis read rule ⇒ those dates vanish
+from every future read path, exit 0, no warning). Raised the default + `sources.yaml` value to
+1.0 — a full deep refetch (`deep_from=2000-01-01`) has no legitimate reason to miss a stored
+date, so any gap now correctly hits the existing "reload rejected: coverage" fail-closed path
+instead of being absorbed by an arbitrary threshold. Files: `etl/ingestion/config.py` (2 sites:
+dataclass default + yaml-loader default), `configs/ingestion/sources.yaml`,
+`docs/etl/vn-stocks-restatement.md`. New regression test
+`test_near_complete_reload_below_full_coverage_is_still_refused` pins the exact boundary the
+audit probed (17/18 = 0.9444 stored dates, which cleared the old 0.9 guard) and asserts refusal
++ zero mutation. Existing `test_truncated_reload_is_refused` (3/18) and the 3 happy-path
+100%-reload tests were already compatible — nothing else changed behavior.
+This item is gated behind the VN30-PROD unlock (`ENABLE_VN_STOCKS_INGEST` is not yet on in any
+deploy surface per PLAN.md §5), so there is no live-serving-path change from this pack — it
+closes the gap before that gate is ever flipped, per the audit's own "do it BEFORE
+ENABLE_VN_STOCKS_INGEST=true" note.
+**Gates:** pytest 599→**600 passed + 1 skip** (PG-only skip unchanged) · ruff 0 · mypy 0 (28+34)
+· workflows 5/5 · compileall clean. apps/web untouched, its gate not re-run.
+**Still open on AUDIT-1B's list (untouched by this pack):** `/ai/chat` rate limiter keys on the
+client-controlled first `X-Forwarded-For` hop · 8/52 commodities carry no freshness group ·
+`ml/forecast.py` `load_price_series` takes a single `MAX(revision)` per (commodity, instrument)
+with no per-date grouping, on the live `/forecast` serving path (HIGH, needs its own pack —
+touches the serving path directly, wider blast radius than this config change) · alembic vs
+`db/migrations/001-007.sql` — two independent schema definitions never diffed against each
+other.
+**Rules distilled:** (1) A "guard against truncation" threshold that isn't 1.0 needs an explicit
+reason for the slack (holiday calendars, partial-source tolerance, etc.); absent one, any value
+under 1.0 is itself the bug, not a tuning parameter to leave alone. (2) A boundary regression
+test (clears the OLD threshold, fails the NEW one) is worth more here than another copy of the
+existing "way below any threshold" truncation test — it is what would have caught the original
+defect before an adversarial audit had to find it.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/

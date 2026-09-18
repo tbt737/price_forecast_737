@@ -48,9 +48,11 @@
   exception ⇒ `rollback()` ⇒ không còn lại gì (test pin). **Không dùng
   ON CONFLICT DO NOTHING** trong reconcile — duplicate grain trong một reload là bug
   và phải nổ to (per-instrument, các mã khác tiếp tục).
-- Guard chống reload cụt: `min_reload_coverage` (0.9) — series mới phải phủ ≥ 90% số
+- Guard chống reload cụt: `min_reload_coverage` (1.0) — series mới phải phủ 100% số
   ngày đang stored, kèm 0 record invalid; vi phạm ⇒ `error`, không ghi gì (giữ nguyên
-  basis cũ). Chặn việc một response bị cắt ngắn trở thành series canonical.
+  basis cũ). Chặn việc một response bị cắt ngắn (kể cả cắt một phần nhỏ) trở thành
+  series canonical — một deep refetch đúng nghĩa (từ `deep_from`) không có lý do
+  chính đáng nào để thiếu bất kỳ ngày đã lưu nào.
 
 ## 5. Cache / model invalidation
 
