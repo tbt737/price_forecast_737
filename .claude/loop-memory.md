@@ -4,6 +4,57 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-19 SCHED-REVIEW-1 — SCHED_REVIEW_1_PASS (autonomous scheduled pack; pushed `claude/sharp-hopper-i475l6`, no PR opened)
+**Shipped (1 fix, pinned by a new test):** `apps/web/app/ai/chat/route.ts` `clientIp()` took the
+FIRST comma-separated `X-Forwarded-For` entry to key the 15/min BYOK-proxy rate limiter. Cloud
+Run's GFE *appends* the real peer IP rather than replacing the header, so a client-supplied prefix
+let a caller mint a fresh "IP" every request and never trip the cap (SEC-2 lineage: relayed calls
+land on the owner's LLM-provider bill). Now trusts only the LAST entry. New test in
+`ai-chat-security.test.ts` proves a rotating spoofed prefix with a fixed trailing IP still 429s
+after 20 requests. Two fresh adversarial-review subagents were dispatched on this diff per
+loop-profile; their verdicts were still pending when this pack closed (background jobs — check
+this session's task notifications, or re-run the review, before treating the fix as fully audited).
+**Gates:** pytest 599 passed + 1 skip (unchanged) · ruff 0 · mypy 0 (28+34) · workflows 6/6 ·
+vitest 39→**40** · tsc/eslint/next build clean. Toolchain note: this container had no
+`requirements-dev.txt` installed and no `.venv`/`apps/web/node_modules` — installed fresh via
+global `python3.13 -m pip install -r requirements-dev.txt` and `npm ci` in `apps/web`; no `.env`
+(no live DB access at all, not even read-only).
+**Investigated, NOT changed — new findings for the next pack:**
+(a) Confirmed the AUDIT-1B finding "8 of 52 commodities carry no freshness group" — the 8 are
+CHINESE_GARLIC, DEHYDRATED_GARLIC, DEHYDRATED_ONION, INDIAN_CHILIES, PEANUTS, RED_ONION_CHINA,
+RED_ONION_INDIA, ROBUSTA (verified: `configs/ingestion/sources.yaml` `monitoring.groups` covers
+44/52 profile codes). But it's not a simple "add them to a group" fix: (1) RED_ONION_CHINA,
+DEHYDRATED_GARLIC, DEHYDRATED_ONION have **no ingestion source configured anywhere** — not in
+`sources.yaml` (prices/vn_prices/vn_history/vn_stocks/weather) nor `csv_imports.yaml` — so
+`fact_price_daily` almost certainly has zero rows for them; adding a `max_gap_days` gate would
+either always-fail or be meaningless. (2) CHINESE_GARLIC, INDIAN_CHILIES, PEANUTS,
+RED_ONION_INDIA, ROBUSTA only have **static one-off Kaggle CSV backfills** (`data/hist/*.csv`,
+`202[456].csv`) via `python -m etl.ingest --csv-import <name>` — there is no daily/scheduled
+connector for any of them (unlike vn_domestic/vn_stocks/futures), so their latest date is a fixed
+historical cutoff that never advances; a calendar-day freshness gate would warn/fail forever with
+no fix available short of a new live connector. This matches AUDIT-1B's actual complaint precisely
+("a months-stale produce series is forecast and rendered exactly like a fresh one") — the real gap
+is a missing STALENESS SIGNAL on these series (in the API payload / forecast log / UI), not a CI
+freshness gate. Onboarding real live feeds for these 8 (or at least the 3 with zero data) is
+`find-price-source` + `backfill-price-history` scope, not a same-pack fix.
+(b) `npm audit` in `apps/web` still reports the same 5 vulnerabilities as the 2026-09-03
+WEB-POLISH-1 pass (vitest/mocker moderate, esbuild low, next+postcss high) — tried `npm audit fix`
+(no `--force`): it only patch-bumps vitest sub-packages 3.2.6→3.2.7, which stays inside every
+vulnerable range (checked via `npm audit --json`), i.e. a no-op for security purposes. Reverted
+the resulting lockfile-only diff rather than commit a change with zero effect. All 5 still require
+`--force` (vitest major 5, next major 16) — same explicit approval-gate as PLAN.md §6.
+(c) Web Dockerfile `API_PROXY_TARGET` (listed in PLAN §6 as still-to-do) is **already** a
+build-time `ARG` with a documented `--build-arg` override (`apps/web/Dockerfile:10`) — PLAN.md §6
+is stale on this specific line; the genuinely open §6 items are just the whitespace CI gate,
+Dependabot/container-scan config, and the E2E smoke test.
+**Rules distilled:** (1) Before trusting any `X-Forwarded-For`-derived value for rate-limiting or
+auth, confirm which hop actually terminates the client TCP connection and trust only that entry —
+never the client-suppliable prefix, regardless of how many proxies are documented in front.
+(2) A "commodity has no freshness group" finding needs a first check of whether it has ANY
+configured ingestion source before proposing a fix — a static one-off CSV backfill and "no feed at
+all" both look identical in the profile list but need entirely different remedies (a staleness
+flag vs. a whole new connector), and neither is a `max_gap_days` config tweak.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
