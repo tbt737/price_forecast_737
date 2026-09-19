@@ -28,8 +28,15 @@ const TIMEOUT_MS = 60_000;
 const limiter = createRateLimiter(15, 60_000); // 15 requests / IP / minute
 
 function clientIp(req: Request): string {
+  // Cloud Run's front end APPENDS the real peer IP as the LAST entry of an inbound
+  // X-Forwarded-For header rather than replacing it — so a client can prepend an
+  // arbitrary fake address and control every entry except the last one. Keying the
+  // limiter on the FIRST entry let a caller mint a fresh "IP" per request and never
+  // hit the cap at all. Only the last (nearest-hop, non-spoofable) entry is trusted.
   const fwd = req.headers.get("x-forwarded-for");
-  return (fwd ? fwd.split(",")[0] : "").trim() || "unknown";
+  if (!fwd) return "unknown";
+  const parts = fwd.split(",").map((s) => s.trim()).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : "unknown";
 }
 
 function bad(detail: string, status = 400) {

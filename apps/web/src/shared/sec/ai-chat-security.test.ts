@@ -28,6 +28,21 @@ describe("/ai/chat rate limiting (behavioral)", () => {
     const res = await POST(chatReq("8.8.8.8"));
     expect(res.status).not.toBe(429); // 400 validation, never 429
   });
+
+  it("keys on the LAST X-Forwarded-For entry, not a client-spoofable prefix", async () => {
+    // Cloud Run's front end appends the real peer IP after any client-supplied
+    // prefix; a caller who rotates that prefix on every request must still hit
+    // the cap, because only the trailing "7.7.7.7" (the trusted hop) is trusted.
+    const spoofedReq = (i: number) =>
+      new Request("http://localhost/ai/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": `1.2.3.${i}, 7.7.7.7` },
+        body: JSON.stringify({ provider: "not-a-real-provider" }),
+      });
+    let last: Response | undefined;
+    for (let i = 0; i < 20; i++) last = await POST(spoofedReq(i));
+    expect(last?.status).toBe(429);
+  });
 });
 
 describe("middleware internal-key contract (source)", () => {
