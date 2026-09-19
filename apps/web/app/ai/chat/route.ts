@@ -33,6 +33,16 @@ function clientIp(req: Request): string {
   // arbitrary fake address and control every entry except the last one. Keying the
   // limiter on the FIRST entry let a caller mint a fresh "IP" per request and never
   // hit the cap at all. Only the last (nearest-hop, non-spoofable) entry is trusted.
+  //
+  // ⚠️ This is correct ONLY while Cloud Run is the direct ingress for this service
+  // (no CDN/reverse proxy in front of it) — that is today's deployment (PLAN.md;
+  // apps/web/Dockerfile's `gcloud run deploy cqp-web`), NOT the Cloudflare Pages
+  // alternative DEPLOY.md §2 also documents. If a CDN (Cloudflare, Firebase
+  // Hosting/Fastly, an external HTTPS Load Balancer, ...) is ever put in front of
+  // this service, its edge IP becomes the new trailing entry, not the visitor's —
+  // collapsing every visitor behind that edge into one shared rate-limit bucket.
+  // Re-derive the trusted hop (or switch to a CDN-specific header, e.g.
+  // `cf-connecting-ip`) if the ingress topology changes.
   const fwd = req.headers.get("x-forwarded-for");
   if (!fwd) return "unknown";
   const parts = fwd.split(",").map((s) => s.trim()).filter(Boolean);

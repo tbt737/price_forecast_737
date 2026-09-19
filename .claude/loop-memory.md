@@ -11,9 +11,26 @@ Run's GFE *appends* the real peer IP rather than replacing the header, so a clie
 let a caller mint a fresh "IP" every request and never trip the cap (SEC-2 lineage: relayed calls
 land on the owner's LLM-provider bill). Now trusts only the LAST entry. New test in
 `ai-chat-security.test.ts` proves a rotating spoofed prefix with a fixed trailing IP still 429s
-after 20 requests. Two fresh adversarial-review subagents were dispatched on this diff per
-loop-profile; their verdicts were still pending when this pack closed (background jobs — check
-this session's task notifications, or re-run the review, before treating the fix as fully audited).
+after 20 requests. **Adversarial review (2 fresh subagents, both landed after the initial push):**
+both independently raised the same real concern — "trust the last XFF entry" is a
+deployment-topology claim, and this repo's own docs disagree on that topology (PLAN.md +
+`apps/web/Dockerfile`'s `gcloud run deploy cqp-web` say Cloud Run is the direct frontend ingress
+today; `DEPLOY.md` §2 documents Cloudflare Pages as an alternative for the same service). If a
+CDN/LB is ever added in front of `cqp-web`, the trailing entry becomes THAT edge's IP, not the
+visitor's — collapsing every visitor behind it into one shared rate-limit bucket (a self-inflicted
+global 429, worse than the bug being fixed). Verified externally (WebSearch, since neither this
+session nor either reviewer could reach `cloud.google.com`/`docs.cloud.google.com` — both
+egress-blocked in this sandbox): community consensus (a real-world compiler-explorer/infra GitHub
+issue among the sources) confirms "trust the last XFF entry" IS the correct, standard rule for
+Cloud Run **when it is the direct ingress**, and explicitly breaks the same way reviewers predicted
+when something like Firebase Hosting/Fastly sits in front instead. Verdict: the fix is correct for
+the documented LIVE topology, not a regression — but it was topology-fragile with no guardrail, so
+a follow-up commit (same pack) added an explicit `⚠️` comment at `clientIp()` naming the
+single-hop assumption, pointing at the DEPLOY.md/PLAN.md split, and telling the next editor to
+re-derive the trusted hop (or use `cf-connecting-ip` etc.) if the ingress ever changes. **Not
+fixed (needs an owner decision, not a same-pack call):** reconciling DEPLOY.md's Cloudflare Pages
+option against PLAN.md's "Cloud Run (`cqp-api`, `cqp-web`)" LIVE statement — the two have disagreed
+since at least this pack and nothing pins which one the live service actually uses going forward.
 **Gates:** pytest 599 passed + 1 skip (unchanged) · ruff 0 · mypy 0 (28+34) · workflows 6/6 ·
 vitest 39→**40** · tsc/eslint/next build clean. Toolchain note: this container had no
 `requirements-dev.txt` installed and no `.venv`/`apps/web/node_modules` — installed fresh via
