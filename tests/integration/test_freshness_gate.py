@@ -41,6 +41,19 @@ def test_freshness_config_loads_critical_and_noncritical_groups() -> None:
     assert "GOLD_VN" in vn.commodities and "SILVER_VN" in vn.commodities
 
 
+def test_produce_no_daily_feed_group_covers_the_unconnected_commodities() -> None:
+    # AUDIT-1B: these 8 (CSV-import-only or no price source at all yet) were in no
+    # monitoring group whatsoever — a months-stale series was forecast/rendered exactly
+    # like a fresh one, with no signal anywhere. Non-critical: WARN, never a false-red gate.
+    groups = {g.name: g for g in load_freshness_groups()}
+    produce = groups["produce_no_daily_feed"]
+    assert produce.critical is False
+    assert set(produce.commodities) == {
+        "ROBUSTA", "CHINESE_GARLIC", "DEHYDRATED_GARLIC", "DEHYDRATED_ONION",
+        "INDIAN_CHILIES", "PEANUTS", "RED_ONION_CHINA", "RED_ONION_INDIA",
+    }
+
+
 # ETL-VN-4: --group filter + strict classification (pure; no DB/network).
 
 _FUT = FreshnessGroup(name="futures", critical=True, max_gap_days=3, commodities=("GOLD", "CRUDE_OIL"))

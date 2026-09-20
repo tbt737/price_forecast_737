@@ -237,3 +237,15 @@ monitoring:
                     HPG_VN, LPB_VN, MBB_VN, MSN_VN, MWG_VN, PLX_VN, SAB_VN, SHB_VN,
                     SSB_VN, SSI_VN, STB_VN, TCB_VN, TPB_VN, VCB_VN, VHM_VN, VIB_VN,
                     VIC_VN, VJC_VN, VNM_VN, VPB_VN, VPL_VN, VRE_VN]
+    # These 8 have no live daily connector (either CSV-import-only via csv_imports.yaml —
+    # Agmarknet/China MOA history refreshed by dropping a new year's file, not a running
+    # scraper — or no price source registered at all yet). Previously in NO monitoring
+    # group, so a months-stale series was forecast/rendered exactly like a fresh one
+    # (AUDIT-1B finding). WARN-only by design: this is expected to stay stale until a
+    # live connector is onboarded (see the find-price-source / add-commodity skills) —
+    # the point is visibility, not a false-red CI gate.
+    - name: produce_no_daily_feed
+      critical: false
+      max_gap_days: 30
+      commodities: [ROBUSTA, CHINESE_GARLIC, DEHYDRATED_GARLIC, DEHYDRATED_ONION,
+                    INDIAN_CHILIES, PEANUTS, RED_ONION_CHINA, RED_ONION_INDIA]

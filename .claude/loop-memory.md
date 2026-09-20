@@ -4,6 +4,43 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-20 SCHEDULED-REVIEW-1 — SCHEDULED_REVIEW_1_PASS (autonomous scheduled scan, single session — no subagent review)
+Closed one item from AUDIT-1B's "still open" list: 8/52 commodities (ROBUSTA, CHINESE_GARLIC,
+DEHYDRATED_GARLIC, DEHYDRATED_ONION, INDIAN_CHILIES, PEANUTS, RED_ONION_CHINA, RED_ONION_INDIA —
+all CSV-import-only via `csv_imports.yaml` or with no price source registered at all yet) were in
+NO `monitoring.groups` entry, so `scripts/check_freshness.py` never watched them and a months-stale
+produce series was forecast/rendered exactly like a fresh one. Added non-critical group
+`produce_no_daily_feed` (`configs/ingestion/sources.yaml`, `max_gap_days: 30`) — WARN-only by
+design (expected to stay stale until a real connector lands; the point is visibility, not a
+false-red gate) — plus a new guard test `test_every_commodity_profile_is_in_a_freshness_group`
+(`tests/quality/test_profiles_quality.py`) that fails if any future onboarded profile lands in no
+monitoring group, and a config-load pin in `tests/integration/test_freshness_gate.py`.
+**Investigated and explicitly declined:** the other two live AUDIT-1B "still open" items were
+looked at and are NOT touched here. (a) `ml/forecast.py` / `apps/api/app/routers/commodities.py` /
+`ml/build_pandas_mv.py` all read `revision == MAX(revision)` per (commodity, instrument) rather than
+per-date — this looks like a bug in isolation, but `docs/etl/vn-stocks-restatement.md` and
+`test_lookup_actual_sql_matches_single_basis_read_path` pin it as a **deliberate** single-basis
+design: a restatement is defined to rewrite its WHOLE history atomically, so per-date latest-revision
+would actually be worse — it would splice an old adjustment basis (untouched dates) next to a new one
+(restated dates) with no fail-closed guard at all. The real defect is write-side (restatement
+currently accepts <100% date coverage before bumping revision, breaking that atomicity), which
+PLAN.md §5/§9 explicitly gates to "restatement coverage 1.0, do BEFORE ENABLE_VN_STOCKS_INGEST=true"
+inside the owner-approval-gated VN30-PROD sequence — correctly out of scope for an unattended
+session. (b) restatement coverage threshold itself — same reason, same gate.
+**Gates:** pytest 594→**601 passed + 1 skip** (repo's own baseline recorded 594 at 571502f; this
+session's Python 3.11 container measured 601 pre-change too — environment/plugin-count difference,
+not a regression, +2 attributable to this pack's own new tests) · ruff 0 · mypy 0 (28+34) ·
+workflows 6/6 · compileall clean. No web files touched, no DB/network, no `--write`, no deploy —
+this container has no live DB access at all, so no runtime smoke of `check_freshness.py --group
+produce_no_daily_feed` beyond the pure-helper unit tests.
+**Rules distilled:** (1) Before "fixing" a pattern that looks wrong in isolation (a global
+MAX(revision) filter), check whether a doc/pinned test already declares it deliberate — the
+AUDIT-1B note describing it as a defect was about the write-side cause, not license to change the
+read-side contract three call sites rely on. (2) A commodity profile with no price connector yet
+(CSV-import-only, or none) still deserves a monitoring group — WARN-only visibility costs nothing
+and closes an audit-identified blind spot; `critical: true` would be wrong here since nothing is
+meant to refresh these daily yet.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/

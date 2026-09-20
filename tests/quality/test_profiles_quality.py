@@ -127,3 +127,21 @@ def test_currency_waivers_are_still_needed() -> None:
     }
     stale = set(CURRENCY_MISMATCH_WAIVERS) - live
     assert not stale, f"stale currency waivers, remove them: {sorted(stale)}"
+
+
+# ── freshness-monitoring contract: every commodity is watched by someone ─────
+# A profile that is in NO ``monitoring.groups`` entry has no staleness signal at all
+# between the model and the reader — a months-stale series is then forecast and
+# rendered exactly like a fresh one (AUDIT-1B: 8/52 commodities silently had this gap).
+# New commodities are onboarded by adding a YAML profile (CLAUDE.md §1) — this pins
+# that onboarding a profile also means placing it in a freshness group, even a
+# non-critical one that only warns.
+
+
+def test_every_commodity_profile_is_in_a_freshness_group() -> None:
+    from etl.ingestion.config import load_freshness_groups
+
+    profile_codes = {yaml.safe_load(p.read_text(encoding="utf-8"))["commodity_code"] for p in PROFILE_FILES}
+    monitored = {c for g in load_freshness_groups() for c in g.commodities}
+    unmonitored = profile_codes - monitored
+    assert not unmonitored, f"commodity profile(s) in no monitoring.groups entry: {sorted(unmonitored)}"
