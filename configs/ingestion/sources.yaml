@@ -179,7 +179,11 @@ vn_stocks:
     anchor_days: 5
     jump_alert_pct: 15
     deep_from: "2000-01-01"
-    min_reload_coverage: 0.9
+    # A genuine corporate-action reload republishes the WHOLE history (module
+    # docstring), so every legitimate reload has coverage == 1.0. The prior 0.9
+    # default let e.g. 18/20 == 0.900 through silently (check is coverage < threshold,
+    # not <=), dropping 2 stored dates from every read path with a clean exit code.
+    min_reload_coverage: 1.0
   url_template: "https://services.entrade.com.vn/chart-api/v2/ohlcs/stock?from={ts_from}&to={ts_to}&symbol={ticker}&resolution=1D"
   # Basket = VN30 effective 2026-02-02 (Jan-2026 HOSE review: VPL in, BCM out).
   # HOSE revises the basket semiannually (Jan/Jul, effective early Feb/Aug) —

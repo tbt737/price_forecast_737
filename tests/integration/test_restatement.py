@@ -288,6 +288,26 @@ def test_truncated_reload_is_refused(session: Session) -> None:
     assert _series(session) == pytest.approx(BASIS_A)
 
 
+def test_near_complete_reload_below_old_threshold_is_refused(session: Session) -> None:
+    # Regression for the boundary the old 0.9 default missed: BASIS_A has 18 stored
+    # dates, so dropping just the single oldest one gives coverage 17/18 ≈ 0.944 —
+    # comfortably >= 0.9 (would have been silently ACCEPTED under the old default,
+    # since the check is coverage < threshold) but must be refused now that a
+    # legitimate reload is required to cover every stored date.
+    _seed_initial(session, BASIS_A)
+    oldest = min(BASIS_A)
+    near_complete = {d: round(v * 0.85, 4) for d, v in BASIS_A.items() if d != oldest}
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=_fetch_for(near_complete), dry_run=False
+    )
+    item = report["instruments"][0]
+    assert item["status"] == "error" and not report["ok"]
+    assert any("coverage" in w for w in item["warnings"])
+    # Fail-closed: nothing was written; the canonical series is still basis A.
+    assert {r[2] for r in _all_rows(session)} == {0}
+    assert _series(session) == pytest.approx(BASIS_A)
+
+
 def test_duplicate_grain_inside_reload_aborts_whole_instrument(session: Session) -> None:
     _seed_initial(session, BASIS_A)
     restated = {d: round(v * 0.85, 4) for d, v in BASIS_A.items()}
@@ -408,5 +428,5 @@ def test_reconcile_config_loads_from_sources_yaml() -> None:
     rc = cfg.vn_stocks_reconcile
     assert isinstance(rc, StockReconcileConfig)
     assert rc.epsilon_pct == 0.5 and rc.anchor_days == 5
-    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 0.9
+    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 1.0
     assert rc.deep_from == "2000-01-01"
