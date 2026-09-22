@@ -288,6 +288,26 @@ def test_truncated_reload_is_refused(session: Session) -> None:
     assert _series(session) == pytest.approx(BASIS_A)
 
 
+def test_near_complete_reload_below_full_coverage_is_refused(session: Session) -> None:
+    """AUDIT-1B regression: a reload missing even ONE stored date used to be accepted
+    (0.9 threshold; 17/18 = 0.944 >= 0.9) and would silently become the sole canonical
+    series (single-basis rule) — the missing date vanishes from every read path with
+    exit 0. min_reload_coverage is now 1.0, so this must fail closed like a truncation."""
+    _seed_initial(session, BASIS_A)
+    missing_one = dict(BASIS_A)
+    del missing_one[max(missing_one)]  # drop the single most recent stored date
+    near_complete = {d: round(v * 0.85, 4) for d, v in missing_one.items()}
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=_fetch_for(near_complete), dry_run=False
+    )
+    item = report["instruments"][0]
+    assert item["status"] == "error" and not report["ok"]
+    assert any("coverage" in w for w in item["warnings"])
+    # Fail-closed: nothing was written; the canonical series still has every stored date.
+    assert {r[2] for r in _all_rows(session)} == {0}
+    assert _series(session) == pytest.approx(BASIS_A)
+
+
 def test_duplicate_grain_inside_reload_aborts_whole_instrument(session: Session) -> None:
     _seed_initial(session, BASIS_A)
     restated = {d: round(v * 0.85, 4) for d, v in BASIS_A.items()}
@@ -408,5 +428,5 @@ def test_reconcile_config_loads_from_sources_yaml() -> None:
     rc = cfg.vn_stocks_reconcile
     assert isinstance(rc, StockReconcileConfig)
     assert rc.epsilon_pct == 0.5 and rc.anchor_days == 5
-    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 0.9
+    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 1.0
     assert rc.deep_from == "2000-01-01"

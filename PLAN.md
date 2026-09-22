@@ -59,6 +59,9 @@ Highest-value next actions, in order:
   repo variable `ENABLE_VN_STOCKS_INGEST` (default OFF; step skipped unless the
   variable is exactly `true`). Deep backfill (5400d) and Cloud Run deploy are **NOT
   approved** until the restatement pack lands and meets ALL of:
+  (item 3's coverage gate: `min_reload_coverage` raised 0.9→1.0 on 2026-09-22, closing
+  the AUDIT-1B-flagged silent-truncation gap — see `.claude/loop-memory.md`; the other
+  requirements below are unaffected by this change)
   1. re-ingest can UPDATE history the source restated (no `ON CONFLICT DO NOTHING`
      for the same revision logic);
   2. re-running the same payload is idempotent;

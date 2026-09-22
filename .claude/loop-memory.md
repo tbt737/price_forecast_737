@@ -4,6 +4,39 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-22 AUDIT-1B-FOLLOWUP — AUDIT_1B_FOLLOWUP_PASS (scheduled review; closes 1 of the AUDIT-1B open items)
+Closes the CONFIRMED HIGH restatement-coverage gap the AUDIT-1B entry below flagged
+as still open ("restatement coverage 1.0 … do it BEFORE `ENABLE_VN_STOCKS_INGEST=true`").
+`StockReconcileConfig.min_reload_coverage` (single-basis reload acceptance gate,
+`etl/restatement.py:238`) defaulted to 0.9 — a restated reload covering only 90% of
+stored dates was accepted, became the sole series every read path serves
+(`ml.forecast.load_price_series`, `ml/build_pandas_mv.py`), and the missing dates
+vanished with exit 0 and no warning surfaced anywhere. Raised to **1.0** in both the
+dataclass default (`etl/ingestion/config.py:93`, `:440`) and `configs/ingestion/sources.yaml:182`
+— matches the module's own documented contract ("every read path selects ONLY the
+instrument's latest revision", i.e. that revision must be complete, not a per-date
+merge across revisions). New regression test
+`test_near_complete_reload_below_full_coverage_is_refused`
+(`tests/integration/test_restatement.py`) pins the exact AUDIT-1B probe shape (drop 1
+of 18 stored dates ⇒ 17/18 = 0.944 coverage, which the old 0.9 threshold accepted and
+the new 1.0 threshold refuses); the 3 existing happy-path tests all reload 100% and
+were unaffected, confirming no legitimate scenario regresses.
+**Gates:** pytest 599→**600 passed + 1 skip** · ruff 0 · mypy 0 (28+34 files) ·
+workflows 6/6 · compileall clean. No DB, no network, no `--write`/`--reconcile`
+against prod (container has no live `.env`); `apps/web` untouched so vitest/eslint/
+build were not re-run (per loop-profile: web gate only when web is touched).
+**Still open from AUDIT-1B (unchanged by this pack):** `/ai/chat` rate limiter keys on
+the client-controlled first `X-Forwarded-For` hop · 8/52 commodities carry no
+freshness group and no staleness signal reaches the reader · `ml/forecast.py`'s
+single-basis MAX(revision) read (by design, matches this pack's fix) still means a
+*future* coverage regression on a currently-passing reload would need this same test
+shape to catch — no code action needed unless the threshold is ever loosened · alembic
+vs `db/migrations/001-007.sql` remain two uncompared schema definitions.
+**Rule distilled:** a "coverage ≥ X" acceptance gate that becomes the sole future
+source of truth (single-basis / latest-revision reads) must require **complete**
+coverage, not a fraction — partial acceptance is silent data loss with exit 0, not a
+gray-area tuning knob.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
