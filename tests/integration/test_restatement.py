@@ -288,6 +288,26 @@ def test_truncated_reload_is_refused(session: Session) -> None:
     assert _series(session) == pytest.approx(BASIS_A)
 
 
+def test_reload_missing_a_single_stored_date_is_refused(session: Session) -> None:
+    # Regression for the pre-fix default (min_reload_coverage=0.9): dropping just ONE
+    # of BASIS_A's 18 stored dates scores 17/18 ≈ 0.944 — comfortably above the old
+    # 90% bar, so it used to be ACCEPTED and become the canonical series, silently and
+    # permanently losing that date (the store is append-only; there is no recovering
+    # it later). At the current min_reload_coverage=1.0 it must be refused.
+    _seed_initial(session, BASIS_A)
+    missing_one = dict(sorted(BASIS_A.items())[1:])  # drop the single oldest stored date
+    restated = {d: round(v * 0.85, 4) for d, v in missing_one.items()}
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=_fetch_for(restated), dry_run=False
+    )
+    item = report["instruments"][0]
+    assert item["status"] == "error" and not report["ok"]
+    assert any("coverage" in w for w in item["warnings"])
+    # Fail-closed: nothing was written; the canonical series is still basis A.
+    assert {r[2] for r in _all_rows(session)} == {0}
+    assert _series(session) == pytest.approx(BASIS_A)
+
+
 def test_duplicate_grain_inside_reload_aborts_whole_instrument(session: Session) -> None:
     _seed_initial(session, BASIS_A)
     restated = {d: round(v * 0.85, 4) for d, v in BASIS_A.items()}
@@ -408,5 +428,5 @@ def test_reconcile_config_loads_from_sources_yaml() -> None:
     rc = cfg.vn_stocks_reconcile
     assert isinstance(rc, StockReconcileConfig)
     assert rc.epsilon_pct == 0.5 and rc.anchor_days == 5
-    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 0.9
+    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 1.0
     assert rc.deep_from == "2000-01-01"
