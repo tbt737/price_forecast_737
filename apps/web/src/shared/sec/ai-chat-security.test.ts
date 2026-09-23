@@ -14,6 +14,18 @@ function chatReq(ip: string): Request {
   });
 }
 
+function chatReqSpoofedXff(cfIp: string, spoofedXff: string): Request {
+  return new Request("http://localhost/ai/chat", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "cf-connecting-ip": cfIp,
+      "x-forwarded-for": spoofedXff,
+    },
+    body: JSON.stringify({ provider: "not-a-real-provider" }),
+  });
+}
+
 describe("/ai/chat rate limiting (behavioral)", () => {
   it("returns 429 once one IP exceeds the per-minute limit; body carries no stack trace", async () => {
     let last: Response | undefined;
@@ -27,6 +39,22 @@ describe("/ai/chat rate limiting (behavioral)", () => {
   it("does not rate-limit a different IP", async () => {
     const res = await POST(chatReq("8.8.8.8"));
     expect(res.status).not.toBe(429); // 400 validation, never 429
+  });
+
+  it("keys on cf-connecting-ip, not a client-spoofable x-forwarded-for", async () => {
+    // Same real client (same cf-connecting-ip) rotating a fresh x-forwarded-for on
+    // every request must still hit the cap — proves the limiter can't be bypassed by
+    // spoofing the header the client controls.
+    let last: Response | undefined;
+    for (let i = 0; i < 20; i++) {
+      last = await POST(chatReqSpoofedXff("7.7.7.7", `1.2.3.${i}`));
+    }
+    expect(last?.status).toBe(429);
+  });
+
+  it("does not rate-limit a different real client behind the same spoofed x-forwarded-for", async () => {
+    const res = await POST(chatReqSpoofedXff("6.6.6.6", "1.2.3.4"));
+    expect(res.status).not.toBe(429); // different cf-connecting-ip ⇒ different bucket
   });
 });
 

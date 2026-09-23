@@ -28,6 +28,15 @@ const TIMEOUT_MS = 60_000;
 const limiter = createRateLimiter(15, 60_000); // 15 requests / IP / minute
 
 function clientIp(req: Request): string {
+  // The frontend host is Cloudflare Pages (DEPLOY.md §2): Cloudflare's edge sets
+  // CF-Connecting-IP to the real client address and overwrites any client-supplied
+  // copy, so it cannot be spoofed regardless of proxy depth. x-forwarded-for's FIRST
+  // entry is client-supplied (a proxy chain only ever APPENDS), so keying the limiter
+  // on it let a caller rotate a fake value per request and bypass the cap entirely —
+  // it stays only as a fallback for environments without Cloudflare in front (local
+  // dev, tests).
+  const cf = req.headers.get("cf-connecting-ip");
+  if (cf) return cf.trim() || "unknown";
   const fwd = req.headers.get("x-forwarded-for");
   return (fwd ? fwd.split(",")[0] : "").trim() || "unknown";
 }
