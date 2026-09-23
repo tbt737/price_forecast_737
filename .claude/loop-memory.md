@@ -4,6 +4,61 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-23 AUTONOMOUS-REVIEW-1 — AUTONOMOUS_REVIEW_1_PASS (scheduled-task pack; pushed to `claude/sharp-hopper-6g60k4`)
+Worked the AUDIT-1B "still open" list (below) for items fixable without an owner
+decision; left the rest untouched.
+**Shipped (3 commits, all gates green):** (1) `min_reload_coverage` 0.9→1.0
+(`etl/ingestion/config.py`, `configs/ingestion/sources.yaml`) — closes the
+CONFIRMED-HIGH restatement-truncation defect: a reload reproducing only 90% of a
+stock's stored dates was accepted as the new canonical revision, permanently and
+silently dropping the missing dates from an append-only store (no read path could
+ever recover them). Was the top "do BEFORE `ENABLE_VN_STOCKS_INGEST=true`" item;
+the flag is still off, so this closes the gap before any real ingest hits it. Added
+`test_reload_missing_a_single_stored_date_is_refused` (17/18 ≈ 0.944 coverage — above
+the old 90% bar, below the new 100% one). (2) `/ai/chat` rate limiter keyed
+`clientIp()` on `x-forwarded-for`'s FIRST entry — client-supplied, since a proxy
+chain only ever appends — so any caller could rotate a fake value per request and
+bypass the 15/min cap on a proxy that relays to LLM providers on the owner's bill.
+The loop-memory blocker was "needs the owner's trusted-proxy hop count to fix
+correctly" — sidestepped: the frontend host is Cloudflare Pages (DEPLOY.md §2),
+whose edge sets `CF-Connecting-IP` to the real client address and overwrites any
+client copy, unspoofable regardless of hop count. Now preferred over
+`x-forwarded-for`, which stays only as the non-Cloudflare (local/test) fallback —
+existing tests untouched, 2 new ones added (spoofed-XFF-same-CF still capped;
+different-CF-same-spoofed-XFF not capped). (3) `apps/web`: `npm audit fix`
+(no `--force`) — next 15.5.25→15.5.26, vitest 3.2.6→3.2.7, vite 4.0.4→4.0.6, all
+in-range (no `package.json` diff); the remaining postcss/esbuild advisories still
+need a Next 16 major, deliberately left as PLAN.md §6's approval-gated item.
+**Investigated, deliberately NOT changed:** the "8 of 52 commodities in no
+freshness group" item (CHINESE_GARLIC, DEHYDRATED_GARLIC, DEHYDRATED_ONION,
+INDIAN_CHILIES, PEANUTS, RED_ONION_CHINA, RED_ONION_INDIA, ROBUSTA) — these have NO
+live daily feed at all, only one-off Kaggle/Agmarknet CSV backfills
+(`configs/ingestion/csv_imports.yaml`), so adding them to `check_freshness.py`'s
+CI-only gate would just be permanently red/warn, not a real signal; the actual gap
+is a user-facing staleness indicator between model and reader, which needs a
+product decision (API contract + UI), not a config tweak. `ml/forecast.py:85-92`
+global-`MAX(revision)` (no per-date grouping) — left as-is: it's the same pattern
+already used in `ml/build_pandas_mv.py`, and item (1) above removes the actual
+trigger (a non-uniform per-date revision after a truncated restatement) since
+restatement now requires 100% date coverage before it will ever create a new
+revision; revisiting the read-path SQL itself stays a larger, owner-scoped change.
+alembic vs `db/migrations/*.sql` (two independent schema definitions, never
+diffed) — docs-only risk, no safe unattended fix without DB access.
+**Gates:** pytest **600 passed + 1 skip** (was 599+1; +1 new test) · ruff 0 ·
+mypy 0 (28+34, the pinned `-p app` + `etl` gate — the broader `ml`/`scripts`/test-dir
+sweep has 14 pre-existing, untouched errors outside that gate) · vitest **41**
+(was 39; +2 new tests) · tsc/eslint/next build clean.
+**Rules distilled:** (1) A coverage *threshold* below 100% on a store that claims
+single-basis correctness is a truncation budget, not a safety margin — read the
+guard's own comment against its own number. (2) On a known, fixed hosting platform,
+a "need the trusted-proxy hop count" blocker often has a platform-specific
+unspoofable header (Cloudflare's `CF-Connecting-IP`, similarly `Fastly-Client-IP`,
+Cloud Run's `X-Cloud-Trace-Context`-adjacent headers) that avoids the hop-counting
+problem entirely — check DEPLOY.md/the hosting doc before escalating. (3) A
+"missing monitoring group" finding can be masking a data-source design fact (no
+live feed exists at all) rather than a monitoring gap — verify the source registry
+before wiring a check that would just be permanently red.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
