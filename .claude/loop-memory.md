@@ -4,6 +4,41 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-24 SCHEDULED-REVIEW-1 — SCHEDULED_REVIEW_1_PASS (autonomous scheduled pass)
+Picked up the top-ranked "still open" item from AUDIT-1B: restatement reload coverage
+was gated at 0.9 (`etl/ingestion/config.py` + `configs/ingestion/sources.yaml`), so a
+reload reproducing only 90% of stored dates was ACCEPTED as the new canonical
+revision — the other 10% silently and permanently drop out of every single-basis read
+path (`ml.forecast.load_price_series`, `ml/build_pandas_mv.py`, the API price
+endpoint) with no error, because those reads filter on `revision == MAX(revision)` and
+a date missing from the winning reload simply never appears again. AUDIT-1B had
+already root-caused this exact fix (raise `min_reload_coverage` 0.9 → 1.0) and traced
+that the 3 happy-path restatement tests all republish 100% of stored dates, and the
+two adversarial-PoC tests (`test_truncated_reload_is_refused`,
+`test_capped_response_with_extra_prehistory_is_refused`) sit far below even the old
+0.9 bar — so raising the bar to "no partial reload ever becomes canonical" costs
+nothing legitimate. Changed the default in both places it's read from + the config
+value-assert in `tests/integration/test_restatement.py:411`. No code change to the
+read paths was needed — the fix is at the one place that decides what's allowed to
+become canonical.
+**Not touched (deliberately):** `/ai/chat` rate limiter keys on `X-Forwarded-For`
+split(",")[0] (`apps/web/app/ai/chat/route.ts:30-33`) — confirmed the header is
+attacker-controlled as described, and DEPLOY.md's frontend target (Cloudflare Pages)
+would make `CF-Connecting-IP` the safe fix, but the actual live deployment topology
+(is it really behind Cloudflare, how many hops) isn't verifiable from the repo — stays
+owner-decision per the prior audit. 8-of-52-commodities-no-freshness-group and the
+alembic-vs-sql-migrations dual schema definition are unchanged — both need design
+decisions, not a bounded bug fix.
+**Gates:** pytest 599 passed + 1 skip (unchanged baseline) · ruff 0 · mypy 0 (28+34) ·
+`ci_check_workflows.py` 6/6 · `apps/web` untouched, no npm gates re-run.
+**Rules distilled:** (1) A dedicated Python 3.13 install of the full `requirements-dev.txt`
+in a fresh container can silently start pulling `nvidia-nccl-cu13` (a multi-GB CUDA lib)
+because the `xgboost>=2.0` manylinux wheel declares it as a Linux-platform dependency
+even though CPU-only import/use never touches it — if a from-scratch install stalls,
+check `/proc/<pid>/io` for real progress before waiting it out, and if it's fetching
+`nvidia_*` packages, kill it and reinstall the small set of actually-imported modules
+with `--no-deps` for the offending package instead of the full requirements file.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
@@ -44,8 +79,8 @@ proxy stored on the Jinxiang instrument) and a second test that fails when a wai
 `--write` still seeds 11) — the seeding now sits behind the write-mode guard. (10) `validate_record`
 had NO numeric validation at all, so the NaN class was only closed per-connector: it now rejects
 NaN/±Inf as NON_FINITE_VALUE at the choke point every record passes through.
-**Still open, ranked (nothing below was changed):** restatement coverage 1.0 (do it BEFORE
-`ENABLE_VN_STOCKS_INGEST=true`) · `/ai/chat` rate limiter keys on the FIRST X-Forwarded-For entry,
+**Still open, ranked (nothing below was changed):** restatement coverage 1.0 — CLOSED by
+SCHEDULED-REVIEW-1 (2026-09-24), see above · `/ai/chat` rate limiter keys on the FIRST X-Forwarded-For entry,
 which the client controls, so the 15/min cap never fires and the key map degrades to an O(n) scan
 per request — needs the owner's trusted-proxy hop count to fix correctly · 8 of 52 commodities are
 in no freshness group at all, and no layer between model and reader carries a staleness signal, so
