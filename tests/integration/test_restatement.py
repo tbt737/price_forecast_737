@@ -347,6 +347,26 @@ def test_capped_response_with_extra_prehistory_is_refused(session: Session) -> N
     assert _series(session) == pytest.approx(BASIS_A)
 
 
+def test_reload_missing_one_stored_date_is_refused(session: Session) -> None:
+    # AUDIT-1B regression: with the old min_reload_coverage=0.9, a reload reproducing
+    # 17 of 18 stored dates (0.944 >= 0.9) was ACCEPTED and the dropped date silently
+    # vanished from every read path forever (probed live at 18/20 = 0.900). Coverage
+    # is now required to be 1.0 — even one missing stored date must refuse the reload,
+    # not just a heavily truncated one.
+    _seed_initial(session, BASIS_A)
+    missing_one = {d: round(v * 0.85, 4) for d, v in BASIS_A.items() if d != DATES[0]}
+    assert len(missing_one) == len(BASIS_A) - 1
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=_fetch_for(missing_one), dry_run=False
+    )
+    item = report["instruments"][0]
+    assert item["status"] == "error" and not report["ok"]
+    assert any("coverage" in w for w in item["warnings"])
+    # Fail-closed: nothing was written; the canonical series still has ALL 18 dates.
+    assert {r[2] for r in _all_rows(session)} == {0}
+    assert _series(session) == pytest.approx(BASIS_A)
+
+
 def test_append_after_restatement_lands_at_new_revision(session: Session) -> None:
     # After a reload to revision 1, daily appends must land at revision 1 too — an
     # append at revision 0 would be INVISIBLE to the single-basis read paths.
@@ -408,5 +428,5 @@ def test_reconcile_config_loads_from_sources_yaml() -> None:
     rc = cfg.vn_stocks_reconcile
     assert isinstance(rc, StockReconcileConfig)
     assert rc.epsilon_pct == 0.5 and rc.anchor_days == 5
-    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 0.9
+    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 1.0
     assert rc.deep_from == "2000-01-01"

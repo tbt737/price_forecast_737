@@ -70,6 +70,10 @@ exact new numbers — do not guess.** Update:
 - `apps/api/tests/test_api.py` (`/commodities`, `/profiles`, `/stats` counts)
 - The generated `db/views/generated/010_mv_ml_daily_features_wide.sql` **auto-regenerates**
   with the new driver `metric_code`s — keep the regenerated file (it's expected, not pollution).
+- Add the new `commodity_code` to a `monitoring.groups` entry in `sources.yaml` (existing
+  group if the cadence matches, else a new `critical: false` one) — `test_every_commodity_is_in_a_freshness_group`
+  in `test_profiles_quality.py` fails otherwise. A CSV-only commodity with no live connector
+  still belongs in a group (non-critical, expected-stale) so it isn't invisible to ops.
 
 ## Step 6 — Offline tests for the connector
 Add a test (e.g. `tests/integration/test_<source>_source.py`) that loads the **captured

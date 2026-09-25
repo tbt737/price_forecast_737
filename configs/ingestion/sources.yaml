@@ -179,7 +179,7 @@ vn_stocks:
     anchor_days: 5
     jump_alert_pct: 15
     deep_from: "2000-01-01"
-    min_reload_coverage: 0.9
+    min_reload_coverage: 1.0
   url_template: "https://services.entrade.com.vn/chart-api/v2/ohlcs/stock?from={ts_from}&to={ts_to}&symbol={ticker}&resolution=1D"
   # Basket = VN30 effective 2026-02-02 (Jan-2026 HOSE review: VPL in, BCM out).
   # HOSE revises the basket semiannually (Jan/Jul, effective early Feb/Aug) —
@@ -230,6 +230,17 @@ monitoring:
       critical: false
       max_gap_days: 4 # scraped spot; a dead PNJ/Phú Quý/VNAppMob endpoint is surfaced
       commodities: [GOLD_VN, SILVER_VN, PEPPER_VN, DIESEL_VN]
+    - name: csv_import_produce
+      critical: false
+      max_gap_days: 5 # Agmarknet/China-MOA mandi cadence, matched to the vn_stocks tolerance
+      # These 8 have NO live connector at all — price history comes only from one-off
+      # Kaggle CSV backfills (configs/ingestion/csv_imports.yaml), so this group is
+      # EXPECTED to sit STALE (warning-only) between backfill runs. Its point is to make
+      # that gap visible in the daily ops report instead of these commodities being
+      # invisible to every freshness check (AUDIT-1B: "8 of 52 commodities are in no
+      # freshness group at all") — not to demand a cadence nothing currently feeds.
+      commodities: [ROBUSTA, CHINESE_GARLIC, DEHYDRATED_GARLIC, DEHYDRATED_ONION,
+                    RED_ONION_CHINA, RED_ONION_INDIA, INDIAN_CHILIES, PEANUTS]
     - name: vn_stocks
       critical: false
       max_gap_days: 5 # daily bars incl. long holiday weekends (Tết gaps stay WARNING-only)

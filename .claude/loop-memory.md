@@ -4,6 +4,47 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-25 AUDIT-2 — AUDIT_2_PASS (closed 2 of the 5 AUDIT-1B "still open" items)
+Scheduled maintenance pass; picked the two still-open items fixable without an owner
+decision (skipped the rate-limiter/proxy-hop and alembic-vs-SQL-migrations items — both
+need an infra decision, not a code change).
+**Shipped:** (1) `min_reload_coverage` 0.9→**1.0** (`etl/ingestion/config.py` dataclass
+default + YAML-load fallback, `configs/ingestion/sources.yaml` vn_stocks.reconcile) — the
+AUDIT-1B probe showed a reload reproducing only 18/20 stored dates (0.900) was ACCEPTED
+and became canonical, permanently dropping 2 dates from every read path; now any reload
+missing even one stored date is refused. New regression test
+`test_reload_missing_one_stored_date_is_refused` (17/18 = 0.944, would've passed the old
+0.9 gate) pins the exact shape of the bug. The 3 pre-existing happy-path tests already
+republish 100% of stored dates, so nothing legitimate regresses (verified: full suite
+still green). Dormant in prod today (`ENABLE_VN_STOCKS_INGEST` is off), so this is a
+pre-emptive fix, not a live hotfix. (2) The 8 commodities AUDIT-1B found in NO freshness
+group (ROBUSTA, CHINESE_GARLIC, DEHYDRATED_GARLIC, DEHYDRATED_ONION, RED_ONION_CHINA,
+RED_ONION_INDIA, INDIAN_CHILIES, PEANUTS — all CSV-import-only produce series, verified
+none has a live connector) now sit in a new non-critical `csv_import_produce` monitoring
+group (`sources.yaml`), documented as *expected*-stale (no scheduled top-up exists) so the
+gap is visible in ops output instead of silently unmonitored forever. New pinning test
+`test_every_commodity_is_in_a_freshness_group` (`tests/quality/test_profiles_quality.py`)
+fails if a future profile ships with no group. Added the same requirement to the
+add-commodity skill's inventory-count-bump checklist so it doesn't regress on the next
+onboarding.
+**Gates:** pytest 599+1skip → **601+1skip** · ruff 0 · mypy 0 (28+34) · workflows 6/6 ·
+compileall clean. apps/web untouched, no vitest re-run needed. No DB/network touched — all
+verification is offline (YAML load + SQLite-backed reconcile tests); did not run
+`check_freshness.py` against live Supabase since the config-load path is already covered
+by pytest and a live read wasn't needed to verify correctness.
+**Still open (unchanged, both need an owner/infra call, not a code fix):** `/ai/chat` rate
+limiter keys on the client-controlled first X-Forwarded-For entry · alembic (0001,0002)
+vs `db/migrations/001-007.sql` are two independent schema definitions, never compared.
+Also untouched: all AUDIT-1 "ESCALATED" items (backfill contract-lie docstring, POST
+/forecast gate, runner/serve MAPE mismatch, cash_flow_predictor harvest-lag) — same reason.
+**Rules distilled:** (1) A "still open, CONFIRMED HIGH, one-line fix identified" audit
+note is a queued fix, not a design debate — re-verify the 3 file locations it names and
+ship it if the happy-path tests still cover 100% coverage (they did here). (2) A
+freshness-group gap isn't just "N days stale" math — a commodity with a data source but
+literally no group entry is invisible to `check_freshness.py` forever; the fix is a config
+addition, not a new monitoring feature, and belongs in `monitoring.groups` even when the
+right cadence is "warn always" for a source with no scheduled top-up.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/

@@ -127,3 +127,24 @@ def test_currency_waivers_are_still_needed() -> None:
     }
     stale = set(CURRENCY_MISMATCH_WAIVERS) - live
     assert not stale, f"stale currency waivers, remove them: {sorted(stale)}"
+
+
+def test_every_commodity_is_in_a_freshness_group() -> None:
+    """AUDIT-1B regression: 8 of 52 commodities (all CSV-import-only produce series —
+    ROBUSTA/CHINESE_GARLIC/DEHYDRATED_GARLIC/DEHYDRATED_ONION/RED_ONION_CHINA/
+    RED_ONION_INDIA/INDIAN_CHILIES/PEANUTS) were in NO `monitoring.groups` entry at all,
+    so a months-stale series was invisible to `scripts/check_freshness.py` forever. A
+    commodity with no live connector still belongs in a (non-critical) group so staleness
+    is at least surfaced, not silently unmonitored."""
+    from etl.ingestion.config import load_freshness_groups
+
+    profile_codes = set()
+    for path in PROFILE_FILES:
+        profile_codes.add(yaml.safe_load(path.read_text(encoding="utf-8"))["commodity_code"])
+
+    grouped_codes: set[str] = set()
+    for group in load_freshness_groups():
+        grouped_codes.update(group.commodities)
+
+    missing = profile_codes - grouped_codes
+    assert not missing, f"commodities in no freshness group: {sorted(missing)}"
