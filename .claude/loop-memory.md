@@ -4,6 +4,55 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-26 RESTATE-COVERAGE-1 — RESTATE_COVERAGE_1_PASS (closes the top AUDIT-1B "still open" item; local only, not pushed)
+Scheduled autonomous pack (no live human this session). Picked the highest-ranked unfixed
+item from AUDIT-1B's "still open" list: `min_reload_coverage` defaulted to **0.9**, so a
+VN-stock restatement reload missing up to 10% of previously-stored dates was silently
+ACCEPTED as the new canonical basis, permanently dropping those dates from every read path
+(no warning, exit 0) — CONFIRMED HIGH at the time, never shipped. Reproduced the exact
+mechanism first (probe: dropping 1 of 18 seeded dates ⇒ coverage 17/18 ≈ 0.944, accepted
+under the old 0.9 gate) before touching anything.
+**Shipped:** `min_reload_coverage` 0.9 → **1.0** in `etl/ingestion/config.py`
+(`StockReconcileConfig` dataclass default + `load_ingestion_config` YAML-loader default)
+and `configs/ingestion/sources.yaml` (`vn_stocks.reconcile.min_reload_coverage`); doc
+update in `docs/etl/vn-stocks-restatement.md` §4; new regression test
+`test_reload_missing_one_stored_date_is_refused` in `tests/integration/test_restatement.py`
+— verified by hand that it FAILS at 0.9 (status `"restated"`, silently accepted) and PASSES
+at 1.0 (status `"error"`, nothing written, dropped date still served from the untouched old
+basis); updated the one test pinning the old default. Repo-wide grep confirmed no other
+source/profile independently defines its own reload-coverage value, and no stale "0.9"/
+"≥ 90%" text survives outside this historical log entry.
+**Invariants touched:** INV-7 (writes stay fail-closed on a truncated reload — now with zero
+tolerance instead of 10%). Unblocks (does not weaken) the VN30-PROD gate in PLAN.md §5, which
+lists 100% restatement coverage as a named prerequisite before `ENABLE_VN_STOCKS_INGEST=true`.
+**Gates:** pytest 599→**600 passed + 1 skip** · ruff 0 · mypy 0 (28+34) · compileall clean ·
+workflows 5/5. `apps/web` untouched, so vitest/tsc/eslint/build were not re-run (loop-profile
+rule: only run web gates when web is touched). No DB, no network, no `--write`, no deploy —
+container has no `.env`.
+**Adversarial review:** 2 independent fresh reviewer subagents (general-purpose, no prior
+context), each given the diff + a skeptical outcome spec, both told to default to REFUTED
+and demand a concrete failing scenario. Both independently re-ran the exact probe outside the
+test file and confirmed it flips `"restated"`→`"error"` exactly at the 0.9→1.0 boundary; both
+traced every caller of `min_reload_coverage`/`coverage` (only the restatement branch — the
+append branch has no truncation risk by construction) and grepped the whole repo for a second
+stale threshold — none found. One REFUTED concern worth recording for provenance: is 1.0 too
+strict for an honest restatement whose deep refetch structurally can't reproduce every stored
+date? Both reviewers traced `deep_from`/window construction and the `chart_arrays_json`
+parser's UTC-date bucketing and concluded a genuine corporate-action reload trivially covers
+100% (it rescales values on the same trading days, never adds/removes them) — the only real
+gap is a pre-existing, already-tested, already-documented vendor-side risk (an ENTRADE
+response cap/paginate on a very wide unchunked date range), not something this change
+introduces or worsens. One nit taken: the test comment originally implied it replayed
+AUDIT-1B's exact 18/20 probe; reworded to say it generalizes the same bug class with a
+smaller (17/18) example instead of overclaiming precision.
+**Rules distilled:** (1) When an audit leaves a CONFIRMED HIGH finding "still open" with an
+exact reproduction recipe, re-verify the bug is still live in the CURRENT tree (grep the
+actual constant) before fixing — don't assume an old finding is stale. (2) For a coverage/
+truncation guard keyed on "share of previously-stored dates reproduced," 1.0 is achievable
+for any correct reload because restatement rescales existing trading days rather than
+changing which days exist — a threshold below 1.0 has no legitimate use case on this data
+class, only a truncation-hiding one.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/

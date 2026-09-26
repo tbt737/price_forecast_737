@@ -23,10 +23,11 @@ Locked 2026-07-07 at commit `4925b9d` (details + monotonic rule in `.claude/loop
 **20 commodity profiles** (pinned by `tests/quality/test_profiles_quality.py`). Test counts
 never go down; locked invariants never weaken.
 
-> Current (2026-09-03, re-measured): **pytest 588 + 1 skipped · vitest 39 · 52
+> Current (2026-09-26, re-measured): **pytest 600 + 1 skipped · vitest 39 · 52
 > profiles / 100 instruments** (22 commodities + 30 VN30 equities, `commodity_group: equity`).
 > The profile count is pinned by `tests/quality/test_profiles_quality.py`; PEPPER_VN and
-> DIESEL_VN joined after the 2026-07-11 snapshot that this line used to carry.
+> DIESEL_VN joined after the 2026-07-11 snapshot that this line used to carry. (AUDIT-1B's
+> 599 baseline is stale — RESTATE-COVERAGE-1 added one test; see `.claude/loop-memory.md`.)
 
 > ⚠️ Companion docs: `README.md` / `ARCHITECTURE.md` / `DEPLOY.md` were refreshed in the
 > RESTATE-1 hardening pack (2026-07-11) for profile counts, SEC-2 smoke, and live status.
