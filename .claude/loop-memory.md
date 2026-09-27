@@ -4,6 +4,42 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-27 RESTATE-COVERAGE-1 — RESTATE_COVERAGE_1_PASS (autonomous review; local only, not pushed to prod)
+Closed the top-ranked item left open by AUDIT-1B: `min_reload_coverage` defaulted to
+0.9, so `coverage < cfg.min_reload_coverage` in `etl/restatement.py:238` ACCEPTS any
+reload that reproduces ≥90% of stored dates — a restated series missing up to 10% of
+history becomes canonical (single-basis read rule) and those dates vanish from every
+read path with `status: restated`, exit 0, no signal. Confirmed by AUDIT-1B's probe
+(18/20 ⇒ coverage exactly 0.900 ⇒ accepted) but not shipped there. Fixed at the two
+declared defaults (`etl/ingestion/config.py:93` dataclass field + `:436` YAML-fallback)
+and the checked-in value (`configs/ingestion/sources.yaml:182`) — all now `1.0`, so any
+missing stored date refuses the reload (fail-closed, matches every other guard in this
+module). `ENABLE_VN_STOCKS_INGEST` is still OFF (verified: unset in workflow vars), so
+this landed with zero prod exposure, exactly the sequencing AUDIT-1B called for.
+**New test** `test_reload_missing_a_single_stored_date_is_refused` drops only the single
+oldest of BASIS_A's 18 stored dates (17/18 ≈ 0.944 — comfortably above the OLD 0.9
+threshold, i.e. it reproduces the exact silent-acceptance bug) and pins refusal +
+zero writes; the 3 existing happy-path restate tests (full history reproduced) needed
+no change, confirming AUDIT-1B's "nothing legitimate regresses" call. Also updated the
+config-plumbing pin (`test_reconcile_config_loads_from_sources_yaml`) to the new default.
+**Gates:** pytest 599+1skip → **600 passed + 1 skip** · ruff 0 · mypy 0 (28 app + 34 etl)
+· `ci_check_workflows.py` 6/6 · compileall clean. `apps/web` untouched, vitest not re-run.
+Dev toolchain was not preinstalled in this session's container (no pytest/ruff/mypy
+until `pip install -r requirements-dev.txt`, global Python 3.11 not 3.13 as the profile
+records) — installed from `requirements-dev.txt` over network, no version pins changed.
+**Still open, ranked (unchanged by this pass):** `/ai/chat` rate limiter keys on the
+first X-Forwarded-For entry (needs owner's trusted-proxy hop count) · 8/52 commodities
+in no freshness group, no staleness signal between model and reader · `ml/forecast.py:
+85-92` `MAX(revision)` with no per-date grouping, same class AUDIT-1B rated HIGH in
+build_pandas_mv.py, on the LIVE serving path · alembic vs `db/migrations/001-007.sql`
+never compared.
+**Rules distilled:** (1) A coverage/threshold guard written as `< X` is only as strict
+as X — when the guard's job is "the reload must reproduce everything," the constant
+has to be 1.0, not a tolerance; 0.9 silently blessed a 10%-history loss. (2) Before
+trusting a recorded toolchain baseline (loop-profile's "global Python 3.13"), check
+what's actually on PATH in the container — this session had Python 3.11 and no dev
+deps installed at all, not a stale-but-present venv.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
