@@ -288,6 +288,29 @@ def test_truncated_reload_is_refused(session: Session) -> None:
     assert _series(session) == pytest.approx(BASIS_A)
 
 
+def test_near_complete_reload_missing_one_date_is_refused(session: Session) -> None:
+    # Regression pin (AUDIT-1B): a reload that reproduces all-but-one stored date sits
+    # at 17/18 = 0.944 coverage — comfortably above the OLD 0.9 threshold, which
+    # accepted it, bumped the revision, and made the missing date vanish from every
+    # single-basis read path forever (ml.forecast, the price-series endpoint). Full
+    # (1.0) coverage must refuse this exactly like the more obviously truncated cases.
+    _seed_initial(session, BASIS_A)
+    dropped = sorted(BASIS_A)[len(BASIS_A) // 2]  # drop one date from the middle
+    near_complete = {d: round(v * 0.85, 4) for d, v in BASIS_A.items() if d != dropped}
+    coverage = len(near_complete) / len(BASIS_A)
+    assert 0.9 <= coverage < 1.0  # would have passed the old ≥0.9 guard
+
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=_fetch_for(near_complete), dry_run=False
+    )
+    item = report["instruments"][0]
+    assert item["status"] == "error" and not report["ok"]
+    assert any("coverage" in w for w in item["warnings"])
+    # Fail-closed: nothing was written, and the dropped date is still readable.
+    assert {r[2] for r in _all_rows(session)} == {0}
+    assert _series(session) == pytest.approx(BASIS_A)
+
+
 def test_duplicate_grain_inside_reload_aborts_whole_instrument(session: Session) -> None:
     _seed_initial(session, BASIS_A)
     restated = {d: round(v * 0.85, 4) for d, v in BASIS_A.items()}
@@ -408,5 +431,5 @@ def test_reconcile_config_loads_from_sources_yaml() -> None:
     rc = cfg.vn_stocks_reconcile
     assert isinstance(rc, StockReconcileConfig)
     assert rc.epsilon_pct == 0.5 and rc.anchor_days == 5
-    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 0.9
+    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 1.0
     assert rc.deep_from == "2000-01-01"
