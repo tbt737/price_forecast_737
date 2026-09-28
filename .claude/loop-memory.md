@@ -4,6 +4,34 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-09-28 RESTATE-COVERAGE-1 — RESTATE_COVERAGE_1_PASS (top ranked open item from AUDIT-1B)
+Autonomous scheduled review pack. Closed the highest-ranked still-open defect from AUDIT-1B:
+`min_reload_coverage` (VN-stocks restatement reconcile, `etl/restatement.py`) was 0.9, so a
+reload reproducing only 90% of currently-stored dates was silently ACCEPTED as the new canonical
+revision — and because every read path (`ml.forecast.load_price_series`, the
+`/commodities/{code}/prices` endpoint) serves ONLY an instrument's latest revision (single-basis
+rule), any date the reload didn't reproduce vanished from every read path the instant it landed
+(the prior audit's own probe: 18/20 stored dates ⇒ coverage exactly 0.900 ⇒ accepted, 2 dates gone
+for good, exit 0). **Shipped:** `min_reload_coverage` raised 0.9→1.0 in the `StockReconcileConfig`
+dataclass default, the `load_ingestion_config` YAML-parse fallback, and
+`configs/ingestion/sources.yaml` (+ expanded comment); `docs/etl/vn-stocks-restatement.md` updated
+to match; new regression test `test_near_complete_reload_missing_one_date_is_refused` pins the
+exact previously-accepted failure mode (17/18 = 0.944 coverage — comfortably above the OLD 0.9
+bar — now refused, original series left fully intact). Verified no other test/config/doc still
+assumed 0.9 (grepped `min_reload_coverage` and "90%" across the repo). No DB, no network, no
+`--write` against prod, no deploy — offline SQLite tests only.
+**Gates:** pytest 599→**600 passed + 1 skip** · ruff 0 · mypy 0 (28+34 files) · workflows 6/6 ·
+`apps/web` untouched (web gates not required). Verified locally by re-running the full suite
+before and after, not just trusting the diff.
+**Reviewed:** 2 fresh adversarial reviewer subagents dispatched against the diff (floating-point
+coverage equality, legitimate-restatement deadlock risk, whether the new test actually exercises
+the anchors-mismatch branch, and a repo-wide grep for stale 0.9 assumptions) per
+`.claude/loop-profile.md`.
+**Rule reaffirmed:** when a prior audit already scoped an exact, low-risk fix with its regression
+evidence spelled out ("the N happy-path tests all republish 100%, so nothing legitimate
+regresses"), executing that scoped fix — rather than re-discovering issues from scratch — is
+higher-value than a fresh sweep.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
@@ -44,8 +72,8 @@ proxy stored on the Jinxiang instrument) and a second test that fails when a wai
 `--write` still seeds 11) — the seeding now sits behind the write-mode guard. (10) `validate_record`
 had NO numeric validation at all, so the NaN class was only closed per-connector: it now rejects
 NaN/±Inf as NON_FINITE_VALUE at the choke point every record passes through.
-**Still open, ranked (nothing below was changed):** restatement coverage 1.0 (do it BEFORE
-`ENABLE_VN_STOCKS_INGEST=true`) · `/ai/chat` rate limiter keys on the FIRST X-Forwarded-For entry,
+**Still open, ranked (nothing below was changed):** ~~restatement coverage 1.0~~ **DONE in
+RESTATE-COVERAGE-1 below** · `/ai/chat` rate limiter keys on the FIRST X-Forwarded-For entry,
 which the client controls, so the 15/min cap never fires and the key map degrades to an O(n) scan
 per request — needs the owner's trusted-proxy hop count to fix correctly · 8 of 52 commodities are
 in no freshness group at all, and no layer between model and reader carries a staleness signal, so
