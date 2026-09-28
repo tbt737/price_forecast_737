@@ -26,7 +26,16 @@ before and after, not just trusting the diff.
 **Reviewed:** 2 fresh adversarial reviewer subagents dispatched against the diff (floating-point
 coverage equality, legitimate-restatement deadlock risk, whether the new test actually exercises
 the anchors-mismatch branch, and a repo-wide grep for stale 0.9 assumptions) per
-`.claude/loop-profile.md`.
+`.claude/loop-profile.md` — both independently re-ran the tests and returned no defect.
+**New watch-item (both reviewers, independently):** requiring exactly 1.0 coverage is a deliberate
+loud-failure-over-silent-truncation trade-off, not a bug — but a source whose serving window ages
+out its OLDEST stored date (e.g. a chart API with a fixed lookback cap older than a stored
+instrument's depth) could never reach 1.0 coverage again and would sit in permanent `status=error`
+on every future corporate action for that instrument, where the old 0.9 rule would have silently
+(and wrongly) kept accepting ~90%+ reloads. Inert today — `ENABLE_VN_STOCKS_INGEST` is still off,
+no instrument has been through a live deep backfill yet — but check for this before flipping that
+flag in the VN30-PROD sequence (PLAN.md §5): confirm the ENTRADE source's history window is deeper
+than any stored series, or this guard will need a documented manual-unstick path.
 **Rule reaffirmed:** when a prior audit already scoped an exact, low-risk fix with its regression
 evidence spelled out ("the N happy-path tests all republish 100%, so nothing legitimate
 regresses"), executing that scoped fix — rather than re-discovering issues from scratch — is
