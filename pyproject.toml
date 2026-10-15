@@ -36,6 +36,7 @@ dev = [
 pythonpath = ["apps/api", "."]
 testpaths = ["tests/quality", "tests/integration", "apps/api/tests", "ml/tests"]
 addopts = "-ra"
+markers = ["integration: tests that exercise multiple layers or need a live database"]
 
 [tool.ruff]
 line-length = 120
