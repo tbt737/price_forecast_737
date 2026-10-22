@@ -1,0 +1,56 @@
+name: Probe Agmarknet API (throwaway)
+
+# Throwaway reachability + response-shape probe for the data.gov.in Agmarknet API.
+# api.data.gov.in is TCP-blocked from the owner's network; this runs from a GitHub
+# runner instead. Read-only GETs; no repo secrets except an optional API key.
+# The fallback key is data.gov.in's PUBLISHED sample key (shown on every API page),
+# capped at 10 records/call — used only to learn the response shape.
+
+on:
+  push:
+    branches: ["probe/agmarknet-api"]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KEY: ${{ secrets.DATA_GOV_IN_API_KEY || '579b464db66ec23bdd000001cdd3946e44ce4aad7209ff7b23ac571b' }}
+      R_HIST: 35985678-0d79-46b4-9ed6-6f13308a1d24
+      R_CUR: 9ef84268-d588-465a-a308-a864a43d0070
+    steps:
+      - name: Network reachability
+        run: |
+          getent hosts api.data.gov.in || true
+          curl -sS -o /dev/null -w "connect=%{time_connect} code=%{http_code}\n" --connect-timeout 20 -m 40 https://api.data.gov.in/ || true
+          curl -sS -o /dev/null -w "agmarknet code=%{http_code}\n" --connect-timeout 20 -m 40 -A "Mozilla/5.0" https://agmarknet.gov.in/ || true
+      - name: Probe resources
+        run: |
+          mkdir -p out
+          get() { # name, resource, extra query
+            local name="$1" res="$2" q="$3"
+            local url="https://api.data.gov.in/resource/${res}?api-key=${KEY}&format=json${q}"
+            curl -sS --connect-timeout 20 -m 90 -g -o "out/${name}.json" -w "${name}: http=%{http_code} bytes=%{size_download} t=%{time_total}\n" "$url" || echo "${name}: curl failed"
+            jq -c '{status, message, total, count, limit, offset, n: (.records|length), field: [.field[]?|.id], first: .records[0]}' "out/${name}.json" 2>/dev/null || head -c 400 "out/${name}.json"
+            echo
+            sleep 2
+          }
+          get hist_nofilter      "$R_HIST" "&limit=10"
+          get hist_onion_ddmm    "$R_HIST" "&limit=1000&filters[Commodity]=Onion&filters[Arrival_Date]=20/04/2026"
+          get hist_onion_iso     "$R_HIST" "&limit=10&filters[Commodity]=Onion&filters[Arrival_Date]=2026-04-20"
+          get hist_onion_off10   "$R_HIST" "&limit=10&offset=10&filters[Commodity]=Onion&filters[Arrival_Date]=20/04/2026"
+          get hist_onion_recent  "$R_HIST" "&limit=10&filters[Commodity]=Onion&filters[Arrival_Date]=20/10/2026"
+          get hist_onion_kw      "$R_HIST" "&limit=10&filters[Commodity.keyword]=Onion&filters[Arrival_Date]=20/04/2026"
+          get hist_onion_sort    "$R_HIST" "&limit=10&filters[Commodity]=Onion&sort[Arrival_Date]=desc"
+          get hist_chilli        "$R_HIST" "&limit=10&filters[Commodity]=Dry%20Chillies&filters[Arrival_Date]=20/04/2026"
+          get hist_garlic        "$R_HIST" "&limit=10&filters[Commodity]=Garlic&filters[Arrival_Date]=20/04/2026"
+          get hist_groundnut     "$R_HIST" "&limit=10&filters[Commodity]=Groundnut&filters[Arrival_Date]=20/04/2026"
+          get hist_coffee        "$R_HIST" "&limit=10&filters[Commodity]=Coffee&filters[Arrival_Date]=20/04/2026"
+          get cur_nofilter       "$R_CUR"  "&limit=10"
+          get cur_onion          "$R_CUR"  "&limit=1000&filters[commodity]=Onion"
+          get cur_onion_off      "$R_CUR"  "&limit=10&offset=10&filters[commodity]=Onion"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agmarknet-probe
+          path: out
