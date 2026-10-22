@@ -104,7 +104,7 @@ Kaggle dump until a newer one is imported (no live mandi feed reachable).
 
 ```
 curl https://<backend>/health
-curl https://<backend>/stats                      # 51 commodities / 98 instruments (see PLAN.md)
+curl https://<backend>/stats                      # counts must match PLAN.md §2 (pinned by tests)
 # Forecast is SEC-2 gated: either call via the Pages site (middleware injects the key),
 # or pass the header explicitly:
 curl -H "X-Internal-Key: $INTERNAL_API_KEY" https://<backend>/commodities/GOLD/forecast

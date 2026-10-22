@@ -38,6 +38,23 @@ def test_parse_chart_arrays_exact_value_synthetic() -> None:
     assert parse_chart_arrays(raw, 1.0) == [{"date": date(2025, 5, 5), "close": 91.41}]  # scale is config
 
 
+def test_parse_chart_arrays_rounds_to_stored_precision() -> None:
+    """fact_price_daily.value is Numeric(20,6). A close that scales to a binary-float
+    artifact beyond 6dp is stored rounded by Postgres, so the writer's Decimal(str(...))
+    compare would read a replay of the SAME bar as a `conflict` — blocking and rolling
+    back the whole batch. ~1.6% of HOSE ticks (e.g. 16.10, 16.15, 32.05) do this."""
+    from decimal import Decimal
+
+    for tick in (16.10, 16.15, 32.05):
+        raw = f'{{"t":[1746410400],"c":[{tick}]}}'
+        (row,) = parse_chart_arrays(raw, 1000.0)
+        stored = Decimal(str(row["close"])).quantize(Decimal("0.000001"))
+        assert Decimal(str(row["close"])) == stored, f"{tick} keeps >6dp: {row['close']!r}"
+    assert parse_chart_arrays('{"t":[1746410400],"c":[16.10]}', 1000.0) == [
+        {"date": date(2025, 5, 5), "close": 16100.0}
+    ]
+
+
 def test_parse_chart_arrays_skips_bad_bars() -> None:
     raw = json.dumps({
         "t": [1746410400, "not-a-ts", 1746496800, 1746583200],

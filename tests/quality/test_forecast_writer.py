@@ -11,6 +11,8 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 import write_forecast_log as W  # noqa: E402
@@ -127,6 +129,24 @@ def test_generate_rows_skips_failures_without_crashing() -> None:
     )
     assert len(rows) == 2  # only ROBUSTA
     assert {c for c, _ in skipped} == {"BOOM", "GONE"}
+
+
+def test_generate_rows_db_failure_aborts_loudly() -> None:
+    """An infrastructure failure must NOT be laundered into a per-commodity skip: with
+    pool_pre_ping the session recovers, the run inserts only the commodities collected
+    before the drop, exits 0 green, and the accuracy evaluator then scores a silently
+    biased subset. Same rule the weekly bulletin already enforces."""
+    from sqlalchemy.exc import OperationalError
+
+    def fn(session, code, *, horizons):
+        if code == "DROPPED":
+            raise OperationalError("SELECT 1", {}, Exception("connection dropped"))
+        return _sample(code)
+
+    with pytest.raises(OperationalError):
+        W.generate_rows(
+            None, ["ROBUSTA", "DROPPED", "GOLD"], [30], run_id="R", run_mode="write", forecast_fn=fn
+        )
 
 
 def test_generate_rows_as_of_guard() -> None:

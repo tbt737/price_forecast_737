@@ -7,6 +7,7 @@ record with any error-severity issue is invalid and must not be mapped to a fact
 from __future__ import annotations
 
 import enum
+import math
 from dataclasses import dataclass, field
 
 from etl.contracts import FactFamily, NormalizedRecord
@@ -31,6 +32,11 @@ class ErrorCode(enum.StrEnum):
     # Parse-time issues from NormalizedRecord.from_dict (Phase 3C fixtures).
     INVALID_DATE = "INVALID_DATE"  # error
     IGNORED_FIELD = "IGNORED_FIELD"  # warning
+    #: A numeric field is NaN or ±Infinity. Kept out of the store at any cost: NaN != NaN,
+    #: so a stored NaN makes every later replay of the same payload compare as a CONFLICT,
+    #: which blocks and rolls back the whole batch, and restatement's `stored <= 0` basis
+    #: check is False for NaN, so nothing heals it. It also poisons np.log() downstream.
+    NON_FINITE_VALUE = "NON_FINITE_VALUE"
     # Connector/ETL boundary provenance gate (Phase 4C-A). These are enforced ONLY at
     # the connector boundary (see etl/provenance.py) — NOT in validate_record() — so
     # legacy/direct writer records without provenance keep Phase 4A/4B behaviour.
@@ -129,5 +135,12 @@ def validate_record(record: NormalizedRecord) -> ValidationResult:
     ref = record.reference_date()
     if record.release_date is not None and ref is not None and record.release_date < ref:
         result.add(ErrorCode.LOOKAHEAD_UNSAFE, "release_date must be on/after the observation/period-end date")
+
+    # Numeric sanity, enforced HERE rather than per-connector: `json.loads` accepts bare
+    # NaN/Infinity tokens, upstream feeds emit NaN for halted or holiday rows, and neither
+    # compares `<= 0`, so a per-source guard closes one hole and leaves the rest open.
+    # This is the choke point every record passes through.
+    if record.value is not None and not math.isfinite(record.value):
+        result.add(ErrorCode.NON_FINITE_VALUE, f"value must be finite, got {record.value!r}")
 
     return result

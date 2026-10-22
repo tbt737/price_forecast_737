@@ -148,12 +148,20 @@ def generate_rows(
 ) -> tuple[list[dict[str, Any]], list[tuple[str, str]]]:
     """Run the forecaster per commodity and map to rows. A single failing/unavailable
     commodity is SKIPPED (recorded), never crashing the whole run."""
+    from sqlalchemy.exc import DBAPIError, InvalidRequestError
+
     fn = forecast_fn or _default_forecast_fn
     rows: list[dict[str, Any]] = []
     skipped: list[tuple[str, str]] = []
     for code in codes:
         try:
             result = fn(session, code, horizons=tuple(horizons))
+        except (DBAPIError, InvalidRequestError):
+            # Infrastructure failure (connection dropped, session poisoned): every later
+            # commodity would fail the same way. Swallowing it here writes a partial day
+            # of forecasts, exits 0, and leaves the accuracy evaluator scoring a silently
+            # biased subset. Abort loudly instead — same rule as weekly_movers_alert.
+            raise
         except Exception as exc:  # noqa: BLE001 — one bad commodity must not abort the batch
             skipped.append((code, f"error: {type(exc).__name__}"))
             continue

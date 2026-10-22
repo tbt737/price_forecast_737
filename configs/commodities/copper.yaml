@@ -6,7 +6,7 @@ default_currency: "USD"
 
 market_instruments:
   - { instrument_code: "LME_CA", exchange: "London Metal Exchange", symbol: "CA", description: "LME Copper (Grade A) 3-month (benchmark)", contract_unit: "25 tonnes", currency: "USD" }
-  - { instrument_code: "COMEX_HG", exchange: "CME/COMEX", symbol: "HG", description: "COMEX Copper Futures", contract_unit: "25000 lb", currency: "USc" }
+  - { instrument_code: "COMEX_HG", exchange: "CME/COMEX", symbol: "HG", description: "COMEX Copper Futures", contract_unit: "25000 lb", currency: "USD" }
   - { instrument_code: "SHFE_CU", exchange: "Shanghai Futures Exchange", symbol: "CU", description: "SHFE Copper Futures", contract_unit: "5 tonnes", currency: "CNY" }
 
 weather_regions:

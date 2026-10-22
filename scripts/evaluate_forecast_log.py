@@ -174,7 +174,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--as-of", dest="as_of", default=None, help="YYYY-MM-DD; default today")
     p.add_argument("--commodities", nargs="*", default=None)
     p.add_argument("--horizons", nargs="*", type=int, default=None)
-    p.add_argument("--limit", type=int, default=None)
+    p.add_argument("--limit", type=int, default=None, help="only evaluate the first N pending rows")
     p.add_argument(
         "--grace-days", type=int, default=DEFAULT_GRACE_DAYS, help="accept nearest next actual within N days"
     )
@@ -201,6 +201,12 @@ def main(argv: list[str] | None = None) -> int:
         as_of = date.fromisoformat(args.as_of) if args.as_of else date.today()
     except ValueError:
         print("Error: --as-of must be YYYY-MM-DD", file=sys.stderr)
+        return 2
+    if args.limit is not None and args.limit < 1:
+        # `0` is falsy, so it used to DROP the LIMIT clause and evaluate every matured
+        # pending row — the opposite of the zero-row probe an operator asks for, and the
+        # status UPDATE is one-way. Same rule as weekly_movers_alert's --limit.
+        print("Error: --limit must be >= 1", file=sys.stderr)
         return 2
 
     session = _open_session()

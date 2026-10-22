@@ -74,6 +74,22 @@ def test_missing_release_date_is_error() -> None:
     assert not res.ok and ErrorCode.MISSING_RELEASE_DATE in res.error_codes
 
 
+def test_non_finite_value_is_error_for_every_family() -> None:
+    """Closed at the choke point, not per connector: a bare NaN/Infinity token survives
+    `json.loads`, and upstream feeds emit NaN for halted or holiday rows. A stored NaN is
+    unrecoverable in place — NaN != NaN makes every later replay of the same payload
+    compare as a conflict, which blocks and rolls back the whole batch — so no source,
+    present or future, may put one in a fact row."""
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        rec = NormalizedRecord(**{**_valid_sd().__dict__, "value": bad})
+        res = validate_record(rec)
+        assert not res.ok, f"{bad!r} accepted"
+        assert ErrorCode.NON_FINITE_VALUE in res.error_codes
+    # a finite value, and an absent one, still pass
+    assert validate_record(_valid_sd()).ok
+    assert validate_record(NormalizedRecord(**{**_valid_sd().__dict__, "value": None})).ok
+
+
 def test_periodic_requires_period_bounds() -> None:
     rec = NormalizedRecord(**{**_valid_sd().__dict__, "period_start": None, "period_end": None})
     res = validate_record(rec)

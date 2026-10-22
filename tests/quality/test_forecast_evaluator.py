@@ -136,3 +136,35 @@ def test_write_evaluates_and_expires(monkeypatch) -> None:
 def test_main_rejects_invalid_horizon_and_commodity() -> None:
     assert E.main(["--horizons", "45"]) == 2
     assert E.main(["--commodities", "../x"]) == 2
+
+
+def test_main_rejects_non_positive_limit(monkeypatch) -> None:
+    """`--limit 0` reads as a zero-row safety probe, but 0 is falsy: it used to DROP the
+    LIMIT clause and flip EVERY matured pending row in one unaudited commit. The status
+    UPDATE is one-way, so this must be refused before a session is even opened."""
+    def _boom():
+        raise AssertionError("must reject --limit before opening a session")
+
+    monkeypatch.setattr(E, "_open_session", _boom)
+    assert E.main(["--limit", "0", "--write"]) == 2
+    assert E.main(["--limit", "-1"]) == 2
+
+
+def test_select_pending_omits_limit_clause_only_when_unset() -> None:
+    """The falsy-check that made `--limit 0` unbounded lives in _select_pending too."""
+    captured: list[tuple[str, dict]] = []
+
+    class _S:
+        def execute(self, stmt, params):
+            captured.append((str(stmt), params))
+
+            class _R:
+                def all(self_inner):
+                    return []
+
+            return _R()
+
+    E._select_pending(_S(), date(2026, 6, 29), None, None, None)
+    assert "LIMIT" not in captured[-1][0]  # unset ⇒ no clause, as before
+    E._select_pending(_S(), date(2026, 6, 29), None, None, 5)
+    assert "LIMIT" in captured[-1][0] and captured[-1][1]["limit"] == 5

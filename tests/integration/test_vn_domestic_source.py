@@ -142,6 +142,23 @@ def test_collect_is_fail_soft_on_fetch_error() -> None:
     assert recs == []  # no crash, no records
 
 
+def test_collect_rejects_non_finite_prices() -> None:
+    """`json.loads` accepts bare NaN/Infinity, and neither compares `<= 0` — a garbled
+    feed row must never reach fact_price_daily. A NaN there is unrecoverable in place:
+    NaN != NaN makes every later replay of the same payload a false `conflict`, which
+    blocks and rolls back the whole write batch."""
+    spec = [VnPriceSpec("GOLD_VN", "PNJ_SJC", "PNJ", "pnj_json", GOLD_URL, "SJC", "VND", 0)]
+    for token in ("NaN", "Infinity", "-Infinity"):
+        garbled = f'{{"data":[{{"masp":"SJC","giaban":{token}}}]}}'
+        recs = list(
+            VnDomesticPriceSource(spec, today=TODAY, fetch=lambda _u, g=garbled: g).collect()
+        )
+        assert recs == [], f"{token} leaked into a price record"
+    # a healthy payload through the same path still yields its record
+    ok = list(VnDomesticPriceSource(spec, today=TODAY, fetch=_fetch).collect())
+    assert len(ok) == 1 and ok[0].value > 0
+
+
 def test_collect_skips_unknown_parser_format() -> None:
     bad = [VnPriceSpec("X_VN", "X", "PNJ", "no_such_format", GOLD_URL, "SJC", "VND", 0)]
     assert list(VnDomesticPriceSource(bad, today=TODAY, fetch=_fetch).collect()) == []
@@ -233,6 +250,13 @@ def test_vnappmob_parse_fail_soft_empty_and_malformed() -> None:
     assert parse_vnappmob_gold('{"results":[]}', "sell_1l", "buy_1l") == []
     assert parse_vnappmob_gold('{"results":[{"sell_1l":"1"}]}', "sell_1l", "buy_1l") == []  # no datetime → skip
     assert parse_vnappmob_gold('{"results":[{"datetime":"1781143207","sell_1l":"-5"}]}', "sell_1l", "buy_1l") == []
+    # bare NaN/Infinity survive json.loads and do NOT compare `<= 0` — must still be dropped
+    nan_sell = '{"results":[{"datetime":"1781143207","sell_1l":NaN,"buy_1l":"131000000.0"}]}'
+    assert parse_vnappmob_gold(nan_sell, "sell_1l", "buy_1l") == []
+    inf_buy = '{"results":[{"datetime":"1781143207","sell_1l":"136000000.0","buy_1l":Infinity}]}'
+    assert parse_vnappmob_gold(inf_buy, "sell_1l", "buy_1l") == [
+        {"date": date(2026, 6, 11), "sell": 136000000.0, "buy": None}
+    ]
 
 
 def test_day_chunks_builds_bounded_windows() -> None:

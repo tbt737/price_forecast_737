@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import math
 import re
 from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta
@@ -170,7 +171,11 @@ class VnDomesticPriceSource(BaseSource):
                 price = parser(self._fetch(spec.url), spec.product_key)
             except (OSError, ValueError, KeyError, json.JSONDecodeError):
                 price = None  # network/parse failure is fail-soft per endpoint
-            if price is None or price <= 0:
+            # `json.loads` accepts bare NaN/Infinity tokens, and neither compares
+            # `<= 0` — a garbled feed row would otherwise reach fact_price_daily and
+            # poison it permanently (NaN != NaN makes every replay a false conflict).
+            # Same guard the vn_stocks connector already carries.
+            if price is None or not math.isfinite(price) or price <= 0:
                 continue
             obs = self._today
             payload = {
@@ -218,11 +223,13 @@ def parse_vnappmob_gold(raw: str, sell_field: str, buy_field: str) -> list[dict[
             sell = float(r[sell_field])
         except (KeyError, TypeError, ValueError, OverflowError, OSError):
             continue
-        if sell <= 0:
+        if not math.isfinite(sell) or sell <= 0:  # bare NaN/Infinity survives json.loads
             continue
         try:
             buy = float(r[buy_field]) if r.get(buy_field) not in (None, "") else None
         except (TypeError, ValueError):
+            buy = None
+        if buy is not None and not math.isfinite(buy):
             buy = None
         out.append({"date": d, "sell": sell, "buy": buy})
     return out
