@@ -36,6 +36,7 @@ dev = [
 pythonpath = ["apps/api", "."]
 testpaths = ["tests/quality", "tests/integration", "apps/api/tests", "ml/tests"]
 addopts = "-ra"
+markers = ["integration: cross-module / database-backed tests"]
 
 [tool.ruff]
 line-length = 120
