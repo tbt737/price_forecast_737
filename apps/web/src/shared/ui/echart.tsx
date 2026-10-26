@@ -1,36 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import type { ECharts, EChartsOption } from "echarts";
-import * as echarts from "echarts/core";
-import { BarChart, LineChart } from "echarts/charts";
-import { GridComponent, TooltipComponent } from "echarts/components";
-import { SVGRenderer } from "echarts/renderers";
+import dynamic from "next/dynamic";
+import type { EChartsOption } from "echarts";
 
-// Only register what the charts use → much smaller bundle than the full `echarts`.
-echarts.use([BarChart, LineChart, GridComponent, TooltipComponent, SVGRenderer]);
+// Navigation and profile text can load before the chart renderer. Reserve its
+// full height while downloading the library to avoid a layout shift.
+const ChartEngine = dynamic(
+  () => import("./echart-engine").then((module) => module.EChartEngine),
+  { ssr: false, loading: () => <div role="status" className="h-full animate-pulse bg-surface-2" aria-label="Đang tải biểu đồ" /> },
+);
 
-/** Thin React wrapper around an ECharts instance (SVG renderer, auto-resize). */
 export function EChart({ option, height = 150 }: { option: EChartsOption; height?: number }) {
-  const elRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<ECharts | null>(null);
-
-  useEffect(() => {
-    if (!elRef.current) return;
-    const chart = echarts.init(elRef.current, undefined, { renderer: "svg" });
-    chartRef.current = chart;
-    const ro = new ResizeObserver(() => chart.resize());
-    ro.observe(elRef.current);
-    return () => {
-      ro.disconnect();
-      chart.dispose();
-      chartRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    chartRef.current?.setOption(option, true);
-  }, [option]);
-
-  return <div ref={elRef} style={{ width: "100%", height }} />;
+  return <div style={{ width: "100%", height }}><ChartEngine option={option} height={height} /></div>;
 }

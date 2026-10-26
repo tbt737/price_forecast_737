@@ -142,6 +142,7 @@ interface Data {
   prices: PriceSeries;
   forecast: Forecast | null;
   forecastError: string | null;
+  forecastLoading: boolean;
 }
 type State = { s: "loading" } | { s: "error"; m: string } | { s: "ready"; d: Data };
 
@@ -152,12 +153,16 @@ export function ProfileDetail({ code }: { code: string }) {
     let active = true;
     setState({ s: "loading" });
     (async () => {
-      // Forecast is compute-heavy and SEC-2 gated — never let it fail the whole page.
-      const [commodityR, profileR, pricesR, forecastR] = await Promise.allSettled([
+      // Start compute in parallel, but render prices/profile without waiting for it.
+      // Attach both handlers immediately so a fast rejection is always handled.
+      const forecastTask = api.getForecast(code).then(
+        (value) => ({ forecast: value, forecastError: null }),
+        (error: unknown) => ({ forecast: null, forecastError: forecastErrorMessage(error) }),
+      );
+      const [commodityR, profileR, pricesR] = await Promise.allSettled([
         api.getCommodity(code),
         api.getProfile(code),
         api.getPrices(code, 730),
-        api.getForecast(code),
       ]);
       if (!active) return;
 
@@ -182,10 +187,16 @@ export function ProfileDetail({ code }: { code: string }) {
           commodity: commodityR.value,
           profile: profileR.value,
           prices: pricesR.status === "fulfilled" ? pricesR.value : emptyPrices,
-          forecast: forecastR.status === "fulfilled" ? forecastR.value : null,
-          forecastError: forecastR.status === "rejected" ? forecastErrorMessage(forecastR.reason) : null,
+          forecast: null,
+          forecastError: null,
+          forecastLoading: true,
         },
       });
+      const result = await forecastTask;
+      if (!active) return;
+      setState((previous) => previous.s === "ready"
+        ? { s: "ready", d: { ...previous.d, ...result, forecastLoading: false } }
+        : previous);
     })();
     return () => {
       active = false;
@@ -210,7 +221,7 @@ export function ProfileDetail({ code }: { code: string }) {
     return <p className="text-sm text-neg">Lỗi tải {code}: {state.m}</p>;
   }
 
-  const { commodity, profile: prof, prices, forecast, forecastError } = state.d;
+  const { commodity, profile: prof, prices, forecast, forecastError, forecastLoading } = state.d;
   const p = prof.profile;
   const sector = sectorMeta(commodity.commodity_group);
   const hasRealPrices = prices.points.length > 0;
@@ -264,7 +275,7 @@ export function ProfileDetail({ code }: { code: string }) {
         </p>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
         <div className="rounded-card border border-border bg-surface-2 p-3">
           <div className="mb-1 flex items-center justify-between text-xs text-muted">
             <span>
@@ -283,7 +294,14 @@ export function ProfileDetail({ code }: { code: string }) {
             labels={priceLabels}
             tone={hasRealPrices ? "real" : "demo"}
             forecast={overlay}
+            height={280}
+            showAxes
           />
+          {forecastLoading ? (
+            <p role="status" className="mt-2 text-xs text-muted">Đang tính dự báo · dữ liệu lịch sử đã sẵn sàng</p>
+          ) : forecast && !forecast.available ? (
+            <p role="status" className="mt-2 text-xs text-muted">Chưa có dự báo: {forecast.reason || "Chưa đủ dữ liệu"}</p>
+          ) : null}
           {overlay && fc30 ? (
             <p className="mt-1 text-[11px] leading-snug text-subtle">
               <span style={{ color: "var(--brand)" }}>┄┄</span> Dự báo 30 phiên (
@@ -293,15 +311,16 @@ export function ProfileDetail({ code }: { code: string }) {
                   ? "XGBoost"
                   : fc30.model_used === "gbm_cyc"
                     ? "XGBoost + chu kỳ"
-                    : "naive"}
+                    : fc30.model_used || "naive"}
               ) · backtest MAPE{" "}
-              <b className="text-text">{fc30.backtest.mape_pct}%</b> (naive {fc30.backtest.naive_mape_pct}%
+              <b className="text-text">{fc30.backtest.mape_pct == null ? "—" : `${fc30.backtest.mape_pct}%`}</b> (naive {fc30.backtest.naive_mape_pct == null ? "—" : `${fc30.backtest.naive_mape_pct}%`}
               {fc30.backtest.beats_naive
                 ? " — thắng naive ✓"
                 : " — chưa vượt naive, dùng đường naive"}
               )
             </p>
           ) : null}
+          {overlay ? <p className="mt-2 text-xs text-muted">Nét liền: giá lịch sử · Nét đứt: dự báo · Vùng tô: khoảng dự báo danh nghĩa 80%, chưa xác nhận độ bao phủ thực tế. Sai số quá khứ không bảo đảm kết quả tương lai.</p> : null}
         </div>
         <div className="rounded-card border border-border bg-surface-2 p-3">
           <div className="mb-1 flex items-center justify-between text-xs text-muted">

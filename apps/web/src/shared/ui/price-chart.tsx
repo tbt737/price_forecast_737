@@ -19,12 +19,14 @@ export function PriceChart({
   tone = "demo",
   forecast,
   height = 150,
+  showAxes = false,
 }: {
   data: number[];
   labels?: string[];
   tone?: "real" | "demo";
   forecast?: ForecastOverlay;
   height?: number;
+  showAxes?: boolean;
 }) {
   const c = useChartTheme();
   const color = tone === "real" ? c["--info"] || "#38bdf8" : c["--demo"] || "#f59e0b";
@@ -33,7 +35,7 @@ export function PriceChart({
 
   const option = useMemo<EChartsOption>(() => {
     const histLabels = labels ?? data.map((_, i) => `Phiên ${i + 1}`);
-    const hasForecast = !!forecast && forecast.value.length > 0;
+    const hasForecast = data.length > 0 && !!forecast && forecast.value.length > 0;
     const h = data.length;
     const nullsH: (number | null)[] = Array(h).fill(null);
 
@@ -43,7 +45,7 @@ export function PriceChart({
       type: "line" as const,
       name: "Giá",
       data: hasForecast ? [...data, ...Array<number | null>(forecast.value.length).fill(null)] : data,
-      smooth: data.length < 120,
+      smooth: false,
       symbol: "none" as const,
       sampling: "lttb" as const,
       lineStyle: { color, width: 2 },
@@ -71,6 +73,7 @@ export function PriceChart({
             stack: "band",
             symbol: "none" as const,
             silent: true,
+            tooltip: { show: false },
           },
           {
             type: "line" as const,
@@ -80,6 +83,7 @@ export function PriceChart({
             stack: "band",
             symbol: "none" as const,
             silent: true,
+            tooltip: { show: false },
           },
         ]
       : [];
@@ -97,7 +101,8 @@ export function PriceChart({
       : [];
 
     return {
-      grid: { left: 8, right: 8, top: 16, bottom: 8, containLabel: false },
+      animation: false,
+      grid: { left: 8, right: 16, top: 16, bottom: 8, containLabel: showAxes },
       tooltip: {
         trigger: "axis",
         backgroundColor: c["--surface-2"] || "#1a232e",
@@ -105,11 +110,19 @@ export function PriceChart({
         textStyle: { color: c["--text"] || "#e6edf3", fontSize: 12 },
         valueFormatter: (v) => (v == null ? "—" : `${Number(v).toFixed(2)}${suffix}`),
       },
-      xAxis: { type: "category", show: false, boundaryGap: false, data: axis },
-      yAxis: { type: "value", show: false, scale: true },
+      xAxis: {
+        type: "category", show: showAxes, boundaryGap: false, data: axis,
+        axisLabel: { color: c["--text-muted"] || "#9fb0bf", hideOverlap: true, fontSize: 10 },
+        axisLine: { lineStyle: { color: c["--border"] || "#243140" } },
+      },
+      yAxis: {
+        type: "value", show: showAxes, scale: true,
+        axisLabel: { color: c["--text-muted"] || "#9fb0bf", fontSize: 10 },
+        splitLine: { lineStyle: { color: c["--border"] || "#243140", type: "dashed" } },
+      },
       series: [...bandSeries, historySeries, ...forecastSeries],
     };
-  }, [data, labels, color, fcColor, suffix, forecast, c]);
+  }, [data, labels, color, fcColor, suffix, forecast, c, showAxes]);
 
   return <EChart option={option} height={height} />;
 }
