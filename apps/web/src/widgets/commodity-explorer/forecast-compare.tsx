@@ -77,30 +77,36 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
     let active = true;
     setRows(null);
     setDone(0);
-    (async () => {
-      const out: Row[] = [];
-      for (const c of codes) {
+    const out: (Row | null)[] = codes.map(() => null);
+    let next = 0;
+    async function worker() {
+      while (active && next < codes.length) {
+        const index = next++;
+        const c = codes[index];
         const fc = await api.getForecast(c).catch(() => null);
         if (!active) return;
         if (fc) {
           let lastValue = fc.last_price ?? null;
           let currency = fc.currency ?? null;
           const hist = fc.available ? null : parseHistory(fc.reason);
-          // Has a real price but not enough history to forecast ⇒ fetch the true last price.
           if (!fc.available && hist && hist.have > 0 && lastValue == null) {
             const ps = await api.getPrices(c, 400).catch(() => null);
+            if (!active) return;
             const last = ps?.points?.[ps.points.length - 1];
             if (last) {
               lastValue = last.value;
               currency = ps?.currency ?? currency;
             }
           }
-          out.push({ fc, lastValue, currency, hist });
+          out[index] = { fc, lastValue, currency, hist };
         }
         setDone((n) => n + 1);
+        // Keep selection order even when requests finish in a different order.
+        setRows(out.filter((row): row is Row => row !== null));
       }
-      if (active) setRows(out);
-    })();
+    }
+    // Bound expensive forecast requests rather than launching the whole basket.
+    void Promise.all(Array.from({ length: Math.min(2, codes.length) }, () => worker()));
     return () => {
       active = false;
     };
@@ -128,6 +134,11 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
 
   return (
     <div className="overflow-x-auto">
+      {done < codes.length ? (
+        <p role="status" className="mb-2 text-xs text-muted">Đang tải dự báo… {done}/{codes.length}. Kết quả đã có hiển thị bên dưới.</p>
+      ) : rows.length < codes.length ? (
+        <p role="status" className="mb-2 text-xs text-muted">Không tải được {codes.length - rows.length}/{codes.length} dự báo. Hãy thử lại sau.</p>
+      ) : null}
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
