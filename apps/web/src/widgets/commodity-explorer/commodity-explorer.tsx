@@ -11,7 +11,7 @@ import { ForecastCompare } from "@/widgets/commodity-explorer/forecast-compare";
 import { ProfileDetail } from "@/widgets/profile-detail";
 
 interface Loaded {
-  stats: Stats;
+  stats: Stats | null;
   commodities: Commodity[];
 }
 type State = { s: "loading" } | { s: "error"; m: string } | { s: "ready"; d: Loaded };
@@ -33,6 +33,7 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
   const [lastSync, setLastSync] = useState<string | null>(null);
 
   const detailRef = useRef<HTMLDivElement>(null);
+  const requestId = useRef(0);
 
   const toggleCompare = (code: string) =>
     setCompareSet((prev) => {
@@ -50,27 +51,36 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
     }
   };
 
-  // Pull the latest stats + commodities from the API (which reads the database
-  // live, cache:"no-store"). Used on mount and by the manual "Đồng bộ" button —
-  // a manual sync keeps the current view (no skeleton) and only toggles a spinner.
+  // Load the list independently of the expensive whole-database counts. A
+  // generation guard prevents a previous scope/sync from replacing current data.
   const loadData = useCallback(async (opts?: { manual?: boolean }) => {
+    const id = ++requestId.current;
     if (opts?.manual) setSyncing(true);
+    const statsTask = api.stats().catch(() => null);
     try {
-      const [stats, commodities] = await Promise.all([api.stats(), api.listCommodities()]);
-      setState({ s: "ready", d: { stats, commodities } });
+      const commodities = await api.listCommodities();
+      if (id !== requestId.current) return;
+      setState({ s: "ready", d: { stats: null, commodities } });
       const scoped = filterByGroup(commodities, { group, excludeGroup });
       setSelected((prev) => prev ?? scoped[0]?.commodity_code ?? null);
       setLastSync(new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
+      const stats = await statsTask;
+      if (id !== requestId.current) return;
+      setState((previous) => previous.s === "ready"
+        ? { s: "ready", d: { ...previous.d, stats } } : previous);
     } catch (e) {
+      if (id !== requestId.current) return;
       // On a manual re-sync, keep the data already on screen rather than blanking it.
       setState((prev) => (prev.s === "ready" ? prev : { s: "error", m: e instanceof Error ? e.message : "unknown" }));
     } finally {
-      if (opts?.manual) setSyncing(false);
+      if (opts?.manual && id === requestId.current) setSyncing(false);
     }
   }, [group, excludeGroup]);
 
   useEffect(() => {
+    const requests = requestId;
     void loadData();
+    return () => { requests.current++; };
   }, [loadData]);
 
   const filtered = useMemo(() => {
@@ -112,13 +122,18 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
 
   return (
     <div className="space-y-6">
-      {showStats ? (
+      {showStats && stats ? (
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <Stat label="Commodities" value={stats.commodities} accent="var(--brand)" />
           <Stat label="Instruments" value={stats.instruments} accent="var(--info)" />
           <Stat label="Regions" value={stats.regions} accent="var(--sector-agriculture)" />
           <Stat label="Data sources" value={stats.data_sources} accent="var(--sector-metal)" />
           <Stat label="Fact rows" value={stats.fact_rows} hint="chưa ingest" accent="var(--demo)" />
+        </section>
+      ) : showStats ? (
+        <section aria-label="Thống kê hệ thống" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20" />)}
+          <p className="col-span-full text-xs text-muted">Thống kê chưa sẵn sàng; bạn có thể tiếp tục khám phá dữ liệu.</p>
         </section>
       ) : null}
 

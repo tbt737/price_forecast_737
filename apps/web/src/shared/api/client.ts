@@ -10,8 +10,20 @@ export class ApiError extends Error {
   }
 }
 
-/** Minimal typed fetch wrapper over the same-origin /api proxy. */
-export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+const pending = new Map<string, Promise<unknown>>();
+
+/** Share only concurrent default GETs; retain no response after completion. */
+export function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  // Custom headers, bodies or cancellation signals must keep their own lifecycle.
+  if (init !== undefined) return requestJson<T>(path, init);
+  const existing = pending.get(path);
+  if (existing) return existing as Promise<T>;
+  const task = requestJson<T>(path).finally(() => pending.delete(path));
+  pending.set(path, task);
+  return task;
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: { Accept: "application/json", ...init?.headers },
