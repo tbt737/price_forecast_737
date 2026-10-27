@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.security import require_internal_key
+from app.core.single_flight import KeyedSingleFlight
 from app.db.session import get_db
 from app.models import (
     CommodityProfileRegistry,
@@ -175,6 +176,7 @@ def get_commodity_prices(
 # data or restatement. Within FINGERPRINT_TTL we serve the cached result without even
 # re-running the fingerprint query, so warm repeat calls are instant.
 _FORECAST_CACHE: dict[str, tuple[float, tuple[int, str | None, int], dict[str, Any]]] = {}
+_FORECAST_FLIGHTS = KeyedSingleFlight()
 FINGERPRINT_TTL = 300.0  # seconds before re-checking whether the data changed
 
 
@@ -188,6 +190,13 @@ def get_commodity_forecast(commodity_code: str, db: Session = Depends(get_db)) -
     ~80% band and an honest walk-forward backtest (MAPE vs naive). Falls back to a
     flat naive line per-horizon where no model beats naive out-of-sample. Cached per
     commodity until its price data changes. ``available: false`` with too little history."""
+    # Authentication remains a route dependency. Recheck both cache and revision
+    # inside the per-code lock so followers can reuse the leader's computation.
+    with _FORECAST_FLIGHTS.hold(commodity_code.upper()):
+        return _get_commodity_forecast(commodity_code, db)
+
+
+def _get_commodity_forecast(commodity_code: str, db: Session) -> dict[str, Any]:
     code = commodity_code.upper()
     cached = _FORECAST_CACHE.get(code)
     if cached is not None and time.monotonic() - cached[0] < FINGERPRINT_TTL:
