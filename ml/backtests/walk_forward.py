@@ -195,10 +195,14 @@ def walk_forward_gbm(
     fold ("no spring is identical") without leaking the future."""
     logy = np.log(np.asarray(values, dtype=float))
     doy = np.array([d.timetuple().tm_yday for d in dates], dtype=float)
-    rpy = _rows_per_year(dates, len(values))
 
     def make(cut: int) -> GBMForecaster:
-        periods = select_cycles(logy, doy, rows_per_year=rpy, horizon=horizon, end=cut) if use_cycles else []
+        periods = []
+        if use_cycles:
+            # Sampling density is also point-in-time: future calendar gaps must
+            # not alter the cycle candidates considered for an earlier fold.
+            rpy = _rows_per_year(dates[:cut], cut)
+            periods = select_cycles(logy, doy, rows_per_year=rpy, horizon=horizon, end=cut)
         return GBMForecaster(horizon=horizon, cycle_periods=periods).fit(
             logy, doy, exog_features=exog_features, end=cut
         )
