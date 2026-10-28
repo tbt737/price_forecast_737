@@ -56,7 +56,7 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
   const loadData = useCallback(async (opts?: { manual?: boolean }) => {
     const id = ++requestId.current;
     if (opts?.manual) setSyncing(true);
-    const statsTask = api.stats().catch(() => null);
+    const statsTask = showStats ? api.stats().catch(() => null) : Promise.resolve(null);
     try {
       const commodities = await api.listCommodities();
       if (id !== requestId.current) return;
@@ -75,7 +75,7 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
     } finally {
       if (opts?.manual && id === requestId.current) setSyncing(false);
     }
-  }, [group, excludeGroup]);
+  }, [group, excludeGroup, showStats]);
 
   useEffect(() => {
     const requests = requestId;
