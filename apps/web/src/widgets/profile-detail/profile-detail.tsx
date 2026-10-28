@@ -140,6 +140,8 @@ interface Data {
   commodity: CommodityDetail;
   profile: Profile;
   prices: PriceSeries;
+  pricesLoading: boolean;
+  pricesError: boolean;
   forecast: Forecast | null;
   forecastError: string | null;
   forecastLoading: boolean;
@@ -153,16 +155,19 @@ export function ProfileDetail({ code }: { code: string }) {
     let active = true;
     setState({ s: "loading" });
     (async () => {
-      // Start compute in parallel, but render prices/profile without waiting for it.
+      // Render the profile independently of price queries and forecast compute.
       // Attach both handlers immediately so a fast rejection is always handled.
       const forecastTask = api.getForecast(code).then(
         (value) => ({ forecast: value, forecastError: null }),
         (error: unknown) => ({ forecast: null, forecastError: forecastErrorMessage(error) }),
       );
-      const [commodityR, profileR, pricesR] = await Promise.allSettled([
+      const pricesTask = api.getPrices(code, 730).then(
+        (prices) => ({ prices, pricesError: false }),
+        () => ({ prices: null, pricesError: true }),
+      );
+      const [commodityR, profileR] = await Promise.allSettled([
         api.getCommodity(code),
         api.getProfile(code),
-        api.getPrices(code, 730),
       ]);
       if (!active) return;
 
@@ -186,17 +191,28 @@ export function ProfileDetail({ code }: { code: string }) {
         d: {
           commodity: commodityR.value,
           profile: profileR.value,
-          prices: pricesR.status === "fulfilled" ? pricesR.value : emptyPrices,
+          prices: emptyPrices,
+          pricesLoading: true,
+          pricesError: false,
           forecast: null,
           forecastError: null,
           forecastLoading: true,
         },
       });
-      const result = await forecastTask;
-      if (!active) return;
-      setState((previous) => previous.s === "ready"
-        ? { s: "ready", d: { ...previous.d, ...result, forecastLoading: false } }
-        : previous);
+      await Promise.all([
+        pricesTask.then((result) => {
+          if (!active) return;
+          setState((previous) => previous.s === "ready"
+            ? { s: "ready", d: { ...previous.d, prices: result.prices ?? emptyPrices, pricesError: result.pricesError, pricesLoading: false } }
+            : previous);
+        }),
+        forecastTask.then((result) => {
+          if (!active) return;
+          setState((previous) => previous.s === "ready"
+            ? { s: "ready", d: { ...previous.d, ...result, forecastLoading: false } }
+            : previous);
+        }),
+      ]);
     })();
     return () => {
       active = false;
@@ -221,7 +237,7 @@ export function ProfileDetail({ code }: { code: string }) {
     return <p className="text-sm text-neg">Lỗi tải {code}: {state.m}</p>;
   }
 
-  const { commodity, profile: prof, prices, forecast, forecastError, forecastLoading } = state.d;
+  const { commodity, profile: prof, prices, pricesLoading, pricesError, forecast, forecastError, forecastLoading } = state.d;
   const p = prof.profile;
   const sector = sectorMeta(commodity.commodity_group);
   const hasRealPrices = prices.points.length > 0;
@@ -275,30 +291,32 @@ export function ProfileDetail({ code }: { code: string }) {
         </p>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
-        <div className="rounded-card border border-border bg-surface-2 p-3">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
+        <div className="min-w-0 rounded-card border border-border bg-surface-2 p-3">
           <div className="mb-1 flex items-center justify-between text-xs text-muted">
             <span>
-              {hasRealPrices
+              {pricesLoading ? "Đang tải giá lịch sử…" : pricesError ? "Giá lịch sử chưa sẵn sàng" : hasRealPrices
                 ? `Giá ${prices.points.length} phiên · ${prices.instrument_code} (${prices.currency})`
                 : "Giá 32 phiên"}
             </span>
-            {hasRealPrices ? (
+            {pricesLoading || pricesError ? null : hasRealPrices ? (
               <Badge tone="info">dữ liệu thật</Badge>
             ) : (
               <Badge tone="demo">DEMO · chưa ingest</Badge>
             )}
           </div>
-          <PriceChart
+          {pricesLoading ? <Skeleton className="h-[280px]" /> : pricesError ? (
+            <p role="alert" className="py-6 text-sm text-muted">Không tải được giá lịch sử. Hãy thử chọn lại mặt hàng.</p>
+          ) : <PriceChart
             data={priceValues}
             labels={priceLabels}
             tone={hasRealPrices ? "real" : "demo"}
             forecast={overlay}
             height={280}
             showAxes
-          />
+          />}
           {forecastLoading ? (
-            <p role="status" className="mt-2 text-xs text-muted">Đang tính dự báo · dữ liệu lịch sử đã sẵn sàng</p>
+            <p role="status" className="mt-2 text-xs text-muted">{hasRealPrices ? "Đang tính dự báo · dữ liệu lịch sử đã sẵn sàng" : "Đang tính dự báo…"}</p>
           ) : forecast && !forecast.available ? (
             <p role="status" className="mt-2 text-xs text-muted">Chưa có dự báo: {forecast.reason || "Chưa đủ dữ liệu"}</p>
           ) : null}
@@ -322,7 +340,7 @@ export function ProfileDetail({ code }: { code: string }) {
           ) : null}
           {overlay ? <p className="mt-2 text-xs text-muted">Nét liền: giá lịch sử · Nét đứt: dự báo · Vùng tô: khoảng dự báo danh nghĩa 80%, chưa xác nhận độ bao phủ thực tế. Sai số quá khứ không bảo đảm kết quả tương lai.</p> : null}
         </div>
-        <div className="rounded-card border border-border bg-surface-2 p-3">
+        <div className="min-w-0 rounded-card border border-border bg-surface-2 p-3">
           <div className="mb-1 flex items-center justify-between text-xs text-muted">
             <span>Cấu trúc profile</span>
             <Badge tone="brand">dữ liệu thật</Badge>

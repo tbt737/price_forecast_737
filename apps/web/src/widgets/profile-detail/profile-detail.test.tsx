@@ -1,6 +1,6 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { api, type Forecast } from "@/shared/api";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { api, type Forecast, type PriceSeries } from "@/shared/api";
 import { ProfileDetail } from "./profile-detail";
 
 vi.mock("@/shared/api", async (original) => ({
@@ -26,8 +26,45 @@ beforeEach(() => {
   vi.mocked(api.getProfile).mockResolvedValue({ commodity_code: "TEST", version: 1, profile: {} });
   vi.mocked(api.getPrices).mockResolvedValue({ commodity_code: "TEST", points: [{ date: "2026-01-01", value: 100 }] });
 });
+afterEach(cleanup);
 
 describe("progressive profile loading", () => {
+  it("shows profile and forecast state before a slow price request, without demo prices", async () => {
+    const prices = deferred<PriceSeries>();
+    vi.mocked(api.getPrices).mockReturnValue(prices.promise);
+    vi.mocked(api.getForecast).mockResolvedValue({ available: false, commodity_code: "TEST", reason: "Fixture forecast ready" });
+    render(<ProfileDetail code="TEST" />);
+    expect(await screen.findByText("Asset TEST")).toBeInTheDocument();
+    expect(await screen.findByText(/Fixture forecast ready/)).toBeInTheDocument();
+    expect(screen.getByText("Đang tải giá lịch sử…")).toBeInTheDocument();
+    expect(screen.queryByText(/DEMO/)).not.toBeInTheDocument();
+    await act(async () => prices.resolve({ commodity_code: "TEST", points: [{ date: "2026-01-01", value: 100 }] }));
+    expect(screen.queryByText("Đang tải giá lịch sử…")).not.toBeInTheDocument();
+    expect(screen.getByText(/Giá 1 phiên/)).toBeInTheDocument();
+  });
+
+  it("reports failed prices without hiding the profile or replacing them with demo data", async () => {
+    vi.mocked(api.getPrices).mockRejectedValue(new Error("Fixture failure"));
+    vi.mocked(api.getForecast).mockResolvedValue({ available: false, commodity_code: "TEST" });
+    render(<ProfileDetail code="TEST" />);
+    expect(await screen.findByText("Asset TEST")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Không tải được giá lịch sử");
+    expect(screen.queryByText(/DEMO/)).not.toBeInTheDocument();
+  });
+
+  it("ignores old prices after switching to another asset", async () => {
+    const oldPrices = deferred<PriceSeries>();
+    vi.mocked(api.getPrices).mockImplementation((code) => code === "A" ? oldPrices.promise : Promise.resolve({ commodity_code: code, instrument_code: "NEW_PRICE", points: [{ date: "2026-01-01", value: 200 }] }));
+    vi.mocked(api.getForecast).mockImplementation(async (code) => ({ available: false, commodity_code: code }));
+    const { rerender } = render(<ProfileDetail code="A" />);
+    await screen.findByText("Asset A");
+    rerender(<ProfileDetail code="B" />);
+    await screen.findByText(/NEW_PRICE/);
+    await act(async () => oldPrices.resolve({ commodity_code: "A", instrument_code: "OLD_PRICE", points: [{ date: "2026-01-01", value: 100 }] }));
+    expect(screen.getByText("Asset B")).toBeInTheDocument();
+    expect(screen.queryByText(/OLD_PRICE/)).not.toBeInTheDocument();
+    expect(screen.getByText(/NEW_PRICE/)).toBeInTheDocument();
+  });
   it("shows historical data while the forecast is still computing, then reports failure", async () => {
     const task = deferred<Forecast>();
     vi.mocked(api.getForecast).mockReturnValue(task.promise);
