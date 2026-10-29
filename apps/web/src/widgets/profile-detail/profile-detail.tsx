@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   api,
   ApiError,
@@ -150,6 +150,25 @@ type State = { s: "loading" } | { s: "error"; m: string } | { s: "ready"; d: Dat
 
 export function ProfileDetail({ code }: { code: string }) {
   const [state, setState] = useState<State>({ s: "loading" });
+  const priceRetry = useRef<symbol | null>(null);
+
+  async function retryPrices() {
+    if (state.s !== "ready" || !state.d.pricesError || priceRetry.current) return;
+    const request = Symbol();
+    priceRetry.current = request;
+    setState({ s: "ready", d: { ...state.d, pricesLoading: true, pricesError: false } });
+    let prices: PriceSeries | null = null;
+    try {
+      prices = await api.getPrices(code, 730);
+    } catch {
+      // Keep the retry local to prices; the profile and forecast remain usable.
+    }
+    if (priceRetry.current !== request) return;
+    priceRetry.current = null;
+    setState((previous) => previous.s === "ready"
+      ? { s: "ready", d: { ...previous.d, prices: prices ?? previous.d.prices, pricesError: prices === null, pricesLoading: false } }
+      : previous);
+  }
 
   useEffect(() => {
     let active = true;
@@ -216,6 +235,7 @@ export function ProfileDetail({ code }: { code: string }) {
     })();
     return () => {
       active = false;
+      priceRetry.current = null;
     };
   }, [code]);
 
@@ -306,7 +326,12 @@ export function ProfileDetail({ code }: { code: string }) {
             )}
           </div>
           {pricesLoading ? <Skeleton className="h-[280px]" /> : pricesError ? (
-            <p role="alert" className="py-6 text-sm text-muted">Không tải được giá lịch sử. Hãy thử chọn lại mặt hàng.</p>
+            <div role="alert" className="space-y-3 py-6 text-sm text-muted">
+              <p>Không tải được giá lịch sử.</p>
+              <button type="button" onClick={retryPrices} className="min-h-11 rounded border border-border px-3 text-text hover:bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-info">
+                Thử tải lại giá
+              </button>
+            </div>
           ) : <PriceChart
             data={priceValues}
             labels={priceLabels}

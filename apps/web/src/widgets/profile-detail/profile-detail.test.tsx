@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, type Forecast, type PriceSeries } from "@/shared/api";
 import { ProfileDetail } from "./profile-detail";
@@ -29,6 +29,41 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("progressive profile loading", () => {
+  it("retries only failed prices, keeping the profile and forecast while loading", async () => {
+    const retry = deferred<PriceSeries>();
+    vi.mocked(api.getPrices).mockRejectedValueOnce(new Error("Offline")).mockReturnValueOnce(retry.promise);
+    vi.mocked(api.getForecast).mockResolvedValue({ available: false, commodity_code: "TEST", reason: "Forecast ready" });
+    render(<ProfileDetail code="TEST" />);
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Thử tải lại giá" }));
+    expect(screen.getByText("Asset TEST")).toBeInTheDocument();
+    expect(screen.getByText("Đang tải giá lịch sử…")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Thử tải lại giá" })).not.toBeInTheDocument();
+    await act(async () => retry.resolve({ commodity_code: "TEST", instrument_code: "RECOVERED", points: [{ date: "2026-01-01", value: 100 }] }));
+    expect(screen.getByText(/RECOVERED/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(api.getPrices).toHaveBeenCalledTimes(2);
+    expect(api.getCommodity).toHaveBeenCalledTimes(1);
+    expect(api.getProfile).toHaveBeenCalledTimes(1);
+    expect(api.getForecast).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a failed price retry after changing assets", async () => {
+    const retry = deferred<PriceSeries>();
+    vi.mocked(api.getPrices).mockRejectedValueOnce(new Error("Offline")).mockReturnValueOnce(retry.promise)
+      .mockResolvedValue({ commodity_code: "B", instrument_code: "NEW_PRICE", points: [{ date: "2026-01-01", value: 200 }] });
+    vi.mocked(api.getForecast).mockImplementation(async (code) => ({ available: false, commodity_code: code }));
+    const { rerender } = render(<ProfileDetail code="A" />);
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Thử tải lại giá" }));
+    rerender(<ProfileDetail code="B" />);
+    await screen.findByText(/NEW_PRICE/);
+    await act(async () => retry.reject(new Error("Late failure")));
+    expect(screen.getByText("Asset B")).toBeInTheDocument();
+    expect(screen.getByText(/NEW_PRICE/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("shows profile and forecast state before a slow price request, without demo prices", async () => {
     const prices = deferred<PriceSeries>();
     vi.mocked(api.getPrices).mockReturnValue(prices.promise);
