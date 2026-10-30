@@ -188,7 +188,7 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
-        <Card className="self-start">
+        <Card className="min-w-0 self-start">
           <CardHeader
             title={compareMode ? `So sánh · ${compareSet.size} chọn` : `${listLabel} · ${filtered.length}`}
             right={
@@ -243,7 +243,7 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
           </div>
         </Card>
 
-        <div ref={detailRef} className="scroll-mt-16">
+        <div ref={detailRef} className="min-w-0 scroll-mt-16">
           <Card>
           <CardHeader
             title={compareMode ? "So sánh dự báo" : "Chi tiết profile"}
