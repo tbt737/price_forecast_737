@@ -111,8 +111,16 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
     return (
       <Card>
         <CardHeader title="Không kết nối được API" />
-        <CardBody className="text-sm text-muted">
-          {state.m}. Khởi động backend (FastAPI cổng 8000).
+        <CardBody className="space-y-3 text-sm text-muted">
+          <p role="alert">Không tải được danh sách mặt hàng. Vui lòng thử lại.</p>
+          <button
+            type="button"
+            onClick={() => void loadData({ manual: true })}
+            disabled={syncing}
+            className="min-h-11 rounded-md border border-border px-3 text-text hover:border-brand disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-info"
+          >
+            {syncing ? "Đang thử lại…" : "Thử lại kết nối"}
+          </button>
         </CardBody>
       </Card>
     );

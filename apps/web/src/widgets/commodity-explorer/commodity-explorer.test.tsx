@@ -12,6 +12,23 @@ beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
 
 describe("explorer loading", () => {
+  it("recovers from an initial list failure and permits retrying another failure", async () => {
+    vi.mocked(api.stats).mockResolvedValue({ commodities: 1, profiles: 1, instruments: 1, regions: 1, data_sources: 1, fact_rows: 100 });
+    vi.mocked(api.listCommodities).mockRejectedValueOnce(new Error("Fixture unavailable"))
+      .mockRejectedValueOnce(new Error("Still unavailable")).mockResolvedValueOnce(assets);
+    render(<CommodityExplorer />);
+    await screen.findByText("Không kết nối được API");
+    const retry = screen.getByRole("button", { name: "Thử lại kết nối" });
+    expect(screen.getByRole("alert")).toHaveTextContent("Không tải được danh sách mặt hàng");
+    fireEvent.click(retry);
+    await waitFor(() => expect(api.listCommodities).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Thử lại kết nối" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Thử lại kết nối" }));
+    expect(await screen.findByText("Detail TEST")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(api.listCommodities).toHaveBeenCalledTimes(3);
+  });
+
   it("skips hidden system counts on mount and manual refresh", async () => {
     vi.mocked(api.stats).mockReturnValue(new Promise(() => {}));
     vi.mocked(api.listCommodities).mockResolvedValue(assets);
