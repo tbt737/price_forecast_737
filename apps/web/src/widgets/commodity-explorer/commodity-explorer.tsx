@@ -64,10 +64,12 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
       const scoped = filterByGroup(commodities, { group, excludeGroup });
       setSelected((prev) => prev ?? scoped[0]?.commodity_code ?? null);
       setLastSync(new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
-      const stats = await statsTask;
-      if (id !== requestId.current) return;
-      setState((previous) => previous.s === "ready"
-        ? { s: "ready", d: { ...previous.d, stats } } : previous);
+      // Optional counts must not keep a completed list refresh in its busy state.
+      void statsTask.then((stats) => {
+        if (id !== requestId.current) return;
+        setState((previous) => previous.s === "ready"
+          ? { s: "ready", d: { ...previous.d, stats } } : previous);
+      });
     } catch (e) {
       if (id !== requestId.current) return;
       // On a manual re-sync, keep the data already on screen rather than blanking it.

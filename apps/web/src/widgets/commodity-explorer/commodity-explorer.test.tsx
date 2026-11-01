@@ -12,6 +12,25 @@ beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
 
 describe("explorer loading", () => {
+  it("finishes manual list refresh before slow optional statistics", async () => {
+    let resolveStats!: (stats: Stats) => void;
+    const stats: Stats = { commodities: 1, profiles: 1, instruments: 1, regions: 1, data_sources: 1, fact_rows: 100 };
+    vi.mocked(api.stats).mockResolvedValueOnce(stats)
+      .mockReturnValueOnce(new Promise((resolve) => { resolveStats = resolve; }));
+    vi.mocked(api.listCommodities).mockResolvedValue(assets);
+    render(<CommodityExplorer />);
+    await screen.findByText("Fact rows");
+    const refresh = screen.getByRole("button", { name: /Đồng bộ dữ liệu/ });
+    fireEvent.click(refresh);
+    await waitFor(() => expect(api.listCommodities).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(refresh).toBeEnabled());
+    expect(screen.getByText("Detail TEST")).toBeInTheDocument();
+    expect(screen.getByText(/Thống kê chưa sẵn sàng/)).toBeInTheDocument();
+    await act(async () => resolveStats({ ...stats, fact_rows: 300 }));
+    expect(screen.getByText("Fact rows")).toBeInTheDocument();
+    expect(screen.queryByText(/Thống kê chưa sẵn sàng/)).not.toBeInTheDocument();
+  });
+
   it("recovers from an initial list failure and permits retrying another failure", async () => {
     vi.mocked(api.stats).mockResolvedValue({ commodities: 1, profiles: 1, instruments: 1, regions: 1, data_sources: 1, fact_rows: 100 });
     vi.mocked(api.listCommodities).mockRejectedValueOnce(new Error("Fixture unavailable"))
