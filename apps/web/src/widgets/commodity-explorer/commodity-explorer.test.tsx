@@ -12,6 +12,24 @@ beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
 
 describe("explorer loading", () => {
+  it("reports a failed refresh while keeping existing data, then clears the notice on recovery", async () => {
+    vi.mocked(api.stats).mockResolvedValue({ commodities: 1, profiles: 1, instruments: 1, regions: 1, data_sources: 1, fact_rows: 100 });
+    vi.mocked(api.listCommodities).mockResolvedValueOnce(assets)
+      .mockRejectedValueOnce(new Error("Fixture unavailable")).mockResolvedValueOnce(assets);
+    render(<CommodityExplorer />);
+    await screen.findByText("Detail TEST");
+    fireEvent.click(screen.getByRole("button", { name: /Đồng bộ dữ liệu/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Đang hiển thị dữ liệu đã tải trước đó");
+    expect(screen.getByText("Detail TEST")).toBeInTheDocument();
+    const refresh = screen.getByRole("button", { name: /Đồng bộ dữ liệu/ });
+    await waitFor(() => expect(refresh).toBeEnabled());
+    fireEvent.click(refresh);
+    await waitFor(() => expect(api.listCommodities).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(refresh).toBeEnabled());
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("Detail TEST")).toBeInTheDocument();
+  });
+
   it("finishes manual list refresh before slow optional statistics", async () => {
     let resolveStats!: (stats: Stats) => void;
     const stats: Stats = { commodities: 1, profiles: 1, instruments: 1, regions: 1, data_sources: 1, fact_rows: 100 };

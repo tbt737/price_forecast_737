@@ -30,6 +30,7 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
   const [compareMode, setCompareMode] = useState(false);
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
   const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
 
   const detailRef = useRef<HTMLDivElement>(null);
@@ -55,6 +56,7 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
   // generation guard prevents a previous scope/sync from replacing current data.
   const loadData = useCallback(async (opts?: { manual?: boolean }) => {
     const id = ++requestId.current;
+    setSyncError(false);
     if (opts?.manual) setSyncing(true);
     const statsTask = showStats ? api.stats().catch(() => null) : Promise.resolve(null);
     try {
@@ -72,6 +74,7 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
       });
     } catch (e) {
       if (id !== requestId.current) return;
+      setSyncError(true);
       // On a manual re-sync, keep the data already on screen rather than blanking it.
       setState((prev) => (prev.s === "ready" ? prev : { s: "error", m: e instanceof Error ? e.message : "unknown" }));
     } finally {
@@ -196,6 +199,12 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
           </button>
         </div>
       </div>
+
+      {syncError ? (
+        <p role="alert" className="rounded-card border border-border bg-surface-2 px-4 py-3 text-sm text-muted">
+          Chưa làm mới được danh sách. Đang hiển thị dữ liệu đã tải trước đó. Bạn có thể thử đồng bộ lại.
+        </p>
+      ) : null}
 
       <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
         <Card className="min-w-0 self-start">
