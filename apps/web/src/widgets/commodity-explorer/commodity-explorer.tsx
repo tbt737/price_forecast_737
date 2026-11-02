@@ -64,7 +64,12 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
       if (id !== requestId.current) return;
       setState({ s: "ready", d: { stats: null, commodities } });
       const scoped = filterByGroup(commodities, { group, excludeGroup });
-      setSelected((prev) => prev ?? scoped[0]?.commodity_code ?? null);
+      const available = new Set(scoped.map((c) => c.commodity_code));
+      setSelected((prev) => prev !== null && available.has(prev) ? prev : scoped[0]?.commodity_code ?? null);
+      setCompareSet((prev) => {
+        const next = new Set([...prev].filter((code) => available.has(code)));
+        return next.size === prev.size ? prev : next;
+      });
       setLastSync(new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
       // Optional counts must not keep a completed list refresh in its busy state.
       void statsTask.then((stats) => {
