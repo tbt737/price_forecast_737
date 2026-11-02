@@ -5,13 +5,47 @@ import { CommodityExplorer } from "./commodity-explorer";
 
 vi.mock("@/shared/api", () => ({ api: { stats: vi.fn(), listCommodities: vi.fn() } }));
 vi.mock("@/widgets/profile-detail", () => ({ ProfileDetail: ({ code }: { code: string }) => <div>Detail {code}</div> }));
-vi.mock("@/widgets/commodity-explorer/forecast-compare", () => ({ ForecastCompare: () => null }));
+vi.mock("@/widgets/commodity-explorer/forecast-compare", () => ({ ForecastCompare: ({ codes }: { codes: string[] }) => <div>Compare {codes.join(",")}</div> }));
 
 const assets = [{ commodity_code: "TEST", commodity_name: "Research asset", commodity_group: "agriculture", base_unit: "kg", default_currency: "USD" }];
 beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
 
 describe("explorer loading", () => {
+  it.each([
+    { name: "preserves an available selection", remaining: ["A", "B"], expected: "B" },
+    { name: "replaces a removed selection", remaining: ["A"], expected: "A" },
+    { name: "clears selection for an empty list", remaining: [] as string[], expected: null },
+  ])("$name after refresh", async ({ remaining, expected }) => {
+    const choices = ["A", "B"].map((code) => ({ ...assets[0], commodity_code: code, commodity_name: `Asset ${code}` }));
+    vi.mocked(api.listCommodities).mockResolvedValueOnce(choices)
+      .mockResolvedValueOnce(choices.filter((c) => remaining.includes(c.commodity_code)));
+    render(<CommodityExplorer showStats={false} />);
+    await screen.findByText("Detail A");
+    fireEvent.click(screen.getByRole("button", { name: /B Asset B/ }));
+    expect(screen.getByText("Detail B")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Đồng bộ dữ liệu/ }));
+    await waitFor(() => expect(api.listCommodities).toHaveBeenCalledTimes(2));
+    if (expected) expect(await screen.findByText(`Detail ${expected}`)).toBeInTheDocument();
+    else {
+      expect(await screen.findByText("Chọn một mặt hàng")).toBeInTheDocument();
+      expect(screen.queryByText("Detail B")).not.toBeInTheDocument();
+    }
+  });
+
+  it("removes unavailable assets from comparison after refresh", async () => {
+    const choices = ["A", "B"].map((code) => ({ ...assets[0], commodity_code: code, commodity_name: `Asset ${code}` }));
+    vi.mocked(api.listCommodities).mockResolvedValueOnce(choices).mockResolvedValueOnce([choices[0]]);
+    render(<CommodityExplorer showStats={false} />);
+    await screen.findByText("Detail A");
+    fireEvent.click(screen.getByRole("button", { name: /So sánh hàng hóa/ }));
+    for (const code of ["A", "B"]) fireEvent.click(screen.getByRole("button", { name: new RegExp(`${code} Asset ${code}`) }));
+    expect(screen.getByText("Compare A,B")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Đồng bộ dữ liệu/ }));
+    expect(await screen.findByText("Compare A")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bỏ chọn (1)" })).toBeInTheDocument();
+  });
+
   it("reports a failed refresh while keeping existing data, then clears the notice on recovery", async () => {
     vi.mocked(api.stats).mockResolvedValue({ commodities: 1, profiles: 1, instruments: 1, regions: 1, data_sources: 1, fact_rows: 100 });
     vi.mocked(api.listCommodities).mockResolvedValueOnce(assets)
