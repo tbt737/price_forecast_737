@@ -12,6 +12,7 @@ import { ProfileDetail } from "@/widgets/profile-detail";
 
 interface Loaded {
   stats: Stats | null;
+  statsLoading: boolean;
   commodities: Commodity[];
 }
 type State = { s: "loading" } | { s: "error"; m: string } | { s: "ready"; d: Loaded };
@@ -62,7 +63,7 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
     try {
       const commodities = await api.listCommodities();
       if (id !== requestId.current) return;
-      setState({ s: "ready", d: { stats: null, commodities } });
+      setState({ s: "ready", d: { stats: null, statsLoading: showStats, commodities } });
       const scoped = filterByGroup(commodities, { group, excludeGroup });
       const available = new Set(scoped.map((c) => c.commodity_code));
       setSelected((prev) => prev !== null && available.has(prev) ? prev : scoped[0]?.commodity_code ?? null);
@@ -75,13 +76,15 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
       void statsTask.then((stats) => {
         if (id !== requestId.current) return;
         setState((previous) => previous.s === "ready"
-          ? { s: "ready", d: { ...previous.d, stats } } : previous);
+          ? { s: "ready", d: { ...previous.d, stats, statsLoading: false } } : previous);
       });
     } catch (e) {
       if (id !== requestId.current) return;
       setSyncError(true);
       // On a manual re-sync, keep the data already on screen rather than blanking it.
-      setState((prev) => (prev.s === "ready" ? prev : { s: "error", m: e instanceof Error ? e.message : "unknown" }));
+      setState((prev) => (prev.s === "ready"
+        ? { s: "ready", d: { ...prev.d, statsLoading: false } }
+        : { s: "error", m: e instanceof Error ? e.message : "unknown" }));
     } finally {
       if (opts?.manual && id === requestId.current) setSyncing(false);
     }
@@ -136,7 +139,7 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
     );
   }
 
-  const { stats } = state.d;
+  const { stats, statsLoading } = state.d;
 
   return (
     <div className="space-y-6">
@@ -149,9 +152,11 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
           <Stat label="Fact rows" value={stats.fact_rows} hint="chưa ingest" accent="var(--demo)" />
         </section>
       ) : showStats ? (
-        <section aria-label="Thống kê hệ thống" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20" />)}
-          <p className="col-span-full text-xs text-muted">Thống kê chưa sẵn sàng; bạn có thể tiếp tục khám phá dữ liệu.</p>
+        <section aria-label="Thống kê hệ thống" aria-busy={statsLoading} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {statsLoading ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20" />) : null}
+          <p role="status" className="col-span-full text-xs text-muted">
+            {statsLoading ? "Đang tải thống kê hệ thống…" : "Thống kê chưa sẵn sàng; bạn có thể tiếp tục khám phá dữ liệu."}
+          </p>
         </section>
       ) : null}
 

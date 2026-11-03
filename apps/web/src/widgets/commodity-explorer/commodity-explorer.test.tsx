@@ -77,10 +77,10 @@ describe("explorer loading", () => {
     await waitFor(() => expect(api.listCommodities).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(refresh).toBeEnabled());
     expect(screen.getByText("Detail TEST")).toBeInTheDocument();
-    expect(screen.getByText(/Thống kê chưa sẵn sàng/)).toBeInTheDocument();
+    expect(screen.getByText(/Đang tải thống kê hệ thống/)).toBeInTheDocument();
     await act(async () => resolveStats({ ...stats, fact_rows: 300 }));
     expect(screen.getByText("Fact rows")).toBeInTheDocument();
-    expect(screen.queryByText(/Thống kê chưa sẵn sàng/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Đang tải thống kê hệ thống/)).not.toBeInTheDocument();
   });
 
   it("recovers from an initial list failure and permits retrying another failure", async () => {
@@ -130,9 +130,10 @@ describe("explorer loading", () => {
     vi.mocked(api.listCommodities).mockResolvedValue(assets);
     render(<CommodityExplorer />);
     expect(await screen.findByText("Detail TEST")).toBeInTheDocument();
-    expect(screen.getByText(/Thống kê chưa sẵn sàng/)).toBeInTheDocument();
+    expect(screen.getByText(/Đang tải thống kê hệ thống/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Thống kê hệ thống")).toHaveAttribute("aria-busy", "true");
     await act(async () => resolve({ commodities: 1, profiles: 1, instruments: 1, regions: 1, data_sources: 1, fact_rows: 100 }));
-    expect(screen.queryByText(/Thống kê chưa sẵn sàng/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Đang tải thống kê hệ thống/)).not.toBeInTheDocument();
     expect(screen.getByText("Detail TEST")).toBeInTheDocument();
   });
 
@@ -142,5 +143,30 @@ describe("explorer loading", () => {
     render(<CommodityExplorer />);
     expect(await screen.findByText("Detail TEST")).toBeInTheDocument();
     expect(screen.queryByText("Không kết nối được API")).not.toBeInTheDocument();
+  });
+
+  it("stops showing loading placeholders after statistics fail", async () => {
+    vi.mocked(api.stats).mockRejectedValue(new Error("Stats unavailable"));
+    vi.mocked(api.listCommodities).mockResolvedValue(assets);
+    render(<CommodityExplorer />);
+    await screen.findByText("Detail TEST");
+    const counts = screen.getByLabelText("Thống kê hệ thống");
+    await waitFor(() => expect(counts.querySelectorAll(".skeleton")).toHaveLength(0));
+    expect(counts).toHaveAttribute("aria-busy", "false");
+    expect(counts).toHaveTextContent("Thống kê chưa sẵn sàng");
+  });
+
+  it("stops superseded statistics loading when the next list refresh fails", async () => {
+    vi.mocked(api.stats).mockReturnValue(new Promise(() => {}));
+    vi.mocked(api.listCommodities).mockResolvedValueOnce(assets).mockRejectedValueOnce(new Error("Refresh unavailable"));
+    render(<CommodityExplorer />);
+    await screen.findByText("Detail TEST");
+    const counts = screen.getByLabelText("Thống kê hệ thống");
+    expect(counts).toHaveAttribute("aria-busy", "true");
+    fireEvent.click(screen.getByRole("button", { name: /Đồng bộ dữ liệu/ }));
+    await screen.findByRole("alert");
+    expect(counts).toHaveAttribute("aria-busy", "false");
+    expect(counts.querySelectorAll(".skeleton")).toHaveLength(0);
+    expect(screen.getByText("Detail TEST")).toBeInTheDocument();
   });
 });
