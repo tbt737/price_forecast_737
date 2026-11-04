@@ -168,7 +168,7 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
                   <HorizonCell fc={fc} h="30" />
                   <HorizonCell fc={fc} h="90" />
                 </>
-              ) : hist && hist.have > 0 ? (
+              ) : hist ? (
                 <td className="px-3 py-2 text-subtle" colSpan={2}>
                   Chưa đủ lịch sử để dự báo{" "}
                   <span className="font-mono text-[11px]">

@@ -16,6 +16,15 @@ beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
 
 describe("progressive forecast comparison", () => {
+  it("reports zero available history without claiming the price source is missing", async () => {
+    vi.mocked(api.getForecast).mockResolvedValue({ available: false, commodity_code: "TEST", reason: "need >= 252 positive prices, have 0" });
+    render(<ForecastCompare codes={["TEST"]} />);
+    expect(await screen.findByText(/0\/252 phiên/)).toBeInTheDocument();
+    expect(screen.getByText(/Chưa đủ lịch sử để dự báo/)).toBeInTheDocument();
+    expect(screen.queryByText("Chưa có nguồn dữ liệu giá")).not.toBeInTheDocument();
+    expect(api.getPrices).not.toHaveBeenCalled();
+  });
+
   it("limits work to two, displays a fast result before a slow one, and keeps selection order", async () => {
     const tasks = [deferred<Forecast>(), deferred<Forecast>(), deferred<Forecast>()];
     vi.mocked(api.getForecast).mockImplementation((code) => tasks[["A", "B", "C"].indexOf(code)].promise);
