@@ -184,32 +184,26 @@ export function ProfileDetail({ code }: { code: string }) {
         (prices) => ({ prices, pricesError: false }),
         () => ({ prices: null, pricesError: true }),
       );
-      const [commodityR, profileR] = await Promise.allSettled([
-        api.getCommodity(code),
-        api.getProfile(code),
-      ]);
-      if (!active) return;
-
-      if (commodityR.status === "rejected" || profileR.status === "rejected") {
-        const err =
-          commodityR.status === "rejected"
-            ? commodityR.reason
-            : profileR.status === "rejected"
-              ? profileR.reason
-              : "unknown";
-        setState({ s: "error", m: err instanceof Error ? err.message : "unknown" });
+      let metadata: [CommodityDetail, Profile];
+      try {
+        // Both are required; report a known failure without waiting for its peer.
+        metadata = await Promise.all([api.getCommodity(code), api.getProfile(code)]);
+      } catch (err) {
+        if (active) setState({ s: "error", m: err instanceof Error ? err.message : "unknown" });
         return;
       }
+      if (!active) return;
+      const [commodity, profile] = metadata;
 
       const emptyPrices: PriceSeries = {
-        commodity_code: commodityR.value.commodity_code,
+        commodity_code: commodity.commodity_code,
         points: [],
       };
       setState({
         s: "ready",
         d: {
-          commodity: commodityR.value,
-          profile: profileR.value,
+          commodity: commodity,
+          profile: profile,
           prices: emptyPrices,
           pricesLoading: true,
           pricesError: false,

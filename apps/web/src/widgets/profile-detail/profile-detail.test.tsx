@@ -29,6 +29,36 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("progressive profile loading", () => {
+
+  it.each(["commodity", "profile"])("reports a failed %s without waiting for the other metadata request", async (failed) => {
+    const pending = deferred<never>();
+    if (failed === "commodity") {
+      vi.mocked(api.getCommodity).mockRejectedValue(new Error("Metadata unavailable"));
+      vi.mocked(api.getProfile).mockReturnValue(pending.promise);
+    } else {
+      vi.mocked(api.getProfile).mockRejectedValue(new Error("Metadata unavailable"));
+      vi.mocked(api.getCommodity).mockReturnValue(pending.promise);
+    }
+    vi.mocked(api.getForecast).mockResolvedValue({ available: false, commodity_code: "TEST" });
+    render(<ProfileDetail code="TEST" />);
+    expect(await screen.findByText(/Lỗi tải TEST: Metadata unavailable/)).toBeInTheDocument();
+    await act(async () => pending.reject(new Error("Later metadata failure")));
+    expect(screen.getByText(/Lỗi tải TEST: Metadata unavailable/)).toBeInTheDocument();
+  });
+
+  it.each(["commodity", "profile"])("ignores a stale %s failure after switching assets", async (failed) => {
+    const pending = deferred<never>();
+    if (failed === "commodity") vi.mocked(api.getCommodity).mockReturnValueOnce(pending.promise);
+    else vi.mocked(api.getProfile).mockReturnValueOnce(pending.promise);
+    vi.mocked(api.getForecast).mockResolvedValue({ available: false, commodity_code: "TEST" });
+    const { rerender } = render(<ProfileDetail code="A" />);
+    rerender(<ProfileDetail code="B" />);
+    await screen.findByText("Asset B");
+    await act(async () => pending.reject(new Error("Stale metadata failure")));
+    expect(screen.getByText("Asset B")).toBeInTheDocument();
+    expect(screen.queryByText(/Stale metadata failure/)).not.toBeInTheDocument();
+  });
+
   it("retries only failed prices, keeping the profile and forecast while loading", async () => {
     const retry = deferred<PriceSeries>();
     vi.mocked(api.getPrices).mockRejectedValueOnce(new Error("Offline")).mockReturnValueOnce(retry.promise);
