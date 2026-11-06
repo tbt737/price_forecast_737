@@ -16,6 +16,26 @@ beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
 
 describe("progressive forecast comparison", () => {
+
+  it.each(["success", "failure"])("shows the history result before fallback price %s", async (outcome) => {
+    const prices = deferred<PriceSeries>();
+    vi.mocked(api.getForecast).mockResolvedValue({ available: false, commodity_code: "TEST", reason: "need >= 252 positive prices, have 100" });
+    vi.mocked(api.getPrices).mockReturnValue(prices.promise);
+    render(<ForecastCompare codes={["TEST"]} />);
+    expect(await screen.findByText(/100\/252 phiên/)).toBeInTheDocument();
+    expect(screen.getByText("Đang tải giá…")).toBeInTheDocument();
+    await act(async () => {
+      if (outcome === "success") prices.resolve({ commodity_code: "TEST", currency: "USD", points: [{ date: "2026-01-01", value: 50 }] });
+      else prices.reject(new Error("Price unavailable"));
+    });
+    expect(screen.getByText(/100\/252 phiên/)).toBeInTheDocument();
+    expect(screen.queryByText("Đang tải giá…")).not.toBeInTheDocument();
+    if (outcome === "success") expect(screen.getByText("50")).toBeInTheDocument();
+    else expect(screen.getByText("chưa có dữ liệu")).toBeInTheDocument();
+    expect(api.getForecast).toHaveBeenCalledTimes(1);
+    expect(api.getPrices).toHaveBeenCalledTimes(1);
+  });
+
   it("reports zero available history without claiming the price source is missing", async () => {
     vi.mocked(api.getForecast).mockResolvedValue({ available: false, commodity_code: "TEST", reason: "need >= 252 positive prices, have 0" });
     render(<ForecastCompare codes={["TEST"]} />);
