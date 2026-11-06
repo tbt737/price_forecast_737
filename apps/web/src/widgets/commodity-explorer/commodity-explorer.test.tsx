@@ -12,6 +12,17 @@ beforeEach(() => vi.resetAllMocks());
 afterEach(cleanup);
 
 describe("explorer loading", () => {
+
+  it.each([0, 100])("shows the fact row count %i without inferring ingest status", async (count) => {
+    vi.mocked(api.listCommodities).mockResolvedValue(assets);
+    vi.mocked(api.stats).mockResolvedValue({ commodities: 1, profiles: 1, instruments: 1, regions: 1, data_sources: 1, fact_rows: count });
+    render(<CommodityExplorer />);
+    const label = await screen.findByText("Fact rows");
+    expect(label.parentElement).toHaveTextContent(String(count));
+    expect(screen.queryByText("chưa ingest")).not.toBeInTheDocument();
+    expect(screen.getByText("Detail TEST")).toBeInTheDocument();
+  });
+
   it.each([
     { name: "preserves an available selection", remaining: ["A", "B"], expected: "B" },
     { name: "replaces a removed selection", remaining: ["A"], expected: "A" },
