@@ -149,7 +149,7 @@ export function CommodityExplorer({ group, excludeGroup, showStats = true, listL
           <Stat label="Instruments" value={stats.instruments} accent="var(--info)" />
           <Stat label="Regions" value={stats.regions} accent="var(--sector-agriculture)" />
           <Stat label="Data sources" value={stats.data_sources} accent="var(--sector-metal)" />
-          <Stat label="Fact rows" value={stats.fact_rows} hint="chưa ingest" accent="var(--demo)" />
+          <Stat label="Fact rows" value={stats.fact_rows} accent="var(--demo)" />
         </section>
       ) : showStats ? (
         <section aria-label="Thống kê hệ thống" aria-busy={statsLoading} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
