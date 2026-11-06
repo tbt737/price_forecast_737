@@ -20,7 +20,7 @@ function parseHistory(reason?: string): { have: number; need: number } | null {
   return m ? { need: Number(m[1]), have: Number(m[2]) } : null;
 }
 
-type Row = { fc: Forecast; lastValue: number | null; currency: string | null; hist: { have: number; need: number } | null };
+type Row = { pricesLoading?: boolean; fc: Forecast; lastValue: number | null; currency: string | null; hist: { have: number; need: number } | null };
 
 function horizonChange(fc: Forecast, h: "30" | "90"): number | null {
   const ho = fc.horizons?.[h];
@@ -90,6 +90,9 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
           let currency = fc.currency ?? null;
           const hist = fc.available ? null : parseHistory(fc.reason);
           if (!fc.available && hist && hist.have > 0 && lastValue == null) {
+            // The history result is ready; optional price lookup must not hide it.
+            out[index] = { fc, lastValue, currency, hist, pricesLoading: true };
+            setRows(out.filter((row): row is Row => row !== null));
             const ps = await api.getPrices(c, 400).catch(() => null);
             if (!active) return;
             const last = ps?.points?.[ps.points.length - 1];
@@ -149,7 +152,7 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ fc, lastValue, currency, hist }) => (
+          {rows.map(({ fc, lastValue, currency, hist, pricesLoading }) => (
             <tr key={fc.commodity_code} className="border-b border-border/60 last:border-0">
               <td className="px-3 py-2">
                 <span className="font-mono text-xs font-semibold">{fc.commodity_code}</span>
@@ -159,6 +162,8 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
                   <>
                     {lastValue.toLocaleString()} <span className="text-subtle">{currency}</span>
                   </>
+                ) : pricesLoading ? (
+                  <span className="text-subtle">Đang tải giá…</span>
                 ) : (
                   <span className="text-subtle">chưa có dữ liệu</span>
                 )}
