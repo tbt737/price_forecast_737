@@ -118,7 +118,8 @@ def _select_pending(
 ) -> list[dict[str, Any]]:
     from sqlalchemy import text
 
-    filters, params = "", {"as_of": as_of}
+    filters = ""
+    params: dict[str, Any] = {"as_of": as_of}
     if commodities:
         filters += " AND commodity_code = ANY(:codes)"
         params["codes"] = commodities

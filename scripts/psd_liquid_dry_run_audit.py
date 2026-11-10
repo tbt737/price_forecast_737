@@ -147,7 +147,7 @@ def main() -> int:
                 print(f"  ... and {n_countries - 8} more countries")
 
             # unit consistency across all countries
-            all_units = Counter()
+            all_units: Counter[str] = Counter()
             for _, v in entries:
                 all_units.update(v["units"])
             expected = unit_expected.get((code, metric))

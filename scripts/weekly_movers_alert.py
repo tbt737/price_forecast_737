@@ -205,7 +205,8 @@ def apply_freshness(
         return [], list(movers), 999
     latest = max(dates)
     global_lag = trading_days_between(latest, today)
-    fresh, stale = [], []
+    fresh: list[Any] = []
+    stale: list[Any] = []
     for m in movers:
         skew = trading_days_between(date.fromisoformat(m.last_date), latest) if m.last_date else 999
         (fresh if skew <= cfg.max_asset_skew_trading_days else stale).append(m)
