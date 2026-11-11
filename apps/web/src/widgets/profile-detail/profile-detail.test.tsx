@@ -142,6 +142,24 @@ describe("progressive profile loading", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
+  it("warns when the forecast is anchored on a stale price, and stays quiet for a current one", async () => {
+    vi.mocked(api.getForecast).mockResolvedValueOnce({
+      available: true, commodity_code: "TEST", last_date: "2025-06-30", last_price: 100, data_age_days: 499, data_stale: true,
+    });
+    const { unmount } = render(<ProfileDetail code="TEST" />);
+    const warning = await screen.findByText(/Dữ liệu giá đã cũ/);
+    expect(warning).toHaveTextContent("phiên cuối 2025-06-30 (499 ngày trước)");
+    unmount();
+
+    vi.mocked(api.getForecast).mockResolvedValueOnce({
+      available: true, commodity_code: "TEST", last_date: "2026-11-10", last_price: 100, data_age_days: 1, data_stale: false,
+    });
+    render(<ProfileDetail code="TEST" />);
+    await screen.findByText("Asset TEST");
+    await waitFor(() => expect(screen.queryByText(/Đang tính dự báo/)).not.toBeInTheDocument());
+    expect(screen.queryByText(/Dữ liệu giá đã cũ/)).not.toBeInTheDocument();
+  });
+
   it("ignores a previous asset's late forecast after switching assets", async () => {
     const first = deferred<Forecast>();
     const second = deferred<Forecast>();

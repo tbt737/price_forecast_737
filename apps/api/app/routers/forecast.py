@@ -11,13 +11,16 @@ path, DB URL, or secret. Read-only — ``forecast_commodity`` never writes.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.schemas.forecast import ForecastOut, ForecastRequest
+from app.services.forecast_freshness import with_data_freshness
 
 router = APIRouter(tags=["forecast"])
 
@@ -41,4 +44,8 @@ def run_forecast(req: ForecastRequest, db: Session = Depends(get_db)) -> dict[st
     if not result.get("available", False):
         reason = str(result.get("reason", "not available"))
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Forecast not available for '{code}': {reason}")
-    return result
+    return with_data_freshness(
+        result,
+        today=datetime.now(UTC).date(),
+        stale_after_days=get_settings().forecast_stale_after_days,
+    )

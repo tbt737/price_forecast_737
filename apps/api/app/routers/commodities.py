@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.config import get_settings
 from app.core.security import require_internal_key
 from app.core.single_flight import KeyedSingleFlight
 from app.db.session import get_db
@@ -40,6 +41,7 @@ from app.schemas.commodity import (
     StatsOut,
 )
 from app.schemas.forecast import ForecastOut
+from app.services.forecast_freshness import with_data_freshness
 
 router = APIRouter(tags=["commodities"])
 logger = logging.getLogger(__name__)
@@ -189,11 +191,19 @@ def get_commodity_forecast(commodity_code: str, db: Session = Depends(get_db)) -
     """Ridge/XGBoost (+cycle) price forecast for 30 & 90 trading days, each with an
     ~80% band and an honest walk-forward backtest (MAPE vs naive). Falls back to a
     flat naive line per-horizon where no model beats naive out-of-sample. Cached per
-    commodity until its price data changes. ``available: false`` with too little history."""
+    commodity until its price data changes. ``available: false`` with too little history.
+    ``data_age_days`` / ``data_stale`` report how old the anchor price is right now."""
     # Authentication remains a route dependency. Recheck both cache and revision
     # inside the per-code lock so followers can reuse the leader's computation.
     with _FORECAST_FLIGHTS.hold(commodity_code.upper()):
-        return _get_commodity_forecast(commodity_code, db)
+        result = _get_commodity_forecast(commodity_code, db)
+    # Annotated per response, outside the cache: the anchor ages daily even when the
+    # data (and therefore the cached forecast) has not changed.
+    return with_data_freshness(
+        result,
+        today=datetime.now(UTC).date(),
+        stale_after_days=get_settings().forecast_stale_after_days,
+    )
 
 
 def _get_commodity_forecast(commodity_code: str, db: Session) -> dict[str, Any]:

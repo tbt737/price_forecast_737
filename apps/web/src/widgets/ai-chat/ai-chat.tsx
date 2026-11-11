@@ -5,6 +5,7 @@ import { api, type Commodity } from "@/shared/api";
 import { cn } from "@/shared/lib/cn";
 import { Card, CardBody, CardHeader } from "@/shared/ui";
 import { defaultModel, PROVIDERS, type ChatMessage, type Provider } from "@/widgets/ai-chat/providers";
+import { staleDataNote } from "@/widgets/ai-chat/stale-note";
 import { LS, loadLS as load, saveLS as save } from "@/widgets/ai-chat/storage";
 
 const BASE_SYSTEM =
@@ -20,6 +21,9 @@ async function buildContext(code: string | null, name: string | null): Promise<s
     const d = (await res.json()) as {
       currency?: string;
       last_price?: number;
+      last_date?: string;
+      data_age_days?: number | null;
+      data_stale?: boolean | null;
       horizons?: Record<string, { model_used?: string; points?: { value?: number }[]; backtest?: { mape_pct?: number; naive_mape_pct?: number } }>;
     };
     if (!d.horizons) return "";
@@ -31,7 +35,8 @@ async function buildContext(code: string | null, name: string | null): Promise<s
     return (
       `Số liệu MÔ HÌNH ĐỊNH LƯỢNG cho ${name ?? code} (${code}): giá cuối ${d.last_price ?? "?"} ${d.currency ?? ""}. ` +
       parts.join("; ") +
-      ". Hãy dựa trên các số này khi phân tích."
+      ". Hãy dựa trên các số này khi phân tích." +
+      staleDataNote(d)
     );
   } catch {
     return "";

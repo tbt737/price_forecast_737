@@ -181,6 +181,12 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
                 ) : (
                   <span className="text-subtle">chưa có dữ liệu</span>
                 )}
+                {fc.available && fc.data_stale ? (
+                  <span className="block text-[10px] font-sans text-neg">
+                    dữ liệu cũ · {fc.last_date ?? "—"}
+                    {fc.data_age_days != null ? ` (${fc.data_age_days} ngày)` : ""}
+                  </span>
+                ) : null}
               </td>
               {fc.available ? (
                 <>
@@ -205,7 +211,7 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
       </table>
       <p className="mt-2 px-3 text-[11px] leading-snug text-subtle">
         ▲/▼ = hướng dự báo điểm cuối so với giá hiện tại · nhãn = model thắng backtest (✓ = vượt naive). Dự báo dùng
-        dữ liệu thật, không phải lời khuyên đầu tư.
+        dữ liệu thật, không phải lời khuyên đầu tư. “dữ liệu cũ” = chuỗi giá đã ngừng cập nhật, dự báo neo trên mức giá cũ.
       </p>
     </div>
   );

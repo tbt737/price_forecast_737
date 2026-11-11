@@ -339,6 +339,13 @@ export function ProfileDetail({ code }: { code: string }) {
           ) : forecast && !forecast.available ? (
             <p role="status" className="mt-2 text-xs text-muted">Chưa có dự báo: {forecast.reason || "Chưa đủ dữ liệu"}</p>
           ) : null}
+          {forecast?.available && forecast.data_stale ? (
+            <p role="status" className="mt-2 rounded-r-card border-l-2 border-neg bg-surface px-3 py-2 text-xs text-text">
+              Dữ liệu giá đã cũ: phiên cuối {forecast.last_date ?? "—"}
+              {forecast.data_age_days != null ? ` (${forecast.data_age_days} ngày trước)` : ""}. Dự báo neo trên mức giá
+              này nên không phản ánh thị trường hiện tại.
+            </p>
+          ) : null}
           {overlay && fc30 ? (
             <p className="mt-1 text-[11px] leading-snug text-subtle">
               <span style={{ color: "var(--brand)" }}>┄┄</span> Dự báo 30 phiên (

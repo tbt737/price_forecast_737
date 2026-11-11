@@ -93,5 +93,9 @@ export interface Forecast {
   model?: string;
   last_date?: string;
   last_price?: number;
+  /** Calendar days between `last_date` and the moment the API answered. */
+  data_age_days?: number | null;
+  /** True when the anchor price is older than the platform staleness threshold. */
+  data_stale?: boolean | null;
   horizons?: Record<string, HorizonForecast>;
 }

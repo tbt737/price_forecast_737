@@ -63,6 +63,10 @@ class ForecastOut(BaseModel):
     history_points: int | None = None
     last_date: str | None = None
     last_price: float | None = None
+    # Age of the anchor price at response time (calendar days) and whether it exceeds
+    # the platform staleness threshold — see app.services.forecast_freshness.
+    data_age_days: int | None = None
+    data_stale: bool | None = None
     horizons: dict[str, HorizonForecastOut] | None = None
     # POST /forecast may attach a flat points list for the requested horizon
     points: list[dict[str, Any]] | None = None

@@ -81,6 +81,15 @@ describe("progressive forecast comparison", () => {
     expect(api.getPrices).not.toHaveBeenCalled();
   });
 
+  it("marks a forecast anchored on a stale price and leaves a current one unmarked", async () => {
+    vi.mocked(api.getForecast).mockImplementation(async (code) => code === "OLD"
+      ? { ...forecast(code), last_date: "2025-06-30", data_age_days: 499, data_stale: true }
+      : { ...forecast(code), last_date: "2026-11-10", data_age_days: 1, data_stale: false });
+    render(<ForecastCompare codes={["OLD", "NEW"]} />);
+    expect(await screen.findByText(/dữ liệu cũ · 2025-06-30 \(499 ngày\)/)).toBeInTheDocument();
+    expect(screen.getAllByText(/dữ liệu cũ ·/)).toHaveLength(1);
+  });
+
   it("limits work to two, displays a fast result before a slow one, and keeps selection order", async () => {
     const tasks = [deferred<Forecast>(), deferred<Forecast>(), deferred<Forecast>()];
     vi.mocked(api.getForecast).mockImplementation((code) => tasks[["A", "B", "C"].indexOf(code)].promise);

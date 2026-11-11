@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     # the key on both services BEFORE deploying (SEC-2B).
     internal_api_key: str | None = Field(default=None, alias="INTERNAL_API_KEY")
 
+    # A forecast whose anchor (latest stored price) is older than this many CALENDAR
+    # days is flagged ``data_stale`` in the response. Generic platform threshold: wide
+    # enough for a long exchange holiday, far below a feed that has actually stopped.
+    forecast_stale_after_days: int = Field(default=10, ge=1, alias="FORECAST_STALE_AFTER_DAYS")
+
     profiles_dir: Path = DEFAULT_PROFILES_DIR
 
     def resolved_database_url(self, default: str | None = None) -> str:
