@@ -288,6 +288,25 @@ def test_truncated_reload_is_refused(session: Session) -> None:
     assert _series(session) == pytest.approx(BASIS_A)
 
 
+def test_reload_missing_one_stored_date_is_refused(session: Session) -> None:
+    # A restated reload that reproduces all but ONE stored date (an interior hole, well
+    # outside the anchor window) must not become canonical: under the single-basis read
+    # rule that date would vanish from every read path while the run still exits green.
+    _seed_initial(session, BASIS_A)
+    hole = sorted(BASIS_A)[3]
+    restated = {d: round(v * 0.85, 4) for d, v in BASIS_A.items() if d != hole}
+    assert len(restated) / len(BASIS_A) > 0.9  # the old 90% threshold let this through
+
+    report = reconcile_stock_history(
+        session, [_spec()], today=TODAY, fetch=_fetch_for(restated), dry_run=False
+    )
+    item = report["instruments"][0]
+    assert item["status"] == "error" and not report["ok"]
+    assert any("coverage" in w for w in item["warnings"])
+    assert {r[2] for r in _all_rows(session)} == {0}  # nothing written
+    assert _series(session) == pytest.approx(BASIS_A)  # the hole is still served
+
+
 def test_duplicate_grain_inside_reload_aborts_whole_instrument(session: Session) -> None:
     _seed_initial(session, BASIS_A)
     restated = {d: round(v * 0.85, 4) for d, v in BASIS_A.items()}
@@ -408,5 +427,5 @@ def test_reconcile_config_loads_from_sources_yaml() -> None:
     rc = cfg.vn_stocks_reconcile
     assert isinstance(rc, StockReconcileConfig)
     assert rc.epsilon_pct == 0.5 and rc.anchor_days == 5
-    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 0.9
+    assert rc.jump_alert_pct == 15.0 and rc.min_reload_coverage == 1.0
     assert rc.deep_from == "2000-01-01"
