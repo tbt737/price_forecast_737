@@ -28,6 +28,9 @@ never go down; locked invariants never weaken.
 > The profile count is pinned by `tests/quality/test_profiles_quality.py`; PEPPER_VN and
 > DIESEL_VN joined after the 2026-07-11 snapshot that this line used to carry.
 
+> Re-measured 2026-11-11 (AUDIT-2): **pytest 637 + 1 skipped · vitest 79** · ruff 0 · mypy 0 ·
+> profiles/instruments unchanged (52 / 100).
+
 > ⚠️ Companion docs: `README.md` / `ARCHITECTURE.md` / `DEPLOY.md` were refreshed in the
 > RESTATE-1 hardening pack (2026-07-11) for profile counts, SEC-2 smoke, and live status.
 > **This file remains authoritative** for unlock criteria and approval gates — in particular,

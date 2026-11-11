@@ -4,6 +4,40 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-11-11 AUDIT-2 — AUDIT_2_PASS (scheduled autonomous review; pushed to `claude/sharp-hopper-fjgv27`, no PR)
+Baseline at start (master `bd1a819`): pytest 620+1skip · vitest 75 · ruff 0 · mypy 0. No DB, no
+network writes, no deploy; smoke = real uvicorn against a throwaway SQLite file.
+**Shipped — 5 commits, each pinned by a test:** (1) restatement `min_reload_coverage` 0.9 → **1.0**
+(default + sources.yaml + docs) — closes the AUDIT-1B "CONFIRMED HIGH" item; new test drops ONE
+interior stored date (94% coverage, accepted before). The reconcile step is flag-gated and
+continue-on-error, so this cannot redden the daily ingest. (2) `check_freshness.py` took
+`max(price_date)` over a whole group, so one frozen feed hid behind any fresh peer — it now reads
+per-commodity dates and prints a `LAGGING` line; group verdict/exit code deliberately unchanged.
+(3) Forecast responses carry `data_age_days` + `data_stale` (`app/services/forecast_freshness.py`,
+setting `FORECAST_STALE_AFTER_DAYS`, default 10) — annotated per response OUTSIDE the forecast
+cache; web shows it on the profile chart + comparison table and the AI-chat context warns the
+model. Smoke: a series ending 2025-06-30 returned `data_age_days: 499, data_stale: true` with its
+first "forecast" point dated 2025-07-01. (4) `npm audit fix` (no force) + postcss 8.5.1→8.5.32:
+next 15.5.29, sharp, source-map-js; prod audit 4 → 1 (postcss vendored inside next, needs Next 16).
+`pip-audit -r requirements.txt` clean. (5) predictor drops non-finite prices (`+inf > 0` is True).
+**Gates:** pytest **637+1skip** · vitest **79** · ruff 0 · mypy 0 (30+34) · workflows 5/5 · tsc/eslint/
+next build clean.
+**Still open, ranked (nothing below was changed):** (a) the 8 produce/CSV commodities (ROBUSTA,
+CHINESE_GARLIC, DEHYDRATED_GARLIC, DEHYDRATED_ONION, INDIAN_CHILIES, RED_ONION_CHINA,
+RED_ONION_INDIA, PEANUTS) have NO recurring ingest and are in no freshness group — they are
+one-off Kaggle/Agmarknet imports; the new flag makes that visible but only a live source fixes it.
+(b) Horizon is in ROWS, labels are BUSINESS DAYS: models and backtests step `h` rows ahead while
+`_next_business_days` and the forecast-log `target_date` assume one row per business day — wrong
+for any series that is not ~252 rows/year (7-day mandi data, sparse series); the evaluator then
+scores the forecast against the wrong date. Needs an owner decision on semantics. (c)
+`write_forecast_log.APPROVED_COMMODITIES` is a hardcoded commodity list in code (belongs in
+config) and re-forecasts the stale series daily for no new rows. (d) `/ai/chat` limiter keys on
+client-controlled X-Forwarded-For (needs trusted-proxy hop count). (e) cash-flow harvest lag
+off-by-one (dormant). (f) requirements are lower-bound only — no lockfile, builds not reproducible.
+**Rules distilled:** (1) Time-dependent annotations (age, staleness) must be computed at response
+time, never stored in a data-fingerprint cache. (2) A group-level max is not a freshness check for
+its members. (3) In this container `python` is 3.11 without dev tools — gates run with `python3.13`.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
