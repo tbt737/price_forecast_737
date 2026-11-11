@@ -75,6 +75,11 @@ def _naive_interval(
     return point, point * np.exp(-band), point * np.exp(band)
 
 
+def _usable_price(value: float) -> bool:
+    """Strictly positive AND finite — the series is log-transformed, and ``+inf > 0``."""
+    return bool(np.isfinite(value)) and value > 0
+
+
 def _business_days_ahead(start: date, n: int) -> date:
     return _next_business_days(start, n)[-1]
 
@@ -163,7 +168,7 @@ class CommodityPricePredictor:
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
         df = df.dropna(subset=["date", "value"]).sort_values("date")
-        clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if v > 0]
+        clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if _usable_price(v)]
         dates = [c[0] for c in clean]
         values = [c[1] for c in clean]
         code = (commodity_code or "UNKNOWN").upper()
@@ -217,7 +222,7 @@ class CommodityPricePredictor:
             "currency": instrument.currency if instrument else None,
             "model": "ridge_ar",
         }
-        clean = [(d, v) for d, v in zip(dates, values, strict=True) if v > 0]
+        clean = [(d, v) for d, v in zip(dates, values, strict=True) if _usable_price(v)]
         dates = [c[0] for c in clean]
         values = [c[1] for c in clean]
         if len(values) < self.min_history:

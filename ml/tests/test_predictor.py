@@ -138,3 +138,18 @@ def test_forecast_commodity_delegates_to_predictor(monkeypatch: pytest.MonkeyPat
     out = forecast_commodity(object(), "gold", horizons=(30,), enable_ou=False)
     assert out["commodity_code"] == "DELEGATED"
     assert calls == ["fit:gold", "forecast"]
+
+
+def test_non_finite_prices_are_dropped_before_the_log_transform() -> None:
+    # +inf passes a bare ``> 0`` check and log(inf) poisons every fitted statistic; the
+    # ETL choke point rejects it, but the in-memory ``fit`` path takes arbitrary frames.
+    df = _synthetic_price_df(n=320, seed=7)
+    clean = CommodityPricePredictor(horizons=(30,), enable_gbm=False).fit(
+        df.drop(index=[40]).reset_index(drop=True), commodity_code="SYNTH"
+    ).forecast()
+    dirty_df = df.copy()
+    dirty_df.loc[40, "value"] = np.inf
+    dirty = CommodityPricePredictor(horizons=(30,), enable_gbm=False).fit(dirty_df, commodity_code="SYNTH").forecast()
+    assert dirty["available"] is True
+    assert dirty["history_points"] == 319
+    assert dirty == clean  # identical to never having had the row at all
