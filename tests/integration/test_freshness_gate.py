@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-from check_freshness import classify, is_within_gap, select_groups  # noqa: E402
+from check_freshness import classify, is_within_gap, lagging_members, select_groups  # noqa: E402
 
 from etl.ingestion.config import FreshnessGroup, load_freshness_groups  # noqa: E402
 
@@ -86,3 +86,59 @@ def test_classify_fresh_is_ok_even_strict() -> None:
     today = date(2026, 7, 4)
     assert classify(_VN, date(2026, 7, 3), today, strict=True) == "ok"
     assert classify(_FUT, date(2026, 7, 3), today, strict=True) == "ok"
+
+
+def test_lagging_members_names_a_frozen_feed_hidden_by_a_fresh_peer() -> None:
+    # One member keeps advancing, so the group max is fresh and the group verdict is OK —
+    # the frozen and never-ingested members must still be named.
+    today = date(2026, 6, 30)
+    by_code = {"GOLD": date(2026, 6, 29), "COCOA": date(2026, 5, 29), "RICE": None}
+    assert lagging_members(by_code, today, 3) == [("COCOA", date(2026, 5, 29)), ("RICE", None)]
+
+
+def test_lagging_members_empty_when_every_member_is_fresh() -> None:
+    today = date(2026, 6, 30)
+    by_code = {"GOLD": date(2026, 6, 29), "COCOA": date(2026, 6, 27)}
+    assert lagging_members(by_code, today, 3) == []
+
+
+class _StubSession:
+    """Answers the per-commodity latest-date query from a dict (no DB)."""
+
+    def __init__(self, latest: dict[str, date]) -> None:
+        self._latest = latest
+
+    def execute(self, _stmt, params):  # noqa: ANN001, ANN201
+        codes = params["codes"]
+        rows = [(c, self._latest[c]) for c in codes if c in self._latest]
+        return type("_Result", (), {"all": lambda self: rows})()
+
+    def close(self) -> None:
+        pass
+
+
+def _run_main(monkeypatch, capsys, latest: dict[str, date], groups: list[FreshnessGroup]):  # noqa: ANN001, ANN202
+    import app.db.session as db_session
+    import check_freshness
+
+    import etl.ingestion.config as ingestion_config
+
+    monkeypatch.setattr(ingestion_config, "load_freshness_groups", lambda: groups)
+    monkeypatch.setattr(db_session, "get_session_factory", lambda: lambda: _StubSession(latest))
+    code = check_freshness.main([])
+    return code, capsys.readouterr()
+
+
+def test_main_reports_lagging_member_without_changing_group_verdict(monkeypatch, capsys) -> None:  # noqa: ANN001
+    today = date.today()
+    # CRUDE_OIL has no rows at all; GOLD is current ⇒ group OK (exit 0) but laggard named.
+    code, out = _run_main(monkeypatch, capsys, {"GOLD": today}, [_FUT])
+    assert code == 0
+    assert "OK — futures" in out.out
+    assert "LAGGING — futures: 1/2" in out.err and "CRUDE_OIL (latest no data)" in out.err
+
+
+def test_main_still_fails_when_whole_critical_group_is_stale(monkeypatch, capsys) -> None:  # noqa: ANN001
+    code, out = _run_main(monkeypatch, capsys, {}, [_FUT])
+    assert code == 1
+    assert "STALE — futures" in out.err and "LAGGING" not in out.err

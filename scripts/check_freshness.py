@@ -2,7 +2,9 @@
 
 Reads ``monitoring.groups`` from ``configs/ingestion/sources.yaml`` (no hardcoded ticker
 list). A group is STALE when its latest price date is older than ``max_gap_days`` calendar
-days. **Critical** groups (liquid futures) fail the gate → exit 1, so a green CI run means
+days; a group is as fresh as its freshest member, and members whose own feed has stopped
+are listed as LAGGING (warning only — the group verdict is unchanged). **Critical** groups
+(liquid futures) fail the gate → exit 1, so a green CI run means
 market data actually advanced. **Non-critical** groups (scraped VN spot sources that can
 die silently) are surfaced as a WARNING and only fail under ``--strict`` — so a dedicated
 monitor can catch a dead PNJ/Phú Quý/VNAppMob endpoint without making the daily VN feed
@@ -61,17 +63,34 @@ def classify(group, latest: date | None, today: date, strict: bool) -> str:
     return "fail" if (group.critical or strict) else "warn"
 
 
-def _latest_date(session, commodities: list[str]) -> date | None:
+def lagging_members(
+    latest_by_code: dict[str, date | None], today: date, max_gap_days: int
+) -> list[tuple[str, date | None]]:
+    """Members whose OWN latest price date is stale (or missing), sorted by code.
+
+    The group verdict is driven by the freshest member, so one frozen feed is otherwise
+    invisible for as long as any peer in the same group keeps advancing."""
+    return sorted(
+        (code, latest)
+        for code, latest in latest_by_code.items()
+        if not is_within_gap(latest, today, max_gap_days)
+    )
+
+
+def _latest_dates(session, commodities: list[str]) -> dict[str, date | None]:
+    """Latest price date per configured commodity (None when it has no rows at all)."""
     from sqlalchemy import text
 
-    return session.execute(
+    rows = session.execute(
         text(
-            "SELECT max(f.price_date) FROM fact_price_daily f "
+            "SELECT co.commodity_code, max(f.price_date) FROM fact_price_daily f "
             "JOIN dim_commodity co ON co.commodity_key = f.commodity_key "
-            "WHERE co.commodity_code = ANY(:codes)"
+            "WHERE co.commodity_code = ANY(:codes) GROUP BY co.commodity_code"
         ),
         {"codes": list(commodities)},
-    ).scalar()
+    ).all()
+    found = {str(code): latest for code, latest in rows}
+    return {code: found.get(code) for code in commodities}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -110,7 +129,8 @@ def main(argv: list[str] | None = None) -> int:
     warned = False
     try:
         for g in groups:
-            latest = _latest_date(session, list(g.commodities))
+            by_code = _latest_dates(session, list(g.commodities))
+            latest = max((d for d in by_code.values() if d is not None), default=None)
             tag = "critical" if g.critical else "non-critical"
             verdict = classify(g, latest, today, args.strict)
             if verdict == "ok":
@@ -125,6 +145,16 @@ def main(argv: list[str] | None = None) -> int:
                     should_fail = True
                 else:
                     warned = True
+                continue
+            # Group is fresh overall — still name any member whose own feed has stopped.
+            laggards = lagging_members(by_code, today, g.max_gap_days)
+            if laggards:
+                detail = ", ".join(f"{code} (latest {d or 'no data'})" for code, d in laggards)
+                print(
+                    f"[freshness] LAGGING — {g.name}: {len(laggards)}/{len(by_code)} member(s) "
+                    f"older than {g.max_gap_days}d while the group is fresh: {detail}",
+                    file=sys.stderr,
+                )
     finally:
         session.close()
 
