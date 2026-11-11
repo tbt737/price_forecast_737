@@ -17,6 +17,42 @@ afterEach(cleanup);
 
 describe("progressive forecast comparison", () => {
 
+  it("starts queued forecasts before optional prices while keeping at most two requests active", async () => {
+    const forecasts = [deferred<Forecast>(), deferred<Forecast>(), deferred<Forecast>()];
+    const prices = [deferred<PriceSeries>(), deferred<PriceSeries>()];
+    const calls: string[] = [];
+    let active = 0;
+    let peak = 0;
+    function track<T>(label: string, promise: Promise<T>): Promise<T> {
+      calls.push(label);
+      active += 1;
+      peak = Math.max(peak, active);
+      return promise.finally(() => { active -= 1; });
+    }
+    vi.mocked(api.getForecast).mockImplementation((code) => track(`forecast:${code}`, forecasts[["A", "B", "C"].indexOf(code)].promise));
+    vi.mocked(api.getPrices).mockImplementation((code) => track(`prices:${code}`, prices[["A", "B"].indexOf(code)].promise));
+    render(<ForecastCompare codes={["A", "B", "C"]} />);
+    expect(calls).toEqual(["forecast:A", "forecast:B"]);
+    await act(async () => forecasts[0].resolve({ available: false, commodity_code: "A", reason: "need >= 252 positive prices, have 100" }));
+    expect(screen.getByText(/100\/252 phiên/)).toBeInTheDocument();
+    expect(calls).toEqual(["forecast:A", "forecast:B", "forecast:C"]);
+    await act(async () => forecasts[1].resolve({ available: false, commodity_code: "B", reason: "need >= 252 positive prices, have 101" }));
+    expect(calls).toEqual(["forecast:A", "forecast:B", "forecast:C", "prices:A"]);
+    await act(async () => forecasts[2].resolve(forecast("C")));
+    expect(screen.getByText("C")).toBeInTheDocument();
+    expect(calls.at(-1)).toBe("prices:B");
+    expect(peak).toBe(2);
+    await act(async () => {
+      prices[0].resolve({ commodity_code: "A", points: [{ date: "2026-01-01", value: 50 }] });
+      prices[1].reject(new Error("Unavailable"));
+    });
+    expect(screen.getAllByRole("row").slice(1).map((r) => r.querySelector("td")?.textContent)).toEqual(["A", "B", "C"]);
+    expect(screen.getByText("50")).toBeInTheDocument();
+    expect(screen.getByText("chưa có dữ liệu")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(active).toBe(0);
+  });
+
   it.each(["success", "failure"])("shows the history result before fallback price %s", async (outcome) => {
     const prices = deferred<PriceSeries>();
     vi.mocked(api.getForecast).mockResolvedValue({ available: false, commodity_code: "TEST", reason: "need >= 252 positive prices, have 100" });
@@ -70,26 +106,31 @@ describe("progressive forecast comparison", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Không tải được 1/2");
   });
 
-  it("stops old queued work and ignores late fallback prices after a selection change", async () => {
-    const prices = deferred<PriceSeries>();
+  it("stops queued forecasts after a selection change", async () => {
     const old = deferred<Forecast>();
-    vi.mocked(api.getForecast).mockImplementation((code) => {
-      if (code === "A") return Promise.resolve({ available: false, commodity_code: code, reason: "need >= 252 positive prices, have 100" });
-      if (code === "B") return old.promise;
-      return Promise.resolve(forecast(code));
-    });
+    vi.mocked(api.getForecast).mockImplementation((code) => code === "D" ? Promise.resolve(forecast(code)) : old.promise);
+    const { rerender } = render(<ForecastCompare codes={["A", "B", "C"]} />);
+    expect(api.getForecast).toHaveBeenCalledTimes(2);
+    rerender(<ForecastCompare codes={["D"]} />);
+    expect(await screen.findByText("D")).toBeInTheDocument();
+    await act(async () => old.resolve(forecast("A")));
+    expect(api.getForecast).not.toHaveBeenCalledWith("C");
+    expect(screen.queryByText("A")).not.toBeInTheDocument();
+  });
+
+  it("stops queued prices and ignores late prices after a selection change", async () => {
+    const prices = deferred<PriceSeries>();
+    vi.mocked(api.getForecast).mockImplementation(async (code) => code === "D" ? forecast(code) : { available: false, commodity_code: code, reason: "need >= 252 positive prices, have 100" });
     vi.mocked(api.getPrices).mockReturnValue(prices.promise);
     const { rerender } = render(<ForecastCompare codes={["A", "B", "C"]} />);
     await act(async () => {});
-    expect(api.getPrices).toHaveBeenCalled();
+    expect(api.getPrices).toHaveBeenCalledTimes(2);
     rerender(<ForecastCompare codes={["D"]} />);
     expect(await screen.findByText("D")).toBeInTheDocument();
-    await act(async () => {
-      prices.resolve({ commodity_code: "A", points: [{ date: "2026-01-01", value: 50 }] });
-      old.resolve(forecast("B"));
-    });
+    await act(async () => prices.resolve({ commodity_code: "A", points: [{ date: "2026-01-01", value: 50 }] }));
     expect(screen.queryByText("A")).not.toBeInTheDocument();
     expect(screen.queryByText("B")).not.toBeInTheDocument();
-    expect(api.getForecast).not.toHaveBeenCalledWith("C");
+    expect(screen.queryByText("C")).not.toBeInTheDocument();
+    expect(api.getPrices).not.toHaveBeenCalledWith("C", 400);
   });
 });

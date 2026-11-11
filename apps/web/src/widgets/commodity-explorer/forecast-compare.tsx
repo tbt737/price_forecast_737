@@ -79,27 +79,41 @@ export function ForecastCompare({ codes }: { codes: string[] }) {
     setDone(0);
     const out: (Row | null)[] = codes.map(() => null);
     let next = 0;
+    const priceQueue: { index: number; code: string; row: Row }[] = [];
     async function worker() {
-      while (active && next < codes.length) {
+      while (active) {
+        // Forecasts take priority over optional prices; both share the two workers.
+        if (next >= codes.length) {
+          const task = priceQueue.shift();
+          if (!task) return;
+          const ps = await api.getPrices(task.code, 400).catch(() => null);
+          if (!active) return;
+          const last = ps?.points?.[ps.points.length - 1];
+          out[task.index] = {
+            ...task.row,
+            pricesLoading: false,
+            lastValue: last?.value ?? task.row.lastValue,
+            currency: last ? ps?.currency ?? task.row.currency : task.row.currency,
+          };
+          setDone((n) => n + 1);
+          setRows(out.filter((row): row is Row => row !== null));
+          continue;
+        }
         const index = next++;
         const c = codes[index];
         const fc = await api.getForecast(c).catch(() => null);
         if (!active) return;
         if (fc) {
-          let lastValue = fc.last_price ?? null;
-          let currency = fc.currency ?? null;
+          const lastValue = fc.last_price ?? null;
+          const currency = fc.currency ?? null;
           const hist = fc.available ? null : parseHistory(fc.reason);
           if (!fc.available && hist && hist.have > 0 && lastValue == null) {
             // The history result is ready; optional price lookup must not hide it.
-            out[index] = { fc, lastValue, currency, hist, pricesLoading: true };
+            const row = { fc, lastValue, currency, hist, pricesLoading: true };
+            out[index] = row;
             setRows(out.filter((row): row is Row => row !== null));
-            const ps = await api.getPrices(c, 400).catch(() => null);
-            if (!active) return;
-            const last = ps?.points?.[ps.points.length - 1];
-            if (last) {
-              lastValue = last.value;
-              currency = ps?.currency ?? currency;
-            }
+            priceQueue.push({ index, code: c, row });
+            continue;
           }
           out[index] = { fc, lastValue, currency, hist };
         }
