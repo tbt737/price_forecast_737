@@ -150,6 +150,7 @@ type State = { s: "loading" } | { s: "error"; m: string } | { s: "ready"; d: Dat
 
 export function ProfileDetail({ code }: { code: string }) {
   const [state, setState] = useState<State>({ s: "loading" });
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const priceRetry = useRef<symbol | null>(null);
 
   async function retryPrices() {
@@ -231,7 +232,7 @@ export function ProfileDetail({ code }: { code: string }) {
       active = false;
       priceRetry.current = null;
     };
-  }, [code]);
+  }, [code, loadAttempt]);
 
   if (state.s === "loading") {
     return (
@@ -248,7 +249,14 @@ export function ProfileDetail({ code }: { code: string }) {
     );
   }
   if (state.s === "error") {
-    return <p className="text-sm text-neg">Lỗi tải {code}: {state.m}</p>;
+    return (
+      <div role="alert" className="space-y-3 text-sm">
+        <p className="text-neg">Lỗi tải {code}: {state.m}</p>
+        <button type="button" onClick={() => setLoadAttempt((attempt) => attempt + 1)} className="min-h-11 rounded border border-border px-3 text-text hover:bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-info">
+          Thử tải lại chi tiết
+        </button>
+      </div>
+    );
   }
 
   const { commodity, profile: prof, prices, pricesLoading, pricesError, forecast, forecastError, forecastLoading } = state.d;
