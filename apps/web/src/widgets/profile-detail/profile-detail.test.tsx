@@ -30,6 +30,35 @@ afterEach(cleanup);
 
 describe("progressive profile loading", () => {
 
+  it.each(["commodity", "profile"])("can retry failed %s metadata and recover the detail", async (failed) => {
+    const method = failed === "commodity" ? api.getCommodity : api.getProfile;
+    vi.mocked(method).mockRejectedValueOnce(new Error("Temporary metadata failure"));
+    vi.mocked(api.getForecast).mockResolvedValue({ available: false, commodity_code: "TEST" });
+    render(<ProfileDetail code="TEST" />);
+    expect(await screen.findByText(/Lỗi tải TEST: Temporary metadata failure/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Thử tải lại chi tiết" }));
+    expect(await screen.findByText("Asset TEST")).toBeInTheDocument();
+    expect(screen.queryByText(/Lỗi tải TEST/)).not.toBeInTheDocument();
+    expect(api.getCommodity).toHaveBeenCalledTimes(2);
+    expect(api.getProfile).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores late retry metadata after switching to another asset", async () => {
+    const old = deferred<Awaited<ReturnType<typeof api.getCommodity>>>();
+    vi.mocked(api.getCommodity).mockRejectedValueOnce(new Error("Temporary metadata failure")).mockReturnValueOnce(old.promise);
+    vi.mocked(api.getForecast).mockImplementation(async (code) => ({ available: false, commodity_code: code }));
+    const { rerender } = render(<ProfileDetail code="A" />);
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Thử tải lại chi tiết" }));
+    expect(api.getCommodity).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("button", { name: "Thử tải lại chi tiết" })).not.toBeInTheDocument();
+    rerender(<ProfileDetail code="B" />);
+    expect(await screen.findByText("Asset B")).toBeInTheDocument();
+    await act(async () => old.resolve({ commodity_code: "A", commodity_name: "Old retry result", commodity_group: "agriculture", base_unit: "kg", default_currency: "USD", instruments: [] }));
+    expect(screen.getByText("Asset B")).toBeInTheDocument();
+    expect(screen.queryByText("Old retry result")).not.toBeInTheDocument();
+  });
+
   it.each(["commodity", "profile"])("reports a failed %s without waiting for the other metadata request", async (failed) => {
     const pending = deferred<never>();
     if (failed === "commodity") {
