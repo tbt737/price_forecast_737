@@ -42,6 +42,23 @@ def test_strict_insufficient_history_raises() -> None:
         CommodityPricePredictor(min_history=MIN_HISTORY, strict=True, enable_gbm=False).fit(df)
 
 
+def test_non_finite_prices_are_dropped_like_non_positive_ones() -> None:
+    """An ``inf`` price (e.g. a scraped "inf" string) must be filtered, not crash fitting."""
+    clean = _synthetic_price_df()
+    dirty = clean.astype({"value": object})
+    dirty.loc[100, "value"] = "inf"
+    dirty.loc[150, "value"] = float("-inf")
+    dirty.loc[200, "value"] = float("nan")
+    expected = clean.drop(index=[100, 150, 200]).reset_index(drop=True)
+
+    got = CommodityPricePredictor().fit(dirty, commodity_code="DEMO").forecast()
+    want = CommodityPricePredictor().fit(expected, commodity_code="DEMO").forecast()
+
+    assert got["available"] is True
+    assert np.isfinite(got["last_price"])
+    assert got == want
+
+
 def test_forecast_deterministic_and_contract_shape() -> None:
     df = _synthetic_price_df(n=320, seed=11)
     a = CommodityPricePredictor(horizons=(30,), enable_gbm=False, enable_ou=True).fit(

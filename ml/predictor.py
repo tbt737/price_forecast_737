@@ -56,6 +56,16 @@ logger = logging.getLogger(__name__)
 ARTIFACT_VERSION = "cpp-v1"
 
 
+def _usable_price(value: float) -> bool:
+    """A price can enter log-space modelling only if it is finite and strictly positive.
+
+    ``v > 0`` alone lets ``+inf`` through (e.g. a scraped "inf" coerced by
+    ``pd.to_numeric`` or a PostgreSQL ``'Infinity'``), which poisons ``np.log`` and
+    crashes the XGBoost candidates instead of being dropped like any other bad row.
+    """
+    return bool(np.isfinite(value)) and value > 0
+
+
 def _next_business_days(last: date, count: int) -> list[date]:
     out: list[date] = []
     cursor = last
@@ -163,7 +173,7 @@ class CommodityPricePredictor:
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
         df = df.dropna(subset=["date", "value"]).sort_values("date")
-        clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if v > 0]
+        clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if _usable_price(v)]
         dates = [c[0] for c in clean]
         values = [c[1] for c in clean]
         code = (commodity_code or "UNKNOWN").upper()
@@ -217,7 +227,7 @@ class CommodityPricePredictor:
             "currency": instrument.currency if instrument else None,
             "model": "ridge_ar",
         }
-        clean = [(d, v) for d, v in zip(dates, values, strict=True) if v > 0]
+        clean = [(d, v) for d, v in zip(dates, values, strict=True) if _usable_price(v)]
         dates = [c[0] for c in clean]
         values = [c[1] for c in clean]
         if len(values) < self.min_history:
