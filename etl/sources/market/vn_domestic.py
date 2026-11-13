@@ -29,6 +29,13 @@ from etl.sources.base import BaseSource
 #: fetch(url) -> raw response body (text)
 VnFetch = Callable[[str], str]
 
+#: Per-endpoint fail-soft set. Beyond network (OSError) and decode (ValueError, which
+#: covers JSONDecodeError) failures, a feed that answers with VALID JSON of the wrong
+#: SHAPE — ``[]``, ``null``, a list where an object is expected (CDN/WAF error stubs do
+#: this) — raises AttributeError/TypeError inside a parser's ``.get``. Without these the
+#: whole connector, and the ingest batch with it, crashes on one bad endpoint.
+_SOFT_ERRORS: tuple[type[Exception], ...] = (OSError, ValueError, KeyError, TypeError, AttributeError)
+
 
 def _http_fetch(url: str) -> str:
     import urllib.request
@@ -169,7 +176,7 @@ class VnDomesticPriceSource(BaseSource):
                 continue
             try:
                 price = parser(self._fetch(spec.url), spec.product_key)
-            except (OSError, ValueError, KeyError, json.JSONDecodeError):
+            except _SOFT_ERRORS:
                 price = None  # network/parse failure is fail-soft per endpoint
             # `json.loads` accepts bare NaN/Infinity tokens, and neither compares
             # `<= 0` — a garbled feed row would otherwise reach fact_price_daily and
@@ -310,7 +317,7 @@ class VnAppMobGoldSource(BaseSource):
                 continue
             try:
                 key = self._mint(spec.key_url)
-            except (OSError, ValueError, KeyError, json.JSONDecodeError):
+            except _SOFT_ERRORS:
                 continue  # no key ⇒ skip this source, never crash the run
             if not key:
                 continue
@@ -318,7 +325,7 @@ class VnAppMobGoldSource(BaseSource):
             for lo, hi in _day_chunks(self._from, self._to, spec.chunk_days):
                 try:
                     rows = parser(self._fetch(spec.data_url, key, lo, hi), spec.field, spec.buy_field)
-                except (OSError, ValueError, KeyError, json.JSONDecodeError):
+                except _SOFT_ERRORS:
                     continue  # fail soft per chunk
                 for row in rows:
                     obs: date = row["date"]
