@@ -138,3 +138,36 @@ def test_forecast_commodity_delegates_to_predictor(monkeypatch: pytest.MonkeyPat
     out = forecast_commodity(object(), "gold", horizons=(30,), enable_ou=False)
     assert out["commodity_code"] == "DELEGATED"
     assert calls == ["fit:gold", "forecast"]
+
+
+def test_non_finite_prices_are_dropped_not_propagated() -> None:
+    """+inf passes a bare ``v > 0`` filter; it must be dropped before log/returns, or the
+    payload is 'available' with NaN interval bands (not JSON-serializable)."""
+    import json
+
+    df = _synthetic_price_df(n=320, seed=5)
+    df.loc[150, "value"] = np.inf
+    df.loc[151, "value"] = -np.inf
+    result = (
+        CommodityPricePredictor(horizons=(30,), enable_gbm=False, enable_ou=False)
+        .fit(df, commodity_code="INF")
+        .forecast()
+    )
+    assert result["available"] is True
+    assert result["history_points"] == 318
+    for p in result["horizons"]["30"]["points"]:
+        assert all(np.isfinite([p["value"], p["lower"], p["upper"]]))
+    json.dumps(result, allow_nan=False)  # strict JSON — raises on NaN/inf
+
+
+def test_duplicate_dates_collapse_to_last_value() -> None:
+    df = _synthetic_price_df(n=320, seed=6)
+    dup = df.tail(3).copy()
+    dup["value"] = dup["value"] * 1.5  # a later, conflicting export of the same dates
+    result = (
+        CommodityPricePredictor(horizons=(30,), enable_gbm=False, enable_ou=False)
+        .fit(pd.concat([df, dup], ignore_index=True), commodity_code="DUP")
+        .forecast()
+    )
+    assert result["history_points"] == 320
+    assert result["last_price"] == round(float(dup["value"].iloc[-1]), 4)

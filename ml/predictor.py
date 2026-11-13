@@ -16,6 +16,7 @@ spec ``docs/deep-research-report-baotoandongtien.md``):
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Iterable
 from datetime import date, timedelta
 from pathlib import Path
@@ -73,6 +74,30 @@ def _naive_interval(
     s = np.arange(1, steps + 1)
     band = z * ret_sigma * np.sqrt(s)
     return point, point * np.exp(-band), point * np.exp(band)
+
+
+def _clean_price_series(dates: Iterable[date], values: Iterable[float]) -> tuple[list[date], list[float]]:
+    """Usable ``(dates, values)`` for fitting: strictly positive, FINITE prices, one per date.
+
+    ``v > 0`` alone lets ``+inf`` through (it compares greater than zero), which turns
+    ``ret_sigma`` into NaN and yields an ``available`` payload with NaN interval bands —
+    not JSON-serializable and silently empty of candidates. Duplicate dates (a caller frame
+    with overlapping exports) would otherwise sit side by side and fabricate zero/huge
+    returns; the LAST row per date wins, deterministically, after a stable date sort.
+    """
+    by_date: dict[date, float] = {}
+    duplicates = 0
+    for d, v in zip(dates, values, strict=True):
+        fv = float(v)
+        if not (math.isfinite(fv) and fv > 0):
+            continue
+        if d in by_date:
+            duplicates += 1
+        by_date[d] = fv
+    if duplicates:
+        logger.warning("price series had %d duplicate date row(s); kept the last value per date", duplicates)
+    ordered = sorted(by_date)
+    return ordered, [by_date[d] for d in ordered]
 
 
 def _business_days_ahead(start: date, n: int) -> date:
@@ -162,10 +187,8 @@ class CommodityPricePredictor:
             raise InvalidSeriesError("price_df requires date and value (or price) columns")
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
-        df = df.dropna(subset=["date", "value"]).sort_values("date")
-        clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if v > 0]
-        dates = [c[0] for c in clean]
-        values = [c[1] for c in clean]
+        df = df.dropna(subset=["date", "value"]).sort_values("date", kind="mergesort")
+        dates, values = _clean_price_series(df["date"], df["value"])
         code = (commodity_code or "UNKNOWN").upper()
         base = {
             "commodity_code": code,
@@ -217,9 +240,7 @@ class CommodityPricePredictor:
             "currency": instrument.currency if instrument else None,
             "model": "ridge_ar",
         }
-        clean = [(d, v) for d, v in zip(dates, values, strict=True) if v > 0]
-        dates = [c[0] for c in clean]
-        values = [c[1] for c in clean]
+        dates, values = _clean_price_series(dates, values)
         if len(values) < self.min_history:
             payload = {
                 **base,
