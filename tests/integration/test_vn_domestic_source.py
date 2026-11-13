@@ -301,3 +301,27 @@ def test_vnappmob_fail_closed_on_bad_key() -> None:
     recs = list(VnAppMobGoldSource([_vnappmob_spec()], date_from=1, date_to=2,
                                    fetch=lambda du, k, a, b: VNAPPMOB_JSON, mint_key=boom_key).collect())
     assert recs == []  # no key ⇒ skip, no crash
+
+
+# ── fail-soft on valid JSON of the wrong shape (CDN/WAF error stubs) ─────────
+_WRONG_SHAPES = ("[]", "null", '{"data":[1]}', '{"Objects":"x"}', '"maintenance"')
+
+
+def test_collect_is_fail_soft_on_wrong_json_shape() -> None:
+    fuel = VnPriceSpec("DIESEL_VN", "PLX_DO", "PETROLIMEX", "petrolimex_json", FUEL_URL, "DO", "VND", 0)
+    for raw in _WRONG_SHAPES:
+        # One bad endpoint must not crash the run — the healthy silver endpoint still lands.
+        def fetch(url: str, raw: str = raw) -> str:
+            return PHUQUY_HTML if url == SILVER_URL else raw
+
+        recs = list(VnDomesticPriceSource([*_specs(), fuel], today=TODAY, fetch=fetch).collect())
+        assert [r.instrument_code for r in recs] == ["PQ_BAC_MIENG999"], raw
+
+
+def test_vnappmob_collect_is_fail_soft_on_wrong_json_shape() -> None:
+    for raw in _WRONG_SHAPES:
+        recs = list(
+            VnAppMobGoldSource([_vnappmob_spec()], date_from=1, date_to=2,
+                               fetch=lambda du, k, a, b, raw=raw: raw, mint_key=lambda url: _TOKEN).collect()
+        )
+        assert recs == [], raw
