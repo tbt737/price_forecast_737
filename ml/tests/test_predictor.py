@@ -138,3 +138,30 @@ def test_forecast_commodity_delegates_to_predictor(monkeypatch: pytest.MonkeyPat
     out = forecast_commodity(object(), "gold", horizons=(30,), enable_ou=False)
     assert out["commodity_code"] == "DELEGATED"
     assert calls == ["fit:gold", "forecast"]
+
+
+def test_fit_dedupes_duplicate_dates_keeping_last() -> None:
+    # An overlapping CSV append repeats dates; a duplicated day would double-count and
+    # shift every AR lag. fit() keeps exactly one row per date (the last one given).
+    df = _synthetic_price_df(n=300, seed=3)
+    overlap = df.tail(20).copy()
+    overlap["value"] = overlap["value"] * 1.01  # restated values for the same dates
+    dup = pd.concat([df, overlap], ignore_index=True)
+
+    pred = CommodityPricePredictor(horizons=(30,), enable_gbm=False, enable_ou=False).fit(dup)
+    result = pred.forecast()
+    assert result["available"] is True
+    assert result["history_points"] == 300
+    assert result["last_price"] == round(float(overlap["value"].iloc[-1]), 4)
+
+
+def test_fit_drops_non_finite_prices() -> None:
+    df = _synthetic_price_df(n=300, seed=4)
+    df.loc[10, "value"] = np.inf
+    df.loc[20, "value"] = -np.inf
+    pred = CommodityPricePredictor(horizons=(30,), enable_gbm=False, enable_ou=False).fit(df)
+    result = pred.forecast()
+    assert result["available"] is True
+    assert result["history_points"] == 298
+    for pt in result["horizons"]["30"]["points"]:
+        assert np.isfinite(pt["value"]) and np.isfinite(pt["lower"]) and np.isfinite(pt["upper"])

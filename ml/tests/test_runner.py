@@ -165,3 +165,15 @@ def test_runner_metadata_completeness() -> None:
 def test_allow_registry_write_requires_no_dry_run() -> None:
     with pytest.raises(ValueError, match="allow_registry_write requires dry_run=False"):
         RunnerConfig(commodity_code="ROBUSTA", dry_run=True, allow_registry_write=True)
+
+def test_positive_price_series_drops_non_finite_values() -> None:
+    # +inf passes a bare ``> 0`` filter; it must be dropped along with its exog row.
+    from ml.runner import _positive_price_series
+
+    data = _synthetic_series(n=50)
+    data.values[[3, 7]] = [np.inf, np.nan]
+    clean = _positive_price_series(data)
+    assert len(clean.values) == 48
+    assert np.isfinite(clean.values).all()
+    assert clean.exog_features is not None and clean.exog_features.shape[0] == 48
+    assert data.dates[3] not in clean.dates and data.dates[7] not in clean.dates

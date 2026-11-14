@@ -162,7 +162,16 @@ class CommodityPricePredictor:
             raise InvalidSeriesError("price_df requires date and value (or price) columns")
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
-        df = df.dropna(subset=["date", "value"]).sort_values("date")
+        df = df.dropna(subset=["date", "value"])
+        # Non-finite prices (±inf from a bad CSV/division) would poison log(y) for every
+        # model; duplicate dates would double-count a day and shift every AR lag. Keep the
+        # LAST row per date (the latest restatement in input order), then sort.
+        df = df[np.isfinite(df["value"].to_numpy(dtype=float))]
+        dupes = int(df["date"].duplicated(keep="last").sum())
+        if dupes:
+            logger.warning("fit(): dropped %d duplicate-date price rows (kept last per date)", dupes)
+            df = df.drop_duplicates(subset="date", keep="last")
+        df = df.sort_values("date", kind="stable")
         clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if v > 0]
         dates = [c[0] for c in clean]
         values = [c[1] for c in clean]

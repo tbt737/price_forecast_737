@@ -200,7 +200,8 @@ def _run_walk_forward(
 
 
 def _positive_price_series(data: PriceSeriesData) -> PriceSeriesData:
-    mask = data.values > 0
+    # Finite AND positive: +inf passes a bare ``> 0`` check and would poison log(y).
+    mask = np.isfinite(data.values) & (data.values > 0)
     if not mask.any():
         raise InsufficientHistoryError("no positive prices available")
     dates = [d for d, keep in zip(data.dates, mask, strict=True) if keep]
