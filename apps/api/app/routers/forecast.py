@@ -11,6 +11,7 @@ path, DB URL, or secret. Read-only — ``forecast_commodity`` never writes.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -20,6 +21,7 @@ from app.db.session import get_db
 from app.schemas.forecast import ForecastOut, ForecastRequest
 
 router = APIRouter(tags=["forecast"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/forecast", response_model=ForecastOut)
@@ -34,6 +36,9 @@ def run_forecast(req: ForecastRequest, db: Session = Depends(get_db)) -> dict[st
     try:
         result = forecast_commodity(db, code, horizons=(req.horizon_days,), enable_ou=req.enable_ou)
     except Exception:  # noqa: BLE001 — fail closed: never surface internals to the client
+        # Server-side log only (the client still gets the generic 503) — without this the
+        # failure was invisible to operators.
+        logger.exception("forecast computation failed for %s", code)
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, detail="Forecast service temporarily unavailable"
         ) from None
