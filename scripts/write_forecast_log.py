@@ -121,6 +121,11 @@ def forecast_to_rows(
                     "mape_pct": bt.get("mape_pct"),
                     "naive_mape_pct": bt.get("naive_mape_pct"),
                     "beats_naive": bt.get("beats_naive"),
+                    # Lineage: the evaluator re-derives the benchmark instrument at evaluation
+                    # time; recording what was forecast lets a later instrument/currency switch
+                    # be detected instead of silently scoring INR forecasts against CNY actuals.
+                    "instrument_code": result.get("instrument_code"),
+                    "currency": result.get("currency"),
                     "source": "forecast_commodity",
                     "run_mode": run_mode,
                     "version": version,

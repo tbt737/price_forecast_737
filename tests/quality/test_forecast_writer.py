@@ -19,6 +19,8 @@ import write_forecast_log as W  # noqa: E402
 
 SAMPLE = {
     "commodity_code": "ROBUSTA",
+    "instrument_code": "KC_FUT",
+    "currency": "USD",
     "available": True,
     "last_date": "2026-06-26",
     "last_price": 2000.0,
@@ -103,6 +105,7 @@ def test_forecast_to_rows_maps_all_fields() -> None:
     md = r30["metadata_json"]
     assert md["ou_considered"] is True and md["source"] == "forecast_commodity" and md["run_mode"] == "dry_run"
     assert md["version"] == W.WRITER_VERSION
+    assert md["instrument_code"] == "KC_FUT" and md["currency"] == "USD"  # lineage for the evaluator
 
 
 def test_forecast_to_rows_skips_unavailable_and_nonpositive() -> None:

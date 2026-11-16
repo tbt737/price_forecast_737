@@ -94,7 +94,7 @@ def test_to_forecast_log_rows_shape() -> None:
     df = _synthetic_price_df(n=300, seed=5)
     result = (
         CommodityPricePredictor(horizons=(30, 90), enable_gbm=False, enable_ou=True)
-        .fit(df, commodity_code="LOG")
+        .fit(df, commodity_code="LOG", instrument_code="LOG_SPOT", currency="INR")
         .forecast()
     )
     rows = CommodityPricePredictor.to_forecast_log_rows(result, run_id="r1", run_mode="dry_run")
@@ -103,6 +103,8 @@ def test_to_forecast_log_rows_shape() -> None:
     assert all(r["status"] == "pending" for r in rows)
     assert all(r["predicted_price"] > 0 for r in rows)
     assert rows[0]["metadata_json"]["source"] == "forecast_commodity"
+    assert rows[0]["metadata_json"]["instrument_code"] == "LOG_SPOT"
+    assert rows[0]["metadata_json"]["currency"] == "INR"
 
 
 def test_save_load_roundtrip(tmp_path: Path) -> None:
