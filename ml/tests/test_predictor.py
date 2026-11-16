@@ -138,3 +138,30 @@ def test_forecast_commodity_delegates_to_predictor(monkeypatch: pytest.MonkeyPat
     out = forecast_commodity(object(), "gold", horizons=(30,), enable_ou=False)
     assert out["commodity_code"] == "DELEGATED"
     assert calls == ["fit:gold", "forecast"]
+
+
+def test_non_finite_prices_are_dropped_not_propagated() -> None:
+    """An ``inf`` price passes ``v > 0``; it must be dropped, not turn the band into NaN."""
+    df = _synthetic_price_df(n=320)
+    df.loc[150, "value"] = np.inf
+    df.loc[151, "value"] = -np.inf
+    pred = CommodityPricePredictor(enable_gbm=False, enable_ou=False).fit(df, commodity_code="DEMO")
+    result = pred.forecast(horizons=(30,))
+    assert result["available"] is True
+    assert result["history_points"] == 318
+    hz = result["horizons"]["30"]
+    assert "ridge_ar" in hz["backtest"]["candidates"]  # pool not silently emptied by NaN
+    for pt in hz["points"]:
+        assert all(np.isfinite(pt[k]) for k in ("value", "lower", "upper"))
+
+
+def test_duplicate_dates_collapse_to_last_observation() -> None:
+    """A repeated date must not add zero-gap rows; the last observation for a date wins."""
+    df = _synthetic_price_df(n=320)
+    dup = df.tail(3).assign(value=lambda f: f["value"] * 2.0)
+    pred = CommodityPricePredictor(enable_gbm=False, enable_ou=False).fit(
+        pd.concat([df, dup], ignore_index=True), commodity_code="DEMO"
+    )
+    result = pred.forecast(horizons=(30,))
+    assert result["history_points"] == 320
+    assert result["last_price"] == pytest.approx(round(float(df["value"].iloc[-1]) * 2.0, 4))
