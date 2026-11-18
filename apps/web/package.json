@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "echarts": "^6.1.0",
-    "next": "^15.5.19",
+    "next": "^15.5.29",
     "react": "19.0.0",
     "react-dom": "19.0.0"
   },
@@ -27,7 +27,7 @@
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "10.4.20",
     "eslint": "8.57.1",
-    "eslint-config-next": "^15.5.19",
+    "eslint-config-next": "^15.5.29",
     "jest-axe": "^9.0.0",
     "jsdom": "^25.0.1",
     "postcss": "8.5.1",
