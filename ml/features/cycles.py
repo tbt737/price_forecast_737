@@ -25,6 +25,7 @@ import numpy as np
 LO_DAYS = 30.0  # shortest cycle searched (~1 month)
 HI_YEARS = 8.0  # longest cycle searched (commodity super-cycle)
 MIN_YEARS = 1.5  # need at least this much history to propose anything
+DAYS_PER_YEAR = 365.25
 
 
 def propose_cycles(
@@ -37,7 +38,9 @@ def propose_cycles(
         return []
     t = np.arange(m, dtype=float)
     detrended = y - np.polyval(np.polyfit(t, y, 1), t)
-    lo_rows = max(2.0, lo_days)
+    # Both bounds are converted from calendar time into ROWS of this series' own
+    # sampling (periods are in rows) — ``lo_days`` must not be used as a row count.
+    lo_rows = max(2.0, lo_days * rows_per_year / DAYS_PER_YEAR)
     hi_rows = min(hi_years * rows_per_year, m / 2.0)  # need >= 2 repetitions
     if hi_rows <= lo_rows:
         return []

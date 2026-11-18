@@ -115,6 +115,23 @@ def test_propose_cycles_finds_short_and_long() -> None:
     assert any(abs(p - long_) < 0.3 * long_ for p in periods)  # ... and long recovered
 
 
+def test_propose_cycles_short_floor_scales_with_sampling() -> None:
+    # The ~1-month floor is calendar time, converted into rows of the series' own
+    # sampling. On a weekly series a ~quarterly (13-row) cycle is well above the
+    # 30-day floor (~4.3 rows) and must be recoverable — it was dropped when the
+    # floor was mis-read as 30 *rows* (~7 months of weekly data).
+    rpy = 52.0
+    n = int(rpy * 10)
+    t = np.arange(n, dtype=float)
+    rng = np.random.default_rng(3)
+    quarterly = rpy / 4.0
+    logy = np.log(100.0) + 0.002 * t + 0.2 * np.sin(2 * np.pi * t / quarterly) + rng.normal(0, 0.02, n)
+    periods = propose_cycles(logy, rows_per_year=rpy, n=4)
+    assert any(abs(p - quarterly) < 0.15 * quarterly for p in periods)
+    floor_rows = 30.0 * rpy / 365.25
+    assert all(p >= floor_rows for p in periods)
+
+
 def test_propose_cycles_empty_on_short_history() -> None:
     assert propose_cycles(np.log(np.linspace(100.0, 110.0, 80)), rows_per_year=300.0) == []
 
