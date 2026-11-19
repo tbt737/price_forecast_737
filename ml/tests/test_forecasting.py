@@ -115,6 +115,32 @@ def test_propose_cycles_finds_short_and_long() -> None:
     assert any(abs(p - long_) < 0.3 * long_ for p in periods)  # ... and long recovered
 
 
+def test_propose_cycles_lower_bound_is_calendar_days_on_weekly_series() -> None:
+    # ``lo_days`` is in calendar days: on weekly sampling (~52 rows/yr) a quarterly
+    # (13-row) cycle must be searchable, not cut off by a 30-ROW floor (~7 months).
+    rpy = 52.0
+    n = int(rpy * 14)
+    t = np.arange(n, dtype=float)
+    rng = np.random.default_rng(3)
+    quarterly = 13.0
+    logy = np.log(100.0) + 0.15 * np.sin(2 * np.pi * t / quarterly) + rng.normal(0, 0.02, n)
+    periods = propose_cycles(logy, rows_per_year=rpy)
+    assert any(abs(p - quarterly) < 0.15 * quarterly for p in periods)
+
+
+def test_propose_cycles_finds_five_week_cycle_on_trading_day_series() -> None:
+    # At ~252 rows/yr the 30-day floor is ~20.7 rows, so a 25-row (~5-week) cycle is
+    # in range; the old 30-ROW floor silently excluded it.
+    rpy = 252.0
+    n = int(rpy * 6)
+    t = np.arange(n, dtype=float)
+    rng = np.random.default_rng(4)
+    period = 25.0
+    logy = np.log(100.0) + 0.15 * np.sin(2 * np.pi * t / period) + rng.normal(0, 0.02, n)
+    periods = propose_cycles(logy, rows_per_year=rpy)
+    assert any(abs(p - period) < 0.15 * period for p in periods)
+
+
 def test_propose_cycles_empty_on_short_history() -> None:
     assert propose_cycles(np.log(np.linspace(100.0, 110.0, 80)), rows_per_year=300.0) == []
 

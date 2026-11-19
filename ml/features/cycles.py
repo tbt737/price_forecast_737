@@ -37,7 +37,9 @@ def propose_cycles(
         return []
     t = np.arange(m, dtype=float)
     detrended = y - np.polyval(np.polyfit(t, y, 1), t)
-    lo_rows = max(2.0, lo_days)
+    # ``lo_days`` is calendar days; periods are rows — convert with the series' own
+    # sampling density (treating days as rows hid sub-7-month cycles on weekly data).
+    lo_rows = max(2.0, lo_days * rows_per_year / 365.25)
     hi_rows = min(hi_years * rows_per_year, m / 2.0)  # need >= 2 repetitions
     if hi_rows <= lo_rows:
         return []
