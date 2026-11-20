@@ -75,6 +75,21 @@ def _naive_interval(
     return point, point * np.exp(-band), point * np.exp(band)
 
 
+def _clean_series(dates: Iterable[date], values: Iterable[float]) -> tuple[list[date], list[float]]:
+    """Keep finite, strictly positive prices; one value per date (last wins), date-sorted.
+
+    ``v > 0`` alone lets ``+inf`` through (``inf > 0``), and ``np.log(inf)`` then turns the
+    return sigma and every interval band into NaN. Duplicate dates would be double-counted
+    as history and skew the walk-forward folds."""
+    by_date: dict[date, float] = {}
+    for d, v in zip(dates, values, strict=True):
+        fv = float(v)
+        if np.isfinite(fv) and fv > 0:
+            by_date[d] = fv
+    ordered = sorted(by_date)
+    return ordered, [by_date[d] for d in ordered]
+
+
 def _business_days_ahead(start: date, n: int) -> date:
     return _next_business_days(start, n)[-1]
 
@@ -162,10 +177,8 @@ class CommodityPricePredictor:
             raise InvalidSeriesError("price_df requires date and value (or price) columns")
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
-        df = df.dropna(subset=["date", "value"]).sort_values("date")
-        clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if v > 0]
-        dates = [c[0] for c in clean]
-        values = [c[1] for c in clean]
+        df = df.dropna(subset=["date", "value"]).sort_values("date", kind="stable")
+        dates, values = _clean_series(df["date"], df["value"])
         code = (commodity_code or "UNKNOWN").upper()
         base = {
             "commodity_code": code,
@@ -217,9 +230,7 @@ class CommodityPricePredictor:
             "currency": instrument.currency if instrument else None,
             "model": "ridge_ar",
         }
-        clean = [(d, v) for d, v in zip(dates, values, strict=True) if v > 0]
-        dates = [c[0] for c in clean]
-        values = [c[1] for c in clean]
+        dates, values = _clean_series(dates, values)
         if len(values) < self.min_history:
             payload = {
                 **base,

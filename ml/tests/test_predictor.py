@@ -138,3 +138,27 @@ def test_forecast_commodity_delegates_to_predictor(monkeypatch: pytest.MonkeyPat
     out = forecast_commodity(object(), "gold", horizons=(30,), enable_ou=False)
     assert out["commodity_code"] == "DELEGATED"
     assert calls == ["fit:gold", "forecast"]
+
+
+def test_fit_drops_non_finite_prices() -> None:
+    # +inf passes a bare `v > 0` filter; np.log(inf) would turn every interval band into NaN.
+    df = _synthetic_price_df(n=320, seed=3)
+    df.loc[100, "value"] = np.inf
+    df.loc[101, "value"] = -np.inf
+    result = CommodityPricePredictor(horizons=(30,), enable_gbm=False, enable_ou=False).fit(df).forecast()
+    assert result["history_points"] == 318
+    for pt in result["horizons"]["30"]["points"]:
+        assert all(np.isfinite(pt[k]) for k in ("value", "lower", "upper"))
+
+
+def test_fit_deduplicates_dates_keeping_last() -> None:
+    df = _synthetic_price_df(n=320, seed=4)
+    dup = df.iloc[-5:].copy()
+    dup["value"] = dup["value"] * 1.01  # a later re-delivery of the same dates
+    result = (
+        CommodityPricePredictor(horizons=(30,), enable_gbm=False, enable_ou=False)
+        .fit(pd.concat([df, dup], ignore_index=True))
+        .forecast()
+    )
+    assert result["history_points"] == 320
+    assert result["last_price"] == round(float(dup["value"].iloc[-1]), 4)
