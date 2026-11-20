@@ -11,6 +11,7 @@ path, DB URL, or secret. Read-only — ``forecast_commodity`` never writes.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -18,6 +19,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.forecast import ForecastOut, ForecastRequest
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["forecast"])
 
@@ -34,6 +37,9 @@ def run_forecast(req: ForecastRequest, db: Session = Depends(get_db)) -> dict[st
     try:
         result = forecast_commodity(db, code, horizons=(req.horizon_days,), enable_ou=req.enable_ou)
     except Exception:  # noqa: BLE001 — fail closed: never surface internals to the client
+        # Keep the traceback server-side: the client gets a generic 503, operators get
+        # the cause (mirrors GET /commodities/{code}/forecast).
+        logger.exception("forecast computation failed for %s (horizon=%s)", code, req.horizon_days)
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, detail="Forecast service temporarily unavailable"
         ) from None

@@ -119,6 +119,22 @@ def test_forecast_engine_error_is_503_without_leak(monkeypatch, clean_settings_c
         assert leak not in body
 
 
+def test_forecast_engine_error_is_logged_server_side(monkeypatch, clean_settings_cache, caplog):
+    # The client sees only a generic 503, so the cause must reach the server log —
+    # otherwise a failing guarded endpoint is undiagnosable in production.
+    def boom(db, code, **kw):
+        raise RuntimeError("engine exploded")
+
+    client, _ = _build(monkeypatch, enabled=True, fake_forecast=boom)
+    with caplog.at_level("ERROR", logger="app.routers.forecast"):
+        r = client.post("/forecast", json={"commodity_code": "GOLD", "horizon_days": 30})
+    assert r.status_code == 503
+    records = [rec for rec in caplog.records if rec.name == "app.routers.forecast"]
+    assert records, "engine failure was swallowed without a server-side log record"
+    assert "GOLD" in records[0].getMessage()
+    assert records[0].exc_info is not None and "engine exploded" in str(records[0].exc_info[1])
+
+
 def test_forecast_unavailable_is_404(monkeypatch, clean_settings_cache):
     def unavail(db, code, **kw):
         return {"available": False, "reason": "need >= 252 positive prices, have 10"}
