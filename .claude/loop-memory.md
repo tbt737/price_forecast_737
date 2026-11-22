@@ -12,12 +12,13 @@ Renamed `test_sixteen_profiles_present` → `test_expected_profile_count` (asser
 `API_PROXY_TARGET` defaults to localhost. AI-chat `Kind` exhaustive switch. CI:
 `git diff --check` on PR/push range + Dependabot (pip / apps/web npm / Actions, no
 automerge). ESLint CLI and `outputFileTracingRoot` were already on master.
-Clock-freeze in `test_main_exit_codes` — stub `last_date=2026-07-21` was tripping the
-trading-day freshness gate as wall time moved past max_lag. No prod write/deploy.
-**Gates:** re-measured after rebase.
+Kept master's relative-date forecast stub for weekly-movers `main()` tests (do not
+freeze `datetime.now` when `last_date` is derived from `date.today()`). No prod write/deploy.
+**Gates:** compileall/ruff/mypy 0 · pytest **622 passed + 1 skipped** · vitest **79** ·
+eslint CLI + next build OK · workflows OK · whitespace OK.
 **Rules distilled:** (1) Inventory numbers follow the test pin, never the other way
-around — never lower INV-4. (2) Tests that call `datetime.now` through a freshness
-gate must freeze the clock to the fixture `last_date` window. (3) Web Docker ARG
+around — never lower INV-4. (2) Freshness-gate tests must use dates relative to
+today (or freeze BOTH the clock and the stub last_date). (3) Web Docker ARG
 must not bake a live Cloud Run URL — compose/prod pass `--build-arg`.
 
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)

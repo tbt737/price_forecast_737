@@ -24,10 +24,9 @@ Locked 2026-07-07 at commit `4925b9d` (details + monotonic rule in `.claude/loop
 **20 commodity profiles** (pinned by `tests/quality/test_profiles_quality.py`). Test counts
 never go down; locked invariants never weaken.
 
-> Current (POLISH-1 rebase): **66 profiles / 114 instruments** (22 commodities + 30 VN30
-> + 14 non-VN30 VN equities). Profile count is pinned by `tests/quality/test_profiles_quality.py`;
-> instrument count is the YAML inventory (not a hard test pin). Prior re-measure 2026-09-03:
-> pytest 588 + 1 skipped · vitest 39 (before this pack's extra web test).
+> Current (POLISH-1 rebase): **pytest 622 + 1 skipped · vitest 79 · 66 profiles / 114
+> instruments** (22 commodities + 30 VN30 + 14 non-VN30 VN equities). Profile count is
+> pinned by `tests/quality/test_profiles_quality.py`; instrument count is the YAML inventory.
 
 > ⚠️ Companion docs: `README.md` / `ARCHITECTURE.md` / `DEPLOY.md` were refreshed in the
 > RESTATE-1 hardening pack (2026-07-11) for profile counts, SEC-2 smoke, and live status.
@@ -115,7 +114,8 @@ Shipped in POLISH-1:
   (compose/prod pass `--build-arg`).
 - Logistics sector token + explorer metadata (`commodity_group: logistics`).
 - Docs/comments aligned to the test-pinned **66** profiles (do not lower INV-4).
-- Clock-freeze in weekly-movers `main()` tests so the freshness gate is not wall-clock-flaky.
+- Kept master's relative-date forecast stub for weekly-movers `main()` tests (freshness
+  gate is not wall-clock-flaky).
 
 ## 7. Locked / approval-required work
 
