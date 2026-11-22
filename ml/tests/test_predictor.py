@@ -138,3 +138,26 @@ def test_forecast_commodity_delegates_to_predictor(monkeypatch: pytest.MonkeyPat
     out = forecast_commodity(object(), "gold", horizons=(30,), enable_ou=False)
     assert out["commodity_code"] == "DELEGATED"
     assert calls == ["fit:gold", "forecast"]
+
+
+def test_fit_dedupes_duplicate_dates_keeping_last_row() -> None:
+    """A duplicated date must not splice two observations into the lag structure."""
+    df = _synthetic_price_df(n=300, seed=3)
+    restated = df.iloc[-20:].assign(value=lambda x: x["value"] * 1.5)
+    pred = CommodityPricePredictor(horizons=(30,), enable_gbm=False).fit(
+        pd.concat([df, restated], ignore_index=True), commodity_code="DUP"
+    )
+    assert len(pred._dates) == len(set(pred._dates)) == 300
+    assert pred._dates == sorted(pred._dates)
+    assert pred._values[-1] == pytest.approx(float(df["value"].iloc[-1]) * 1.5)
+
+
+def test_fit_drops_non_finite_prices_so_bands_stay_finite() -> None:
+    """An ``inf`` price must be cleaned out, not propagate NaN interval bands."""
+    df = _synthetic_price_df(n=300, seed=4)
+    df.loc[10, "value"] = np.inf
+    df.loc[11, "value"] = -5.0
+    pred = CommodityPricePredictor(horizons=(30,), enable_gbm=False).fit(df, commodity_code="INF")
+    assert len(pred._values) == 298
+    points = pred.forecast()["horizons"]["30"]["points"]
+    assert all(np.isfinite([p["value"], p["lower"], p["upper"]]).all() for p in points)

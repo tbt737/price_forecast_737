@@ -16,6 +16,7 @@ spec ``docs/deep-research-report-baotoandongtien.md``):
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Iterable
 from datetime import date, timedelta
 from pathlib import Path
@@ -77,6 +78,22 @@ def _naive_interval(
 
 def _business_days_ahead(start: date, n: int) -> date:
     return _next_business_days(start, n)[-1]
+
+
+def _clean_price_points(dates: Iterable[date], values: Iterable[float]) -> tuple[list[date], list[float]]:
+    """Sorted, one-row-per-date, strictly positive and finite price points.
+
+    ``log`` of a non-positive price is undefined and an ``inf`` price poisons every
+    backtest fold (NaN interval bands in the payload). A duplicated date would splice
+    two observations of the same day into the lag structure, so the LAST occurrence
+    in input order wins (deterministic — the input order is the caller's precedence)."""
+    by_date: dict[date, float] = {}
+    for d, v in zip(dates, values, strict=True):
+        fv = float(v)
+        if math.isfinite(fv) and fv > 0:
+            by_date[d] = fv
+    ordered = sorted(by_date.items())
+    return [d for d, _ in ordered], [v for _, v in ordered]
 
 
 class CommodityPredictorError(Exception):
@@ -162,10 +179,11 @@ class CommodityPricePredictor:
             raise InvalidSeriesError("price_df requires date and value (or price) columns")
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
-        df = df.dropna(subset=["date", "value"]).sort_values("date")
-        clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if v > 0]
-        dates = [c[0] for c in clean]
-        values = [c[1] for c in clean]
+        df = df.dropna(subset=["date", "value"])
+        n_dup = int(df["date"].duplicated().sum())
+        if n_dup:
+            logger.warning("price_df has %d duplicated dates; keeping the last row per date", n_dup)
+        dates, values = _clean_price_points(df["date"], df["value"])
         code = (commodity_code or "UNKNOWN").upper()
         base = {
             "commodity_code": code,
@@ -217,9 +235,7 @@ class CommodityPricePredictor:
             "currency": instrument.currency if instrument else None,
             "model": "ridge_ar",
         }
-        clean = [(d, v) for d, v in zip(dates, values, strict=True) if v > 0]
-        dates = [c[0] for c in clean]
-        values = [c[1] for c in clean]
+        dates, values = _clean_price_points(dates, values)
         if len(values) < self.min_history:
             payload = {
                 **base,
