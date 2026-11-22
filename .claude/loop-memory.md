@@ -4,6 +4,23 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-08-12 POLISH-1 — POLISH_1_PASS
+Idle-capacity pack (PLAN §6 + logistics UI gap), rebased onto master (INV-4 = **66
+profiles / 114 instruments** = 22 commodities + 30 VN30 + 14 non-VN30 VN equities).
+Renamed `test_sixteen_profiles_present` → `test_expected_profile_count` (assert stays
+`== 66`). Logistics sector token+Tailwind+explorer meta+vitest. Web Docker
+`API_PROXY_TARGET` defaults to localhost. AI-chat `Kind` exhaustive switch. CI:
+`git diff --check` on PR/push range + Dependabot (pip / apps/web npm / Actions, no
+automerge). ESLint CLI and `outputFileTracingRoot` were already on master.
+Kept master's relative-date forecast stub for weekly-movers `main()` tests (do not
+freeze `datetime.now` when `last_date` is derived from `date.today()`). No prod write/deploy.
+**Gates:** compileall/ruff/mypy 0 · pytest **622 passed + 1 skipped** · vitest **79** ·
+eslint CLI + next build OK · workflows OK · whitespace OK.
+**Rules distilled:** (1) Inventory numbers follow the test pin, never the other way
+around — never lower INV-4. (2) Freshness-gate tests must use dates relative to
+today (or freeze BOTH the clock and the stub last_date). (3) Web Docker ARG
+must not bake a live Cloud Run URL — compose/prod pass `--build-arg`.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/

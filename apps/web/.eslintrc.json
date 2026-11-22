@@ -1,4 +1,4 @@
 {
   "extends": ["next/core-web-vitals", "next/typescript"],
-  "ignorePatterns": [".next/**", "next-env.d.ts", "coverage/**", "node_modules/**"]
+  "ignorePatterns": [".next/**", "next-env.d.ts", "coverage/**", "node_modules/**", "out/"]
 }

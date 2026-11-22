@@ -93,6 +93,11 @@ From the repo root:
    `next.config` rewrites `/api/*` to it.
 3. Deploy. Pages gives you the public site URL (`*.pages.dev`).
 
+If you instead build the `apps/web` Docker image (local compose or Cloud Run
+`cqp-web`), pass `--build-arg API_PROXY_TARGET=<backend URL>` at **build** time —
+rewrites are baked in then. The image default is `http://127.0.0.1:8000`;
+`docker-compose.yml` already overrides it to `http://api:8000`.
+
 ## 3. Keep data fresh
 
 The daily ingest already runs via **GitHub Actions** (`.github/workflows/ingest.yml`,

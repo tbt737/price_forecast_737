@@ -39,7 +39,7 @@ VALID_GROUPS = {"agriculture", "energy", "metal", "logistics", "equity"}
 PROFILE_FILES = sorted(PROFILES_DIR.glob("*.yaml"))
 
 
-def test_sixteen_profiles_present() -> None:
+def test_expected_profile_count() -> None:
     assert len(PROFILE_FILES) == 66  # 22 commodities + 30 VN30 + 14 non-VN30 VN equities
 
 

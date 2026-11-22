@@ -28,13 +28,14 @@ typecheck: ## Static type-check with mypy (app package + etl)
 	python -m mypy -p app
 	python -m mypy etl
 
-quality: ## Full quality gate (mirrors CI): byte-compile, ruff, mypy, pytest, workflow YAML
+quality: ## Full quality gate (mirrors CI): byte-compile, ruff, mypy, pytest, workflow YAML, whitespace
 	python -m compileall -q etl scripts apps tests ml db apply_views.py
 	python -m ruff check .
 	python -m mypy -p app
 	python -m mypy etl
 	python -m pytest
 	python scripts/ci_check_workflows.py
+	python scripts/ci_check_whitespace.py
 
 db-up: ## Start local PostgreSQL via docker-compose
 	$(COMPOSE) up -d postgres
