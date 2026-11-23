@@ -4,6 +4,17 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-11-23 RESTATE-1-OFFLINE-GATE — RESTATE_1_OFFLINE_RELEASE_GATE_PASS
+Independent verifier PASS on `b2477a1a662c6258fd0ee15bf9d0f0f8fa8088fe` (base `fd05417`).
+One test pins API and ML to the complete latest revision using a date only in the older
+revision, a shared date, and a date only in the latest revision.
+**Invariants checked:** INV-3, INV-4, INV-7 and single-basis serving.
+**Gates:** P1 1 passed, P2 40 passed, pytest 621 passed + 1 PostgreSQL-only skip,
+Vitest 78 passed, workflows 6/6, compile/Ruff/mypy/Web typecheck/lint/build all passed.
+**Verified rule:** A single-basis test needs an older-only date to distinguish whole-revision
+selection from latest-per-date selection. Evidence:
+`apps/api/tests/test_revision_reads.py::test_api_and_ml_exclude_dates_only_in_older_revision`.
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
