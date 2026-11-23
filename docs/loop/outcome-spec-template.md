@@ -1,28 +1,34 @@
 # Outcome Spec — template (fill one per PACK)
 
 ```
-GOAL: <one sentence — what “done” means>
+PACK_NAME: <name>
+GOAL: <one sentence describing the outcome>
+BASE_REVISION: <commit SHA>
+ALLOWED_WRITES: <explicit paths or outputs>
+INVARIANTS: <applicable contracts from the loop profile>
 
 PASS_CRITERIA:
-- P1: <binary, machine-checkable>
-- P2: <binary, machine-checkable>
-- P3: <optional>
+- P1: <command or check, input or fixture, expected exit code or value>
+- P2: <command or check, input or fixture, expected exit code or value>
 
 EVIDENCE_REQUIRED:
-- <exit code / stdout snippet / file:line / artifact path>
-- Gate commands from `.claude/loop-profile.md` (paste exit codes + pass counts)
+- <map each P* to a command result, test, or artifact>
+- <profile gate commands, exit codes, and pass/skip counts>
+- <offline smoke command, target, and expected result, if applicable>
+- <adversarial review result when required by the profile>
 
 FORBIDDEN:
-- <e.g. prod --write, deploy, workflow_dispatch, secret print, weaken INV tests>
+- Profile restrictions apply. List any additional restrictions for this pack.
 
-BUDGET: max 3 fix→re-gate iterations / this unit
+BUDGET: max 3 fix→re-gate cycles, 2 adversarial fix rounds, 2 smoke retries
+STOP: first PASS, repeated failure without progress, oscillation, or exhausted budget
+ESCALATION: <unresolved evidence, conflicting invariants, or approval required>
 
-ESCALATION: ask human when budget exhausted, INV conflict, or scope unclear
-
-OUT OF SCOPE: <intentional non-goals for this pack>
+OUT OF SCOPE: <explicitly excluded work>
 ```
 
 ## Rules
-- No PASS_CRITERIA ⇒ not a loop (chat only). Maker implements; Verifier scores.
-- Criteria must be re-runnable by anyone with the repo + listed commands.
-- Prefer pinning new behavior with a failing test first (tests-first).
+- Define the named pack and measurable PASS criteria before starting execution. Every listed P* is required.
+- Give each criterion a reproducible command or check, inputs, and an expected result.
+- Retry only to address a specific failing criterion or gap. Report the blocking evidence if a stop condition is reached before PASS.
+- Freeze the criteria for review. The Maker implements and an independent Verifier scores the result.
