@@ -138,3 +138,28 @@ def test_forecast_commodity_delegates_to_predictor(monkeypatch: pytest.MonkeyPat
     out = forecast_commodity(object(), "gold", horizons=(30,), enable_ou=False)
     assert out["commodity_code"] == "DELEGATED"
     assert calls == ["fit:gold", "forecast"]
+
+
+def test_fit_dedupes_repeated_price_dates_keeping_last_row() -> None:
+    """A repeated date (e.g. a corrected row appended to a CSV) must enter the series
+    once — the later row wins — so history length, lags and the anchor price are sane."""
+    df = _synthetic_price_df(n=300)
+    corrected = df.iloc[-3:].assign(value=lambda x: x["value"] * 1.1)
+    dup = pd.concat([df, corrected], ignore_index=True)
+    result = CommodityPricePredictor(horizons=(30,), enable_gbm=False, enable_ou=False).fit(dup).forecast()
+    assert result["history_points"] == 300
+    assert result["last_price"] == pytest.approx(round(float(corrected["value"].iloc[-1]), 4))
+    clean = CommodityPricePredictor(horizons=(30,), enable_gbm=False, enable_ou=False).fit(
+        pd.concat([df.iloc[:-3], corrected], ignore_index=True)
+    )
+    assert clean.forecast() == result
+
+
+def test_fit_tolerates_duplicate_exog_dates() -> None:
+    df = _synthetic_price_df(n=300)
+    rng = np.random.default_rng(1)
+    exog = pd.DataFrame({"date": df["date"], "driver": rng.normal(size=len(df))})
+    exog_dup = pd.concat([exog, exog.iloc[:2]], ignore_index=True)
+    result = CommodityPricePredictor(horizons=(30,), enable_gbm=False, enable_ou=False).fit(df, exog_dup).forecast()
+    assert result["available"] is True
+    assert result["history_points"] == 300

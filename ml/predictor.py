@@ -162,7 +162,15 @@ class CommodityPricePredictor:
             raise InvalidSeriesError("price_df requires date and value (or price) columns")
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
-        df = df.dropna(subset=["date", "value"]).sort_values("date")
+        # Stable sort + keep the LAST row per date: a repeated date (e.g. a corrected
+        # re-export appended to a CSV) must not enter the series twice — duplicates
+        # would inflate history_points, corrupt AR lags/return sigma and make the
+        # anchor price depend on sort tie-breaking.
+        df = (
+            df.dropna(subset=["date", "value"])
+            .sort_values("date", kind="mergesort")
+            .drop_duplicates(subset="date", keep="last")
+        )
         clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if v > 0]
         dates = [c[0] for c in clean]
         values = [c[1] for c in clean]
@@ -628,6 +636,8 @@ class CommodityPricePredictor:
                 df = df.set_index("date")
         if isinstance(df.index, pd.DatetimeIndex):
             df.index = df.index.date
+        # Duplicate feature dates would make the as-of reindex in impute_exog raise.
+        df = df[~df.index.duplicated(keep="last")]
         drop_cols = [c for c in ["commodity_key", "price_close"] if c in df.columns]
         if drop_cols:
             df = df.drop(columns=drop_cols)
