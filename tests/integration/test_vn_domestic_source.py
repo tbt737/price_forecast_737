@@ -301,3 +301,56 @@ def test_vnappmob_fail_closed_on_bad_key() -> None:
     recs = list(VnAppMobGoldSource([_vnappmob_spec()], date_from=1, date_to=2,
                                    fetch=lambda du, k, a, b: VNAPPMOB_JSON, mint_key=boom_key).collect())
     assert recs == []  # no key ⇒ skip, no crash
+
+
+# ── regression: sell cell read by position; wrong-shape JSON is fail-soft ────
+import pytest  # noqa: E402
+
+_SILVER_KEY = "BẠC MIẾNG PHÚ QUÝ 999 1 LƯỢNG"
+
+
+@pytest.mark.parametrize("sell", ["_", "0", "", "-"])
+def test_phuquy_blank_sell_never_falls_back_to_buy(sell: str) -> None:
+    """A blank sell must yield None — NOT the buy price sitting in the cell before it."""
+    raw = f"<tr><td>{_SILVER_KEY}</td><td>Vnđ/Lượng</td><td>2,245,000</td><td>{sell}</td></tr>"
+    assert parse_phuquy_silver_html(raw, _SILVER_KEY) is None
+    spec = [VnPriceSpec("SILVER_VN", "PQ_BAC_MIENG999", "PHU_QUY", "phuquy_silver_html", SILVER_URL,
+                        _SILVER_KEY, "VND", 0)]
+    assert list(VnDomesticPriceSource(spec, today=TODAY, fetch=lambda url: raw).collect()) == []
+
+
+def test_phuquy_row_without_sell_column_is_none() -> None:
+    raw = f"<tr><td>{_SILVER_KEY}</td><td>Vnđ/Lượng</td><td>2,245,000</td></tr>"
+    assert parse_phuquy_silver_html(raw, _SILVER_KEY) is None
+
+
+@pytest.mark.parametrize("body", ["[]", "null", '"Service Unavailable"', '{"data":[null]}', '{"data":"x"}'])
+def test_collect_wrong_shape_json_does_not_drop_other_endpoints(body: str) -> None:
+    """One endpoint answering with valid-but-wrong-shape JSON must cost only ITS price."""
+
+    def fetch(url: str) -> str:
+        return body if url == GOLD_URL else PHUQUY_HTML
+
+    recs = list(VnDomesticPriceSource(_specs(), today=TODAY, fetch=fetch).collect())
+    assert [r.instrument_code for r in recs] == ["PQ_BAC_MIENG999"]
+
+
+@pytest.mark.parametrize("body", ["[]", "null", '{"Objects":[null]}', '{"Objects":{"a":1}}'])
+def test_collect_wrong_shape_fuel_json_keeps_gold_and_silver(body: str) -> None:
+    specs = [*_specs(), VnPriceSpec("DIESEL_VN", "PLX_DO_005S", "PETROLIMEX", "petrolimex_json", FUEL_URL,
+                                    "DO 0,05S-II", "VND", 0)]
+
+    def fetch(url: str) -> str:
+        return body if url == FUEL_URL else _fetch(url)
+
+    recs = list(VnDomesticPriceSource(specs, today=TODAY, fetch=fetch).collect())
+    assert {r.instrument_code for r in recs} == {"PNJ_SJC", "PNJ_NHAN9999", "PQ_BAC_MIENG999"}
+
+
+@pytest.mark.parametrize("body", ["[]", "null", '"oops"'])
+def test_vnappmob_wrong_shape_chunk_is_skipped_not_fatal(body: str) -> None:
+    recs = list(
+        VnAppMobGoldSource([_vnappmob_spec()], date_from=1_000_000, date_to=1_000_000 + 30 * 86400,
+                           fetch=lambda *a: body, mint_key=lambda url: _TOKEN).collect()
+    )
+    assert recs == []

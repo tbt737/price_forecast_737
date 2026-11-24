@@ -29,6 +29,14 @@ from etl.sources.base import BaseSource
 #: fetch(url) -> raw response body (text)
 VnFetch = Callable[[str], str]
 
+#: What "fail-soft per endpoint" has to cover. Besides network (OSError) and malformed
+#: JSON (ValueError), an endpoint can answer with VALID JSON of the wrong shape — ``[]``,
+#: ``null``, a bare error string, ``{"data": [null]}`` — and ``.get`` on that raises
+#: AttributeError/TypeError. Uncaught, it aborted ``collect()`` and discarded the prices
+#: already parsed from every OTHER endpoint; these feeds are today-only, so that day was
+#: lost for all of them.
+_SOFT_ERRORS = (OSError, ValueError, KeyError, AttributeError, TypeError)
+
 
 def _http_fetch(url: str) -> str:
     import urllib.request
@@ -75,8 +83,8 @@ _TAG = re.compile(r"<[^>]+>")
 def parse_phuquy_silver_html(raw: str, product_key: str) -> float | None:
     """Phú Quý silver partial: rows of
     ``<td>name</td><td>unit</td><td>buy</td><td>sell</td>``. Return the SELL price
-    (GIÁ BÁN RA, the last numeric cell) of the row whose product name contains
-    ``product_key``. Rows with a non-numeric sell (e.g. '_') yield None."""
+    (GIÁ BÁN RA, the LAST cell) of the row whose product name contains
+    ``product_key``. Rows with a non-numeric or zero sell (e.g. '_') yield None."""
     key = _norm(product_key)
     for tr in _TR.findall(raw):
         cells = [_norm(_TAG.sub(" ", td)) for td in _TD.findall(tr)]
@@ -85,9 +93,13 @@ def parse_phuquy_silver_html(raw: str, product_key: str) -> float | None:
         name = cells[0]
         if key not in name:
             continue
-        numbers = [_to_float(c) for c in cells[1:]]
-        numbers = [n for n in numbers if n is not None and n > 0]
-        return numbers[-1] if numbers else None  # GIÁ BÁN RA is the last numeric column
+        if len(cells) < 4:  # name / unit / buy / sell — anything shorter has no sell column
+            return None
+        # Read the sell cell BY POSITION. Taking "the last numeric cell" returned the BUY
+        # price whenever sell was blank ('_' / '0'), storing a wrong-side quote as today's
+        # price — and the daily backfill is insert-only, so it would never be corrected.
+        sell = _to_float(cells[-1])
+        return sell if sell is not None and sell > 0 else None
     return None
 
 
@@ -169,7 +181,7 @@ class VnDomesticPriceSource(BaseSource):
                 continue
             try:
                 price = parser(self._fetch(spec.url), spec.product_key)
-            except (OSError, ValueError, KeyError, json.JSONDecodeError):
+            except _SOFT_ERRORS:
                 price = None  # network/parse failure is fail-soft per endpoint
             # `json.loads` accepts bare NaN/Infinity tokens, and neither compares
             # `<= 0` — a garbled feed row would otherwise reach fact_price_daily and
@@ -310,7 +322,7 @@ class VnAppMobGoldSource(BaseSource):
                 continue
             try:
                 key = self._mint(spec.key_url)
-            except (OSError, ValueError, KeyError, json.JSONDecodeError):
+            except _SOFT_ERRORS:
                 continue  # no key ⇒ skip this source, never crash the run
             if not key:
                 continue
@@ -318,7 +330,7 @@ class VnAppMobGoldSource(BaseSource):
             for lo, hi in _day_chunks(self._from, self._to, spec.chunk_days):
                 try:
                     rows = parser(self._fetch(spec.data_url, key, lo, hi), spec.field, spec.buy_field)
-                except (OSError, ValueError, KeyError, json.JSONDecodeError):
+                except _SOFT_ERRORS:
                     continue  # fail soft per chunk
                 for row in rows:
                     obs: date = row["date"]
