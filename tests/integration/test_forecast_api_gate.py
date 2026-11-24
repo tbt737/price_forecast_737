@@ -107,16 +107,19 @@ def test_forecast_rejects_unknown_fields(monkeypatch, clean_settings_cache):
 
 
 # ── safe error mapping / no leakage ──────────────────────────────────────────
-def test_forecast_engine_error_is_503_without_leak(monkeypatch, clean_settings_cache):
+def test_forecast_engine_error_is_503_without_leak(monkeypatch, clean_settings_cache, caplog):
     def boom(db, code, **kw):
         raise RuntimeError("boom secret=postgres://u:p@host/db path=/srv/app/ml/forecast.py")
 
     client, _ = _build(monkeypatch, enabled=True, fake_forecast=boom)
-    r = client.post("/forecast", json={"commodity_code": "GOLD", "horizon_days": 90})
+    with caplog.at_level("ERROR", logger="app.routers.forecast"):
+        r = client.post("/forecast", json={"commodity_code": "GOLD", "horizon_days": 90})
     assert r.status_code == 503
     body = r.text
     for leak in ("boom", "secret", "postgres", "Traceback", "/srv", "forecast.py"):
         assert leak not in body
+    # Generic to the client, but the failure must be diagnosable server-side.
+    assert "forecast computation failed for GOLD" in caplog.text
 
 
 def test_forecast_unavailable_is_404(monkeypatch, clean_settings_cache):
