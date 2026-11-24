@@ -4,6 +4,40 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-11-24 ROUTINE-REVIEW — ROUTINE_REVIEW_PASS (scheduled autonomous review; branch `claude/sharp-hopper-nqw6df`, no deploy, no prod write)
+Shipped (5 commits, each reproduced before fixing): (1) web patch-upgrade next 15.5.25→15.5.29 +
+sharp/source-map-js/brace-expansion via lockfile, build-time postcss pin 8.5.1→8.5.26; (2) ML input
+hardening — `clean_price_points` (finite AND positive; `+inf` passed the bare `v > 0`), `impute_exog`
+masks ±inf to missing then causal ffill, `fit()` collapses duplicate dates; (3) POST `/forecast` logs
+the engine exception + `integration` pytest marker registered; (4) `vn_domestic`: sell cell read BY
+POSITION (blank sell used to store the BUY quote), wrong-shape JSON (`[]`/`null`/`{"data":[null]}`)
+is fail-soft instead of aborting `collect()` and dropping every other endpoint's price;
+(5) `write_forecast_log`: exit 1 + no write when zero rows produced or >50% of codes raised
+(was `inserted=0/0`, exit 0), NaN/inf prediction guard, skips printed in `--write`.
+Invariants: INV-1/2/3/7 untouched (new tests injected-fetch only). Gates: pytest **648+1skip**
+(was 620) · vitest **78** · ruff 0 · mypy 0 (29+34) · web lint/tsc/build ✓.
+**Verified but NOT changed — owner decision needed:**
+(a) `check_freshness._latest_date` takes max(price_date) over the WHOLE group, so one live ticker
+hides dead ones (repro: 9/10 futures frozen 5 months ⇒ `ok`); per-code check needs per-member
+cadence first (FREIGHT/DIESEL) or the gate goes permanently red.
+(b) forecast-log unique grain includes `model_used` ⇒ a same-`as_of` rerun (every weekend) that
+flips the selected model inserts a 2nd row and the evaluator double-scores it; fix = `WHERE NOT
+EXISTS` on (code, as_of, horizon) — changes prod write semantics.
+(c) history/reconcile windows end at `today 00:00 UTC` while fixtures stamp bars 02:00 UTC ⇒ likely
+permanent 1-day lag on VN equities + VNAPPMOB gold; unverified against the live APIs.
+(d) PNJ gold stored in thousand-VND/chỉ under instruments declared `lượng`/VND (VNAppMob is full
+VND/lượng); needs a config `scale` or a unit relabel — touches stored history.
+(e) price validation accepts 0/negative; NOT tightened on purpose — a real futures close has been
+negative, and the ML layer already drops non-positive points.
+(f) npm: postcss bundled in next 15 (needs next 16) and tinypool/@vitest/mocker (needs vitest 5)
+remain; root worker lockfile (`sharp`, `undici`) fix pulls a large wrangler bump — not applied,
+cannot be verified without a deploy.
+**Rules distilled:** (1) "tolerate one bad item" loops need a floor — if nothing survives, exit
+non-zero. (2) "last numeric cell" is not "the sell column": parse table columns by position.
+(3) fail-soft except-tuples must include AttributeError/TypeError — valid JSON of the wrong shape
+is the common failure body. (4) `x <= 0` is not a validity check: NaN and +inf both pass it.
+(5) This container's `python` is 3.11 with no deps — gates run on `/usr/bin/python3` (3.13).
+
 ## 2026-09-03 AUDIT-1B — AUDIT_1B_PASS (adversarial verification of AUDIT-1 + sweep of the untouched areas)
 26-agent workflow: 3 skeptics per escalated claim (default REFUTED, must produce a failing input)
 → 1 adjudicator each; 5 finders over the areas nobody had read (db/, configs/, apps/web, worker/
