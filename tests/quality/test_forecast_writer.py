@@ -190,3 +190,74 @@ def test_write_flag_attempts_idempotent_insert(monkeypatch) -> None:
 def test_main_rejects_invalid_horizon_and_commodity() -> None:
     assert W.main(["--commodities", "GOLD", "--horizons", "45"]) == 2  # not in {30,90}
     assert W.main(["--commodities", "../etc"]) == 2  # traversal-ish code rejected
+
+
+# ── a run where forecasting broke must be RED, and must write nothing ────────
+def _raise_import(session, code, *, horizons):
+    raise ModuleNotFoundError("No module named 'xgboost'")
+
+
+@pytest.mark.parametrize("extra", [[], ["--write"]])
+def test_every_commodity_erroring_exits_nonzero_and_writes_nothing(monkeypatch, capsys, extra) -> None:
+    """A missing dependency / predictor regression raises identically for every code.
+    Each used to be recorded as a skip and the run exited 0 with ``inserted=0/0``."""
+    fake = FakeSession()
+    monkeypatch.setattr(W, "_open_session", lambda: fake)
+    monkeypatch.setattr(W, "_default_forecast_fn", _raise_import)
+    assert W.main(["--commodities", "GOLD", "CORN", "WHEAT", *extra]) == 1
+    assert fake.executed == []
+    err = capsys.readouterr().err
+    assert "no forecast rows produced" in err
+    assert "://" not in err
+
+
+def test_majority_erroring_refuses_partial_write(monkeypatch, capsys) -> None:
+    def flaky(session, code, *, horizons):
+        if code == "GOLD":
+            return _sample(code)
+        raise RuntimeError("boom")
+
+    fake = FakeSession()
+    monkeypatch.setattr(W, "_open_session", lambda: fake)
+    monkeypatch.setattr(W, "_default_forecast_fn", flaky)
+    assert W.main(["--commodities", "GOLD", "CORN", "WHEAT", "--write"]) == 1
+    assert fake.executed == []  # no partial, biased day of forecasts
+    err = capsys.readouterr().err
+    assert "forecaster raised for 2/3" in err and "SKIP CORN: error: RuntimeError" in err
+
+
+def test_minority_error_and_ordinary_skips_stay_green(monkeypatch) -> None:
+    def mostly_ok(session, code, *, horizons):
+        if code == "CORN":
+            raise RuntimeError("boom")
+        if code == "WHEAT":
+            return {"available": False, "reason": "need >= 252 positive prices, have 10"}
+        return _sample(code)
+
+    fake = FakeSession()
+    monkeypatch.setattr(W, "_open_session", lambda: fake)
+    monkeypatch.setattr(W, "_default_forecast_fn", mostly_ok)
+    assert W.main(["--commodities", "GOLD", "COPPER", "CORN", "WHEAT", "--write"]) == 0
+    assert len(fake.executed) == 4  # 2 healthy commodities x 2 horizons
+
+
+def test_rerun_with_everything_already_present_stays_green(monkeypatch) -> None:
+    class NoOp(FakeSession):
+        def execute(self, stmt, params=None):
+            super().execute(stmt, params)
+            res = _Res()
+            res.rowcount = 0  # ON CONFLICT DO NOTHING
+            return res
+
+    monkeypatch.setattr(W, "_open_session", lambda: NoOp())
+    monkeypatch.setattr(W, "_default_forecast_fn", lambda s, c, *, horizons: _sample(c))
+    assert W.main(["--commodities", "ROBUSTA", "--write"]) == 0
+
+
+def test_forecast_to_rows_skips_non_finite_prediction() -> None:
+    bad = _sample("ROBUSTA")
+    bad["horizons"] = {
+        "30": {**SAMPLE["horizons"]["30"], "points": [{"date": "2026-08-07", "value": float("nan")}]},
+        "90": {**SAMPLE["horizons"]["90"], "points": [{"date": "2026-10-30", "value": float("inf")}]},
+    }
+    assert W.forecast_to_rows(bad, run_id="r", run_mode="dry_run") == []

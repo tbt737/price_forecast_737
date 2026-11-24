@@ -42,8 +42,12 @@ ORDER BY commodity_code, horizon_days;
 - **Manual dry-run first** (no `--write`) before trusting a change:
   `python scripts/write_forecast_log.py` / `python scripts/evaluate_forecast_log.py` —
   both default to dry-run and print exactly what they *would* write.
-- **Exit codes**: `0` success (0 rows is a valid idempotent/no-op outcome), `2` bad
-  arguments, non-zero on an unhandled failure (e.g. DB unreachable) → red run.
+- **Exit codes**: `0` success (0 rows *inserted* is a valid idempotent/no-op outcome), `2` bad
+  arguments, non-zero on an unhandled failure (e.g. DB unreachable) → red run. The writer
+  also exits `1` — and writes nothing — when it produced **no forecast rows at all** or the
+  forecaster **raised for more than half** of the commodities (broken dependency / predictor
+  regression); the per-commodity `SKIP` reasons are printed. Ordinary skips (too little
+  history, `--as-of` mismatch) stay `0` as long as at least one row was produced.
 - **Baseline accrues slowly**: h=30/90 rows only mature after 30/90 business days, so the
   first `evaluated` rows appear ~6 weeks (h=30) / ~18 weeks (h=90) after the writer starts.
 - **No holiday calendar**: `target_date` is business-days-ahead (skips weekends only); the

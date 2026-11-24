@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 import uuid
@@ -101,7 +102,9 @@ def forecast_to_rows(
             predicted = float(points[-1]["value"])
         except (KeyError, TypeError, ValueError):
             continue
-        if predicted <= 0:  # honour the table CHECK (predicted_price > 0)
+        # honour the table CHECK (predicted_price > 0). NaN compares False to `<= 0`, so it
+        # needs its own test or a non-finite forecast would be logged as a prediction.
+        if not math.isfinite(predicted) or predicted <= 0:
             continue
         bt = hz.get("backtest") or {}
         rows.append(
@@ -179,6 +182,31 @@ def generate_rows(
     return rows, skipped
 
 
+#: Share of commodities allowed to ERROR (raise) before the run is declared broken.
+MAX_ERROR_FRACTION = 0.5
+
+
+def run_failure(codes: list[str], rows: list[dict[str, Any]], skipped: list[tuple[str, str]]) -> str | None:
+    """Why this run must exit non-zero, or None when it is healthy.
+
+    ``generate_rows`` deliberately tolerates ONE bad commodity, but it tolerated ALL of
+    them too: a missing dependency or a predictor regression raises the same way for every
+    code, each was recorded as a skip, and the run printed ``inserted=0/0`` and exited 0 —
+    so the accuracy loop silently stopped logging while the workflow stayed green. A run
+    is unhealthy when it produced no forecast rows at all, or when more than
+    ``MAX_ERROR_FRACTION`` of the commodities raised. Ordinary skips (too little history,
+    ``--as-of`` mismatch) and "0 inserted because already present" stay exit 0.
+    """
+    if not codes:
+        return None
+    if not rows:
+        return f"no forecast rows produced for any of {len(codes)} commodities"
+    errored = sum(1 for _, why in skipped if why.startswith("error:"))
+    if errored > MAX_ERROR_FRACTION * len(codes):
+        return f"forecaster raised for {errored}/{len(codes)} commodities"
+    return None
+
+
 def _open_session() -> Any:
     from app.db.session import get_session_factory
 
@@ -220,6 +248,7 @@ def main(argv: list[str] | None = None) -> int:
     session = _open_session()
     try:
         rows, skipped = generate_rows(session, codes, args.horizons, run_id=run_id, run_mode=run_mode, as_of=as_of)
+        failure = run_failure(codes, rows, skipped)
 
         if not args.write:
             print(f"[dry-run] run_id={run_id}: would write {len(rows)} row(s), {len(skipped)} skipped.")
@@ -231,7 +260,16 @@ def main(argv: list[str] | None = None) -> int:
             for code, why in skipped:
                 print(f"  SKIP {code}: {why}")
             print("[dry-run] no rows inserted — pass --write to insert.")
+            if failure:
+                print(f"Error: {failure}", file=sys.stderr)
+                return 1
             return 0
+
+        if failure:  # refuse BEFORE writing: never log a partial, biased day of forecasts
+            for code, why in skipped:
+                print(f"  SKIP {code}: {why}", file=sys.stderr)
+            print(f"Error: {failure} — nothing written.", file=sys.stderr)
+            return 1
 
         from sqlalchemy import text
 
@@ -248,6 +286,8 @@ def main(argv: list[str] | None = None) -> int:
             f"[write] run_id={run_id}: inserted={inserted}/{len(rows)} "
             f"({len(rows) - inserted} already present, {len(skipped)} commodity-skipped)."
         )
+        for code, why in skipped:  # visible in the Actions log, not just counted
+            print(f"  SKIP {code}: {why}")
         return 0
     finally:
         session.close()

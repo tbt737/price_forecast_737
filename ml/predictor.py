@@ -487,7 +487,7 @@ class CommodityPricePredictor:
                 predicted = float(points[-1]["value"])
             except (KeyError, TypeError, ValueError):
                 continue
-            if predicted <= 0:
+            if not np.isfinite(predicted) or predicted <= 0:  # NaN is not `<= 0`
                 continue
             bt = hz.get("backtest") or {}
             rows.append(
