@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from ml.forecast import MIN_HISTORY, select_candidate
+from ml.forecast import MIN_HISTORY, clean_price_points, impute_exog, select_candidate
 from ml.predictor import CommodityPricePredictor, InsufficientHistoryError
 
 
@@ -138,3 +139,59 @@ def test_forecast_commodity_delegates_to_predictor(monkeypatch: pytest.MonkeyPat
     out = forecast_commodity(object(), "gold", horizons=(30,), enable_ou=False)
     assert out["commodity_code"] == "DELEGATED"
     assert calls == ["fit:gold", "forecast"]
+
+
+def test_non_finite_price_is_dropped_not_fatal() -> None:
+    """``+inf`` passes a bare ``v > 0`` check; it must be dropped like NaN / non-positive
+    values instead of reaching ``log`` and crashing the candidate pool."""
+    df = _synthetic_price_df(n=320, seed=11)
+    df.loc[150, "value"] = np.inf
+    df.loc[151, "value"] = np.nan
+    df.loc[152, "value"] = -5.0
+    result = CommodityPricePredictor(horizons=(30,)).fit(df, commodity_code="SYNTH").forecast()
+    assert result["available"] is True
+    assert result["history_points"] == 317
+    assert all(np.isfinite(p["value"]) for p in result["horizons"]["30"]["points"])
+
+
+def test_clean_price_points_keeps_order_and_finite_positive_only() -> None:
+    days = [date(2024, 1, d) for d in range(1, 7)]
+    dates, values = clean_price_points(days, [1.5, float("inf"), float("nan"), 0.0, -2.0, 3.0])
+    assert dates == [days[0], days[5]]
+    assert values == [1.5, 3.0]
+
+
+def test_infinite_exog_cell_is_treated_as_missing() -> None:
+    """A single ``inf`` feature cell must behave exactly like a missing one (causal
+    forward-fill), never drop a candidate or raise inside XGBoost."""
+    df = _synthetic_price_df(n=320, seed=11)
+    exog = pd.DataFrame({"as_of_date": df["date"], "driver": np.linspace(0.0, 1.0, len(df))})
+    with_inf, with_nan = exog.copy(), exog.copy()
+    with_inf.loc[200, "driver"] = np.inf
+    with_nan.loc[200, "driver"] = np.nan
+
+    def run(frame: pd.DataFrame) -> dict[str, Any]:
+        return CommodityPricePredictor(horizons=(30,)).fit(df, frame, commodity_code="SYNTH").forecast()
+
+    got = run(with_inf)
+    assert got == run(with_nan)
+    assert "ridge_ar" in got["horizons"]["30"]["backtest"]["candidates"]
+
+
+def test_impute_exog_inf_fill_is_point_in_time() -> None:
+    """The masked cell is filled from the PAST value only — never a later one."""
+    days = [date(2024, 1, d) for d in range(1, 5)]
+    frame = pd.DataFrame({"driver": [1.0, -np.inf, np.inf, 9.0]}, index=days)
+    assert impute_exog(frame, days)["driver"].tolist() == [1.0, 1.0, 1.0, 9.0]
+
+
+def test_duplicate_dates_collapse_to_last_row(caplog: pytest.LogCaptureFixture) -> None:
+    df = _synthetic_price_df(n=320, seed=11)
+    corrected = float(df["value"].iloc[-1]) * 1.01
+    stale = df.iloc[[-1]].assign(value=1.0)
+    dup = pd.concat([df.iloc[:-1], stale, df.iloc[[-1]].assign(value=corrected)], ignore_index=True)
+    with caplog.at_level("WARNING", logger="ml.predictor"):
+        result = CommodityPricePredictor(horizons=(30,), enable_gbm=False).fit(dup, commodity_code="SYNTH").forecast()
+    assert result["history_points"] == 320
+    assert result["last_price"] == round(corrected, 4)
+    assert "duplicate date" in caplog.text

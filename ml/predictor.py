@@ -37,6 +37,7 @@ from ml.forecast import (
     OU_ENABLED,
     SWITCH_MARGIN,
     Z_80,
+    clean_price_points,
     impute_exog,
     load_price_series,
     select_candidate,
@@ -162,10 +163,15 @@ class CommodityPricePredictor:
             raise InvalidSeriesError("price_df requires date and value (or price) columns")
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
-        df = df.dropna(subset=["date", "value"]).sort_values("date")
-        clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if v > 0]
-        dates = [c[0] for c in clean]
-        values = [c[1] for c in clean]
+        # Stable sort so "last" below means the caller's last row for that date. One price
+        # per date: a repeated date adds a zero-length step with a non-zero return, which
+        # distorts volatility and every lag feature (the DB path is unique by grain already).
+        df = df.dropna(subset=["date", "value"]).sort_values("date", kind="stable")
+        duplicated = int(df["date"].duplicated(keep="last").sum())
+        if duplicated:
+            logger.warning("price_df has %d duplicate date row(s); keeping the last per date", duplicated)
+            df = df.drop_duplicates(subset="date", keep="last")
+        dates, values = clean_price_points(df["date"], df["value"])
         code = (commodity_code or "UNKNOWN").upper()
         base = {
             "commodity_code": code,
@@ -217,9 +223,7 @@ class CommodityPricePredictor:
             "currency": instrument.currency if instrument else None,
             "model": "ridge_ar",
         }
-        clean = [(d, v) for d, v in zip(dates, values, strict=True) if v > 0]
-        dates = [c[0] for c in clean]
-        values = [c[1] for c in clean]
+        dates, values = clean_price_points(dates, values)
         if len(values) < self.min_history:
             payload = {
                 **base,

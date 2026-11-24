@@ -7,7 +7,9 @@ forecast-log writer — it delegates to that class unchanged in payload shape.
 
 from __future__ import annotations
 
+import math
 import sys
+from collections.abc import Iterable
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -55,9 +57,23 @@ def impute_exog(df_view: Any, dates: list[date]) -> Any:
     imputed value at row ``t`` depends only on data at or before ``t``, so nothing leaks the
     future into an early walk-forward backtest fold (the bug this replaces used
     ``df.median()`` over the whole series)."""
-    df = df_view.sort_index().ffill()
+    # +/-inf (e.g. a ratio feature that divided by zero upstream) is treated as MISSING,
+    # not as a value: one non-finite cell otherwise makes the ridge solve return NaN and
+    # makes XGBoost raise, taking the whole forecast down. Masking is per-cell, so it stays
+    # point-in-time — the gap is then filled from the last finite past value like any other.
+    df = df_view.sort_index().replace([np.inf, -np.inf], np.nan).ffill()
     df = df.reindex(dates, method="ffill")
     return df.fillna(0.0)
+
+
+def clean_price_points(dates: Iterable[date], values: Iterable[float]) -> tuple[list[date], list[float]]:
+    """Keep only the points a log-price model can use: finite and strictly positive.
+
+    ``v > 0`` alone lets ``+inf`` through (``log(inf) = inf`` then poisons every feature
+    window it touches); NaN and non-positive values are dropped as before. Order is
+    preserved and nothing is imputed — a dropped point is simply absent."""
+    kept = [(d, float(v)) for d, v in zip(dates, values, strict=True) if math.isfinite(v) and v > 0]
+    return [d for d, _ in kept], [v for _, v in kept]
 
 
 def load_price_series(session: Session, commodity_code: str) -> dict[str, Any] | None:
