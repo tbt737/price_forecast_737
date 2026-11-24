@@ -11,6 +11,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ml.forecast import load_price_series
+
 
 def _row(com, inst, d: date, value: float, revision: int) -> FactPriceDaily:
     return FactPriceDaily(
@@ -47,3 +49,34 @@ def test_prices_endpoint_serves_only_latest_revision(
     # ONLY revision-1 values — none of the revision-0 basis leaks into the series.
     assert [p["value"] for p in body["points"]] == [85000.0, 85850.0, 86000.0]
     assert len(body["points"]) == 3  # no duplicate dates from the older revision
+
+
+def test_api_and_ml_exclude_dates_only_in_older_revision(
+    client: TestClient, seeded_session: Session
+) -> None:
+    commodity = seeded_session.execute(select(DimCommodity).filter_by(commodity_code="FPT_VN")).scalar_one()
+    instrument = seeded_session.execute(
+        select(DimMarketInstrument).filter_by(instrument_code="HOSE_FPT")
+    ).scalar_one()
+    older_only, shared, latest_only = date(2026, 7, 1), date(2026, 7, 2), date(2026, 7, 3)
+    seeded_session.add_all(
+        [
+            _row(commodity, instrument, older_only, 100_000, 0),
+            _row(commodity, instrument, shared, 101_000, 0),
+            _row(commodity, instrument, shared, 85_850, 1),
+            _row(commodity, instrument, latest_only, 86_000, 1),
+        ]
+    )
+    seeded_session.commit()
+
+    response = client.get("/commodities/FPT_VN/prices?days=20000")
+    assert response.status_code == 200
+    assert response.json()["points"] == [
+        {"date": shared.isoformat(), "value": 85_850.0},
+        {"date": latest_only.isoformat(), "value": 86_000.0},
+    ]
+
+    series = load_price_series(seeded_session, "FPT_VN")
+    assert series is not None
+    assert series["dates"] == [shared, latest_only]
+    assert series["values"] == [85_850.0, 86_000.0]

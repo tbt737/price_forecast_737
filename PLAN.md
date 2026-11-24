@@ -37,8 +37,8 @@ never go down; locked invariants never weaken.
 
 Highest-value next actions, in order:
 1. The two **manual-only GitHub tasks** (§4) — they close the last Đợt-1 gaps.
-2. **Land RESTATE-1 gates green**, then follow the VN30-PROD canary sequence in §5
-   (still needs explicit owner approval per write/deploy step).
+2. **RESTATE-1 offline gate passed** (§5). Review the remaining VN30-PROD steps in
+   sequence with explicit owner approval for each write or deploy step.
 3. **ACC-REVIEW** when its artifact exists (§5) — first real evidence of live forecast skill.
 4. If idle capacity remains: deferred polish (§6) as a small tooling pack.
 
@@ -52,6 +52,15 @@ Highest-value next actions, in order:
   live read-only VN monitor (cron 01:30 UTC).
 
 ## 5. Waiting workstreams (do not execute yet)
+
+- **RESTATE-1 offline verification (2026-11-23).** RESTATE-1 is in `master` history
+  (`9f10657`). Gate verdict `RESTATE_1_OFFLINE_RELEASE_GATE_PASS` follows an
+  independent PASS for local candidate `b2477a1` over `fd05417`. The new regression
+  confirms API and ML exclude dates found only in older revisions.
+  P1 1 passed. P2 40 passed. Full gates: pytest 621 passed and 1 PostgreSQL-only
+  skip, Vitest 78 passed, workflows 6/6, compile/Ruff/mypy/Web typecheck/lint/build
+  passed. API smoke and loader confirmed 66 profiles and 114 instruments.
+  This verdict covers the offline fixtures. Production approval follows §11.
 
 - **VN30-PROD (production phase of VN30-STOCKS-1) — CONDITIONALLY APPROVED (owner,
   2026-07-11).** Code shipped `8eb7dc2`. Owner decision: **only `make db-load` is
@@ -70,9 +79,9 @@ Highest-value next actions, in order:
   (`f3d2812`, contract-test-pinned) → snapshot/export DB state ✅ (2026-07-11,
   pre/post JSON) → `make db-load` ✅ (2026-07-11 via Session pooler: 51 profiles /
   98 instruments; 21 old registry rows byte-identical checksum+version;
-  fact_price_daily untouched at 106,455) → verify ✅ → **NEXT:** merge restatement
-  pack after gates green (release_date=reconcile-day PIT stamp; evaluator + forecast
-  cache revision-aware; backfill via provenance gate; MV refresh after ingest) →
+  fact_price_daily untouched at 106,455) → verify ✅ → RESTATE-1 code landed
+  (`9f10657`, reconcile-day release date, revision-aware evaluator and forecast
+  cache, provenance gate and post-ingest MV refresh) →
   canary backfill 1–2 tickers → repeat canary (convergence/
   idempotency) → full 30-ticker backfill → row-count/dup/range/discontinuity checks →
   **[2026-07-22] CANARY_PASS (FPT_VN + VCB_VN, prod):** reconcile run-1 appended
