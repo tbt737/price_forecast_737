@@ -9,7 +9,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-from check_freshness import classify, is_within_gap, select_groups  # noqa: E402
+import check_freshness  # noqa: E402
+import pytest  # noqa: E402
+from check_freshness import (  # noqa: E402
+    classify,
+    group_latest,
+    is_within_gap,
+    select_groups,
+    stale_members,
+)
 
 from etl.ingestion.config import FreshnessGroup, load_freshness_groups  # noqa: E402
 
@@ -86,3 +94,81 @@ def test_classify_fresh_is_ok_even_strict() -> None:
     today = date(2026, 7, 4)
     assert classify(_VN, date(2026, 7, 3), today, strict=True) == "ok"
     assert classify(_FUT, date(2026, 7, 3), today, strict=True) == "ok"
+
+
+# Per-commodity staleness: one live member must not hide a dead one in the same group.
+
+_TODAY = date(2026, 7, 4)
+_LIVE, _DEAD = date(2026, 7, 3), date(2026, 5, 1)
+
+
+def test_stale_members_finds_dead_series_behind_a_live_one() -> None:
+    latest = {"GOLD_VN": _DEAD, "SILVER_VN": _LIVE}
+    assert group_latest(_VN, latest) == _LIVE  # the group itself still looks fresh
+    assert classify(_VN, group_latest(_VN, latest), _TODAY, strict=True) == "ok"
+    assert stale_members(_VN, latest, _TODAY) == [("GOLD_VN", _DEAD)]
+
+
+def test_stale_members_treats_a_member_without_rows_as_stale() -> None:
+    assert stale_members(_VN, {"SILVER_VN": _LIVE}, _TODAY) == [("GOLD_VN", None)]
+    assert stale_members(_VN, {"GOLD_VN": _LIVE, "SILVER_VN": _LIVE}, _TODAY) == []
+    assert group_latest(_VN, {}) is None
+
+
+class _NullSession:
+    def close(self) -> None:
+        pass
+
+
+def _run_gate(monkeypatch: pytest.MonkeyPatch, latest: dict[str, date], argv: list[str]) -> int:
+    import app.db.session as db_session
+
+    import etl.ingestion.config as ingestion_config
+
+    class _FrozenDate(date):
+        @classmethod
+        def today(cls) -> date:
+            return _TODAY
+
+    monkeypatch.setattr(ingestion_config, "load_freshness_groups", lambda: list(_ALL))
+    monkeypatch.setattr(db_session, "get_session_factory", lambda: _NullSession)
+    monkeypatch.setattr(check_freshness, "date", _FrozenDate)
+    monkeypatch.setattr(
+        check_freshness, "_latest_dates", lambda _s, codes: {c: latest[c] for c in codes if c in latest}
+    )
+    return check_freshness.main(argv)
+
+
+def test_gate_warns_on_stale_member_and_strict_turns_it_red(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    latest = {"GOLD": _LIVE, "CRUDE_OIL": _LIVE, "GOLD_VN": _DEAD, "SILVER_VN": _LIVE}
+    # Daily gate: every group advanced ⇒ still green, but the dead series is named.
+    assert _run_gate(monkeypatch, latest, []) == 0
+    assert "STALE MEMBER — vn_domestic/GOLD_VN" in capsys.readouterr().err
+    # Dedicated VN monitor (--strict): a dead member is a failure.
+    assert _run_gate(monkeypatch, latest, ["--group", "vn_domestic", "--strict"]) == 1
+
+
+def test_gate_stays_green_and_quiet_when_every_member_is_fresh(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    latest = {"GOLD": _LIVE, "CRUDE_OIL": _LIVE, "GOLD_VN": _LIVE, "SILVER_VN": _LIVE}
+    assert _run_gate(monkeypatch, latest, ["--strict"]) == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_gate_fully_stale_critical_group_still_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    latest = {"GOLD": _DEAD, "CRUDE_OIL": _DEAD, "GOLD_VN": _LIVE, "SILVER_VN": _LIVE}
+    assert _run_gate(monkeypatch, latest, []) == 1
+
+
+def test_monitored_commodities_are_real_profiles_listed_once() -> None:
+    # A typo here is silent at runtime: the code simply never matches a row.
+    import yaml
+
+    profiles = Path(__file__).resolve().parents[2] / "configs" / "commodities"
+    known = {yaml.safe_load(p.read_text(encoding="utf-8"))["commodity_code"] for p in profiles.glob("*.yaml")}
+    monitored = [code for g in load_freshness_groups() for code in g.commodities]
+    assert not sorted(set(monitored) - known)
+    assert len(monitored) == len(set(monitored))

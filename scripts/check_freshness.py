@@ -8,6 +8,13 @@ die silently) are surfaced as a WARNING and only fail under ``--strict`` — so 
 monitor can catch a dead PNJ/Phú Quý/VNAppMob endpoint without making the daily VN feed
 blocking. Never writes; never prints the DB URL. ``is_within_gap`` is unit-tested.
 
+Freshness is measured **per commodity**, not only per group: a group's verdict still
+follows its newest member (one live feed proves the pipeline ran), but every member whose
+own latest date is past ``max_gap_days`` is reported as a STALE MEMBER. Without that, one
+live series hides any number of dead ones in the same group (a dead PNJ endpoint behind a
+live pepper scrape). Stale members are warnings in the daily gate and fail under
+``--strict``.
+
 ``--group`` scopes the check to named group(s) so a dedicated monitor can watch just the
 VN sources without being coupled to the futures feed. An unknown ``--group`` name is a hard
 error (exit 2) — a typo must never silently pass green.
@@ -21,6 +28,7 @@ Usage (reads DATABASE_URL from env/.env):
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -61,17 +69,41 @@ def classify(group, latest: date | None, today: date, strict: bool) -> str:
     return "fail" if (group.critical or strict) else "warn"
 
 
-def _latest_date(session, commodities: list[str]) -> date | None:
+def stale_members(group, latest_by_code: dict[str, date | None], today: date) -> list[tuple[str, date | None]]:
+    """Members of ``group`` whose OWN latest price date is past ``max_gap_days`` (a member
+    with no rows at all is stale), in configured order. Empty when every member is fresh."""
+    return [
+        (code, latest_by_code.get(code))
+        for code in group.commodities
+        if not is_within_gap(latest_by_code.get(code), today, group.max_gap_days)
+    ]
+
+
+def group_latest(group, latest_by_code: dict[str, date | None]) -> date | None:
+    """Newest price date across the group's members (None when no member has any rows)."""
+    dates = [d for d in (latest_by_code.get(code) for code in group.commodities) if d is not None]
+    return max(dates) if dates else None
+
+
+def _latest_dates(session, commodities: list[str]) -> dict[str, date | None]:
+    """Latest price date per commodity code. Codes with no price rows are absent."""
     from sqlalchemy import text
 
-    return session.execute(
+    rows = session.execute(
         text(
-            "SELECT max(f.price_date) FROM fact_price_daily f "
+            "SELECT co.commodity_code, max(f.price_date) FROM fact_price_daily f "
             "JOIN dim_commodity co ON co.commodity_key = f.commodity_key "
-            "WHERE co.commodity_code = ANY(:codes)"
+            "WHERE co.commodity_code = ANY(:codes) GROUP BY co.commodity_code"
         ),
         {"codes": list(commodities)},
-    ).scalar()
+    ).all()
+    return {code: latest for code, latest in rows}
+
+
+def _annotate(message: str) -> None:
+    """Surface a warning on the GitHub Actions run summary (no-op elsewhere)."""
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        print(f"::warning title=Stale price series::{message}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -110,7 +142,8 @@ def main(argv: list[str] | None = None) -> int:
     warned = False
     try:
         for g in groups:
-            latest = _latest_date(session, list(g.commodities))
+            latest_by_code = _latest_dates(session, list(g.commodities))
+            latest = group_latest(g, latest_by_code)
             tag = "critical" if g.critical else "non-critical"
             verdict = classify(g, latest, today, args.strict)
             if verdict == "ok":
@@ -125,13 +158,32 @@ def main(argv: list[str] | None = None) -> int:
                     should_fail = True
                 else:
                     warned = True
+                continue
+            # The group advanced, but individual members may still be frozen.
+            stale = stale_members(g, latest_by_code, today)
+            for code, member_latest in stale:
+                state = f"latest {member_latest}" if member_latest else "no price rows"
+                message = (
+                    f"{g.name}/{code}: {state}, past {g.max_gap_days}d before {today} "
+                    "while the group is fresh"
+                )
+                print(f"[freshness] STALE MEMBER — {message}", file=sys.stderr)
+            if stale:
+                _annotate(
+                    f"{g.name}: {len(stale)} stale member(s) past {g.max_gap_days}d — "
+                    + ", ".join(code for code, _ in stale)
+                )
+                if args.strict:
+                    should_fail = True
+                else:
+                    warned = True
     finally:
         session.close()
 
     if should_fail:
         return 1
     if warned:
-        print("[freshness] non-critical group(s) stale — warning only (use --strict to fail).", file=sys.stderr)
+        print("[freshness] stale group(s)/member(s) — warning only (use --strict to fail).", file=sys.stderr)
     return 0
 
 
