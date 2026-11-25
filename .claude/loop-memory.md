@@ -4,6 +4,27 @@
      What shipped (files + contract) · invariants touched · gate numbers · new rules.
      No logs, no transcripts. Prune entries that stop being true. -->
 
+## 2026-11-25 AUDIT-2 — AUDIT_2_PASS (scheduled review; branch `claude/sharp-hopper-wv21fm`, not merged)
+Three fixes, each verified beyond unit tests. No prod DB, deploy, or `--write`.
+(1) `min_reload_coverage` 0.9 → **1.0** (config, default, doc): closes the AUDIT-1B HIGH item — a
+reload missing ≤10% of stored dates was accepted and those dates left every read path. Evidence:
+`test_restatement.py::test_reload_missing_a_single_stored_date_is_refused` (fails on 0.9).
+(2) `scripts/check_freshness.py` took `max(price_date)` over a whole group, so one live member hid
+any number of dead ones. Now per commodity: STALE MEMBER warning + run annotation in the daily
+gate, failure under `--strict` (the VN monitor). Group verdicts unchanged. Query and CLI exit
+codes checked on a disposable PostgreSQL 16 (`ANY(:codes)` cannot run on SQLite).
+(3) `apps/web` lockfile: `npm audit fix` without force, next 15.5.25 → 15.5.29; clears the critical
+Next.js advisories. `package.json` unchanged.
+**Gates:** pytest 628 passed + 1 PG skip (629 with `CQP_TEST_PG_URL`), ruff 0, mypy 0 (29 + 34),
+workflows 6/6, vitest 78, tsc/eslint/next build clean, `next start` smoke 200 on `/`, `/stocks`, `/iching`.
+**Still open:** 8 produce profiles (garlic, onion, chili, peanuts, robusta) are in no freshness
+group and have no automated price source · a stale member of the critical `futures` group only
+warns — failing needs the owner to confirm RICE/FREIGHT_INDICES cadence · the postcss copy inside
+Next needs Next 16 · dev-only vitest advisories need a vitest major · root worker lockfile has 4
+high advisories under wrangler (in-range fix rewrites ~1200 lockfile lines; not applied, untestable
+here) · `/ai/chat` rate-limit key still trusts the first X-Forwarded-For entry.
+**Verified rule:** a group-level `max()` is not a freshness check for its members; assert per key.
+
 ## 2026-11-23 RESTATE-1-OFFLINE-GATE — RESTATE_1_OFFLINE_RELEASE_GATE_PASS
 Independent verifier PASS on `b2477a1a662c6258fd0ee15bf9d0f0f8fa8088fe` (base `fd05417`).
 One test pins API and ML to the complete latest revision using a date only in the older
