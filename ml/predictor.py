@@ -79,6 +79,16 @@ def _business_days_ahead(start: date, n: int) -> date:
     return _next_business_days(start, n)[-1]
 
 
+def _clean_positive_series(dates: Iterable[date], values: Iterable[float]) -> tuple[list[date], list[float]]:
+    """Keep only strictly positive, finite prices (log-model domain).
+
+    ``v > 0`` alone lets ``+inf`` through: ``np.log(inf)`` then poisons every fit and
+    the published interval bounds become NaN while the payload still says
+    ``available: True``. NaN is rejected too (``nan > 0`` is False, but be explicit)."""
+    clean = [(d, float(v)) for d, v in zip(dates, values, strict=True) if np.isfinite(v) and v > 0]
+    return [c[0] for c in clean], [c[1] for c in clean]
+
+
 class CommodityPredictorError(Exception):
     """Base error for the production predictor."""
 
@@ -162,10 +172,12 @@ class CommodityPricePredictor:
             raise InvalidSeriesError("price_df requires date and value (or price) columns")
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
-        df = df.dropna(subset=["date", "value"]).sort_values("date")
-        clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if v > 0]
-        dates = [c[0] for c in clean]
-        values = [c[1] for c in clean]
+        df = df.dropna(subset=["date", "value"])
+        # One observation per date (last row wins, input order preserved by the stable
+        # sort) — a duplicated date would be double-counted as history and fed to the
+        # AR lags as a zero-length step. The DB path is already unique per date.
+        df = df.sort_values("date", kind="stable").drop_duplicates(subset="date", keep="last")
+        dates, values = _clean_positive_series(df["date"], df["value"])
         code = (commodity_code or "UNKNOWN").upper()
         base = {
             "commodity_code": code,
@@ -217,9 +229,7 @@ class CommodityPricePredictor:
             "currency": instrument.currency if instrument else None,
             "model": "ridge_ar",
         }
-        clean = [(d, v) for d, v in zip(dates, values, strict=True) if v > 0]
-        dates = [c[0] for c in clean]
-        values = [c[1] for c in clean]
+        dates, values = _clean_positive_series(dates, values)
         if len(values) < self.min_history:
             payload = {
                 **base,

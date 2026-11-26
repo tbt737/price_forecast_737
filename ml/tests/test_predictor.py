@@ -138,3 +138,32 @@ def test_forecast_commodity_delegates_to_predictor(monkeypatch: pytest.MonkeyPat
     out = forecast_commodity(object(), "gold", horizons=(30,), enable_ou=False)
     assert out["commodity_code"] == "DELEGATED"
     assert calls == ["fit:gold", "forecast"]
+
+
+def test_non_finite_prices_are_dropped_not_published_as_nan() -> None:
+    """A single +inf/NaN price must not poison log-space fits: before the fix the payload
+    said ``available: True`` while every interval bound was NaN (invalid JSON)."""
+    df = _synthetic_price_df(n=320, seed=5)
+    df.loc[150, "value"] = np.inf
+    df.loc[151, "value"] = -np.inf
+    df.loc[152, "value"] = np.nan
+    result = CommodityPricePredictor(horizons=(30,), enable_gbm=False).fit(df, commodity_code="SYNTH").forecast()
+    assert result["available"] is True
+    assert result["history_points"] == 317
+    for pt in result["horizons"]["30"]["points"]:
+        assert all(np.isfinite(pt[k]) for k in ("value", "lower", "upper"))
+        assert pt["lower"] <= pt["value"] <= pt["upper"]
+
+
+def test_duplicate_dates_collapse_to_last_observation() -> None:
+    df = _synthetic_price_df(n=320, seed=6)
+    dup = df.iloc[[-1]].assign(value=df["value"].iloc[-1] * 1.5)
+    clean = CommodityPricePredictor(horizons=(30,), enable_gbm=False).fit(df, commodity_code="SYNTH").forecast()
+    duped = (
+        CommodityPricePredictor(horizons=(30,), enable_gbm=False)
+        .fit(pd.concat([df, df.iloc[:10], dup]), commodity_code="SYNTH")
+        .forecast()
+    )
+    assert duped["history_points"] == clean["history_points"] == 320
+    # Last row for a repeated date wins (a later correction supersedes the earlier print).
+    assert duped["last_price"] == round(float(dup["value"].iloc[0]), 4)
