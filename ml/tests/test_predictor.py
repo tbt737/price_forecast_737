@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -138,3 +139,17 @@ def test_forecast_commodity_delegates_to_predictor(monkeypatch: pytest.MonkeyPat
     out = forecast_commodity(object(), "gold", horizons=(30,), enable_ou=False)
     assert out["commodity_code"] == "DELEGATED"
     assert calls == ["fit:gold", "forecast"]
+
+
+def test_fit_drops_non_finite_prices() -> None:
+    # One +inf price (bad upstream row / CSV "inf") must be dropped like a non-positive
+    # price — never fed to log(), which would emit NaN interval bands in an "available" payload.
+    df = _synthetic_price_df()
+    clean_len = len(df)
+    df.loc[len(df) // 2, "value"] = float("inf")
+    result = CommodityPricePredictor(horizons=(30,), enable_gbm=False, enable_ou=False).fit(df).forecast()
+    assert result["available"] is True
+    assert result["history_points"] == clean_len - 1
+    for point in result["horizons"]["30"]["points"]:
+        for key in ("value", "lower", "upper"):
+            assert math.isfinite(point[key]), point

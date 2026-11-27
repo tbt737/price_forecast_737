@@ -16,6 +16,7 @@ spec ``docs/deep-research-report-baotoandongtien.md``):
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Iterable
 from datetime import date, timedelta
 from pathlib import Path
@@ -73,6 +74,13 @@ def _naive_interval(
     s = np.arange(1, steps + 1)
     band = z * ret_sigma * np.sqrt(s)
     return point, point * np.exp(-band), point * np.exp(band)
+
+
+def _usable_price(value: float) -> bool:
+    """A price the log-space models can use: finite and strictly positive. ``v > 0`` alone
+    lets ``+inf`` through (``inf > 0``), and a single infinite price turns ``log(y)`` and
+    every rolling feature into NaN, yielding an "available" payload with NaN bands."""
+    return math.isfinite(value) and value > 0
 
 
 def _business_days_ahead(start: date, n: int) -> date:
@@ -163,7 +171,7 @@ class CommodityPricePredictor:
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
         df = df.dropna(subset=["date", "value"]).sort_values("date")
-        clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if v > 0]
+        clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if _usable_price(v)]
         dates = [c[0] for c in clean]
         values = [c[1] for c in clean]
         code = (commodity_code or "UNKNOWN").upper()
@@ -217,7 +225,7 @@ class CommodityPricePredictor:
             "currency": instrument.currency if instrument else None,
             "model": "ridge_ar",
         }
-        clean = [(d, v) for d, v in zip(dates, values, strict=True) if v > 0]
+        clean = [(d, v) for d, v in zip(dates, values, strict=True) if _usable_price(v)]
         dates = [c[0] for c in clean]
         values = [c[1] for c in clean]
         if len(values) < self.min_history:
