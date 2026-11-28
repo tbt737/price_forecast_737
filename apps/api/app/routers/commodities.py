@@ -34,6 +34,7 @@ from app.models import (
 from app.schemas.commodity import (
     CommodityDetailOut,
     CommodityOut,
+    PricePoint,
     PriceSeriesOut,
     ProfileDetailOut,
     ProfileRegistryOut,
@@ -160,13 +161,15 @@ def get_commodity_prices(
         .order_by(FactPriceDaily.price_date)
     ).all()
 
-    points = [{"date": r.price_date, "value": float(r.value)} for r in rows if r.value is not None]
+    points = [
+        PricePoint(date=r.price_date, value=float(r.value)) for r in rows if r.value is not None
+    ]
     currency = rows[0].currency if rows else (instrument.currency if instrument else None)
     return PriceSeriesOut(
         commodity_code=commodity.commodity_code,
         instrument_code=instrument.instrument_code if instrument else None,
         currency=currency,
-        points=points,  # type: ignore[arg-type]
+        points=points,
     )
 
 
