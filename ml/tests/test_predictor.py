@@ -138,3 +138,37 @@ def test_forecast_commodity_delegates_to_predictor(monkeypatch: pytest.MonkeyPat
     out = forecast_commodity(object(), "gold", horizons=(30,), enable_ou=False)
     assert out["commodity_code"] == "DELEGATED"
     assert calls == ["fit:gold", "forecast"]
+
+
+def test_fit_drops_non_finite_prices_instead_of_crashing() -> None:
+    """An ``inf`` cell (e.g. CSV "1e999" coerced by pd.to_numeric) must be dropped like a
+    non-positive price — not propagated into log space where XGBoost rejects it."""
+    df = _synthetic_price_df(n=320)
+    bad = df.copy()
+    bad.loc[150, "value"] = np.inf
+    bad.loc[151, "value"] = -np.inf
+    pred = CommodityPricePredictor(horizons=(30,)).fit(bad, commodity_code="DEMO")
+    out = pred.predict(horizon=30, return_df=False)
+    assert np.all(np.isfinite(out))
+    assert len(pred._values) == len(df) - 2
+    assert all(np.isfinite(pred._values))
+
+
+def test_fit_deduplicates_dates_last_row_wins() -> None:
+    df = _synthetic_price_df(n=320)
+    dupe = df.iloc[[100]].assign(value=df["value"].iloc[100] * 1.5)
+    pred = CommodityPricePredictor(horizons=(30,), enable_gbm=False).fit(
+        pd.concat([df, dupe], ignore_index=True), commodity_code="DEMO"
+    )
+    assert pred._dates == list(df["date"])
+    assert len(set(pred._dates)) == len(pred._dates)
+    assert pred._values[100] == pytest.approx(df["value"].iloc[100] * 1.5)
+
+
+def test_fit_is_order_independent() -> None:
+    """Shuffled input rows yield the identical forecast (determinism)."""
+    df = _synthetic_price_df(n=320)
+    shuffled = df.sample(frac=1.0, random_state=7).reset_index(drop=True)
+    a = CommodityPricePredictor(horizons=(30,), enable_gbm=False).fit(df, commodity_code="DEMO")
+    b = CommodityPricePredictor(horizons=(30,), enable_gbm=False).fit(shuffled, commodity_code="DEMO")
+    np.testing.assert_allclose(a.predict(horizon=30, return_df=False), b.predict(horizon=30, return_df=False))

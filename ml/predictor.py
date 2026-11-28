@@ -79,6 +79,24 @@ def _business_days_ahead(start: date, n: int) -> date:
     return _next_business_days(start, n)[-1]
 
 
+def _usable_points(dates: Iterable[date], values: Iterable[float]) -> tuple[list[date], list[float]]:
+    """Keep only finite, strictly positive prices — one per date, in date order.
+
+    Models work in log space, so a non-positive price is undefined and an ``inf``
+    (e.g. a ``"1e999"`` cell coerced by ``pd.to_numeric``) poisons every fold — XGBoost
+    rejects it outright. A duplicated date would double-count that day in the AR lags
+    and the rows-per-year estimate, so the LAST row for a date wins (matching the
+    ingest upsert, where a later write replaces the earlier one).
+    """
+    by_date: dict[date, float] = {}
+    for d, v in zip(dates, values, strict=True):
+        fv = float(v)
+        if np.isfinite(fv) and fv > 0:
+            by_date[d] = fv
+    ordered = sorted(by_date)
+    return ordered, [by_date[d] for d in ordered]
+
+
 class CommodityPredictorError(Exception):
     """Base error for the production predictor."""
 
@@ -162,10 +180,8 @@ class CommodityPricePredictor:
             raise InvalidSeriesError("price_df requires date and value (or price) columns")
         df["date"] = pd.to_datetime(df["date"]).dt.date
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
-        df = df.dropna(subset=["date", "value"]).sort_values("date")
-        clean = [(d, float(v)) for d, v in zip(df["date"], df["value"], strict=True) if v > 0]
-        dates = [c[0] for c in clean]
-        values = [c[1] for c in clean]
+        df = df.dropna(subset=["date", "value"]).sort_values("date", kind="stable")
+        dates, values = _usable_points(df["date"], df["value"])
         code = (commodity_code or "UNKNOWN").upper()
         base = {
             "commodity_code": code,
@@ -217,9 +233,7 @@ class CommodityPricePredictor:
             "currency": instrument.currency if instrument else None,
             "model": "ridge_ar",
         }
-        clean = [(d, v) for d, v in zip(dates, values, strict=True) if v > 0]
-        dates = [c[0] for c in clean]
-        values = [c[1] for c in clean]
+        dates, values = _usable_points(dates, values)
         if len(values) < self.min_history:
             payload = {
                 **base,
